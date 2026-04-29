@@ -5,5 +5,5 @@ default_version = '0.0.1'
 requires = 'vector'
 relocatable = false
 schema = 'pgmnemo'
-trusted = false
-superuser = true
+trusted = true
+superuser = false
