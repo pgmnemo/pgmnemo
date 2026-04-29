@@ -1,0 +1,8 @@
+# pgmnemo extension control file
+comment = 'Multi-agent memory substrate for PostgreSQL — provenance-gated, zero-dependency'
+default_version = '0.0.1'
+module_pathname = '$libdir/pgmnemo'
+relocatable = false
+schema = 'pgmnemo'
+trusted = false
+superuser = true

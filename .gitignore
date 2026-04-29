@@ -1,0 +1,45 @@
+# PostgreSQL extension build artifacts
+*.o
+*.so
+*.dylib
+*.dll
+*.bc
+*.lo
+*.a
+
+# pgxs build outputs
+results/
+tmp_check/
+log/
+*.log
+sql/
+expected/
+
+# editor files
+.idea/
+.vscode/
+*.swp
+*~
+.DS_Store
+
+# Python (used in tooling/benchmarks/scripts only — extension itself is pure SQL)
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+.pytest_cache/
+
+# Node (used only for MCP server in Variant 2 if/when it ships)
+node_modules/
+
+# secrets — never check these in
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# local benchmark data
+benchmarks/data/
+benchmarks/results/
