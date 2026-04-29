@@ -1,69 +1,76 @@
 # pgmnemo
 
-> Multi-agent memory substrate for PostgreSQL — provenance-gated, zero-dependency, Apache-2.0.
+> Multi-agent memory layer for PostgreSQL — provenance-gated, HNSW-accelerated, zero-dependency, Apache-2.0.
 
 `pgmnemo` is a PostgreSQL extension that gives multi-agent AI systems durable, auditable memory
-without introducing a separate service, a SaaS dependency, or a vendor lock-in. Install it with one
-SQL command and read/write agent memory directly from your existing database.
+without a separate service, a SaaS dependency, or vendor lock-in. Install it with one SQL command
+and read/write agent memory directly inside your existing database.
 
-```sql
-CREATE EXTENSION pgmnemo;
-SELECT pgmnemo.recall_lessons(role := 'developer', topic := 'authentication');
-```
-
-## Status
-
-🚧 **Pre-release.** Phase 1 (SQL-only schema + retrieval + provenance gate) under active development.
-Targeting public release after ICSE-SEIP paper submission (~T+8w from 2026-04-29).
-
-## Why pgmnemo
-
-| | other memory layers | `pgmnemo` |
-|---|---|---|
-| Form factor | separate service, SaaS, MCP server | `CREATE EXTENSION pgmnemo;` |
-| Data location | their cloud, their server | your existing PostgreSQL |
-| Trust gate on writes | none | **provenance gate** — write requires verifiable commit SHA or artifact hash |
-| Multi-agent role isolation | RLS or none | first-class — role + project + provenance composite keys |
-| Vendor lock-in | yes (data egress, proprietary API) | none (Apache-2.0, plain SQL) |
-| Embeddings | tied to one provider | bring your own (any LLM provider) |
-
-The unique mechanism is the **provenance gate**: an agent observation is not promoted to long-term
-memory until a verifiable artifact (commit SHA in repo, file hash on disk, or signed external claim)
-is attached. This eliminates the "ghost lesson" failure mode common in multi-agent memory systems.
-
-## Architecture
-
-Phase 1 (current):
-- Pure SQL + PL/pgSQL (no C, no Rust, no `pgrx`)
-- Storage: standard PostgreSQL tables with `JSONB` metadata + `tsvector` full-text + GIN indexes
-- Retrieval: PL/pgSQL functions, role-aware filtering, recursive CTE for lightweight graph traversal
-- Provenance: BEFORE INSERT trigger checks artifact verifiability against external store
-
-Phase 2 (future, if Phase 1 traction warrants):
-- pgvector ANN integration for semantic search at scale
-- Apache AGE for graph traversal beyond 3 hops
-- Optional MCP server for IDE integration
+Built for indie AI builders and enterprise teams under data-sovereignty constraints who already run
+PostgreSQL and want their agent memory in the same perimeter.
 
 ## Quick start
 
 ```bash
-# Requires PostgreSQL 14+
 git clone https://github.com/pgmnemo/pgmnemo.git
-cd pgmnemo
+cd pgmnemo/extension
 make
 sudo make install
-
-# In your psql session:
-CREATE EXTENSION pgmnemo;
-SELECT pgmnemo.version();
 ```
+
+```sql
+-- In psql:
+CREATE EXTENSION pgmnemo CASCADE;
+
+-- Write a lesson (provenance gate fires on INSERT)
+SELECT pgmnemo.ingest(
+    p_role        := 'developer',
+    p_project_id  := 1,
+    p_topic       := 'authentication',
+    p_lesson_text := 'Always rotate JWT secrets after a key-compromise incident.',
+    p_commit_sha  := 'abc1234'
+);
+
+-- Read back with hybrid scoring
+SELECT lesson_text, score
+FROM pgmnemo.recall_lessons(
+    query_embedding := <your_vector>,
+    query_text      := 'JWT secret rotation',
+    role            := 'developer'
+);
+```
+
+## Features
+
+- **HNSW vector search** — fast approximate nearest-neighbour recall via `pgvector` HNSW indexes
+- **Provenance gate** — writes are blocked (or warned) unless a `commit_sha` or `artifact_hash` is supplied; eliminates ghost lessons from hallucinating agents
+- **Recency-weighted scoring** — hybrid score combines cosine similarity + BM25 full-text + recency decay
+- **Role scoping** — first-class `role + project_id` composite isolation; no hand-rolled RLS required
+
+## Status
+
+[![CI](https://github.com/pgmnemo/pgmnemo/actions/workflows/ci.yml/badge.svg)](https://github.com/pgmnemo/pgmnemo/actions/workflows/ci.yml)
+
+v0.1.0 — HNSW + recency scoring + `ingest()` API. Pre-release; targeting public launch after ICSE-SEIP paper submission (~T+8w from 2026-04-29).
 
 ## Documentation
 
-See `docs/`:
-- `STRATEGY.md` — vision and roadmap
-- `POSITIONING.md` — how `pgmnemo` differs from OpenBrain, Constructive AgenticDB, MAGMA, mem0, Zep
-- `research/` — academic background (PAPER v0.2, ADRs, design notes)
+- [INSTALL.md](INSTALL.md) — build, install, configure, upgrade
+- [docs/USAGE.md](docs/USAGE.md) — API reference and tuning guide
+- [design/STRATEGY.md](design/STRATEGY.md) — vision and roadmap
+- [design/POSITIONING.md](design/POSITIONING.md) — competitive landscape
+- [design/](design/) — architecture and build plan
+
+## Why pgmnemo
+
+| | Other memory layers | `pgmnemo` |
+|---|---|---|
+| Form factor | separate service / SaaS / MCP server | `CREATE EXTENSION pgmnemo;` |
+| Data location | their cloud / their server | your existing PostgreSQL |
+| Trust gate on writes | none | **provenance gate** — requires commit SHA or artifact hash |
+| Multi-agent role isolation | RLS or none | first-class `role + project_id` composite |
+| Vendor lock-in | yes | none (Apache-2.0, plain SQL) |
+| Embeddings | provider-coupled | bring your own |
 
 ## License
 
@@ -71,11 +78,9 @@ Apache License 2.0 — see [LICENSE](LICENSE).
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md). Contributions are accepted under the DCO sign-off model.
+See [CONTRIBUTING.md](CONTRIBUTING.md). Contributions accepted under the DCO sign-off model.
 
 ## Citing
-
-If you use `pgmnemo` in academic work, please cite:
 
 ```bibtex
 @misc{gaydabura2026pgmnemo,
@@ -85,8 +90,3 @@ If you use `pgmnemo` in academic work, please cite:
   note   = {ICSE-SEIP submission in preparation}
 }
 ```
-
-## Project status & support
-
-This is an early-stage open-source project led by a small team. Issues and PRs are welcome.
-For roadmap and ongoing decisions, see `docs/STRATEGY.md`.
