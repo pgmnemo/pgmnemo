@@ -1,7 +1,8 @@
 # pgmnemo extension control file
-comment = 'Multi-agent memory substrate for PostgreSQL — provenance-gated, zero-dependency'
+# SPDX-License-Identifier: Apache-2.0
+comment = 'Multi-agent memory substrate for PostgreSQL — provenance-gated, vector-hybrid recall'
 default_version = '0.0.1'
-module_pathname = '$libdir/pgmnemo'
+requires = 'vector'
 relocatable = false
 schema = 'pgmnemo'
 trusted = false
