@@ -80,6 +80,23 @@ Apache License 2.0 — see [LICENSE](LICENSE).
 
 See [CONTRIBUTING.md](CONTRIBUTING.md). Contributions accepted under the DCO sign-off model.
 
+## v0.1.1 — recency_weight GUC
+
+Per BENCHMARK_FEATURE_REQUIREMENTS.md item 4: `pgmnemo.recency_weight` (default 0.2)
+controls the γ coefficient in `recall_lessons()` scoring. Used for paper §5 R1 ablation.
+Range: 0.0–1.0.
+
+```sql
+-- Disable recency for R1 ablation (γ=0)
+SET pgmnemo.recency_weight = '0.0';
+SELECT * FROM pgmnemo.recall_lessons(query_embedding := $1);
+
+-- Restore default
+RESET pgmnemo.recency_weight;
+```
+
+Upgrade from v0.1.0: `ALTER EXTENSION pgmnemo UPDATE TO '0.1.1';`
+
 ## Citing
 
 ```bibtex
