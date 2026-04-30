@@ -113,6 +113,23 @@ SELECT * FROM pgmnemo.recall_lessons_pooled(query_embedding := $1, app_id := 42)
 
 Upgrade from v0.1.1: `ALTER EXTENSION pgmnemo UPDATE TO '0.1.2';`
 
+## v0.1.3 — verifier_role column
+
+Per RESEARCH_PROVENANCE_GATE.md §5 HIGH-priority; Insight INS-007.
+Adds `verifier_role TEXT` (NULL-safe) to `pgmnemo.agent_lesson` for ranked-input provenance gate.
+NULL = unverified or unknown. Values: `PI`, `automated`, `founder`, `peer`, etc.
+No function changes; backward compatible.
+
+```sql
+-- Record verifier role on lesson insert
+INSERT INTO pgmnemo.agent_lesson (role, verifier_role, ...) VALUES ('developer', 'PI', ...);
+
+-- Query lessons verified by a specific role
+SELECT * FROM pgmnemo.agent_lesson WHERE verifier_role = 'PI';
+```
+
+Upgrade from v0.1.2: `ALTER EXTENSION pgmnemo UPDATE TO '0.1.3';`
+
 ## Citing
 
 ```bibtex
