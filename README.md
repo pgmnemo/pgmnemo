@@ -79,6 +79,7 @@ Apache License 2.0 — see [LICENSE](LICENSE).
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md). Contributions accepted under the DCO sign-off model.
+<<<<<<< Updated upstream
 
 ## v0.1.1 — recency_weight GUC
 
@@ -96,6 +97,22 @@ RESET pgmnemo.recency_weight;
 ```
 
 Upgrade from v0.1.0: `ALTER EXTENSION pgmnemo UPDATE TO '0.1.1';`
+
+## v0.1.2 — tri-state provenance + pooled recall
+
+Per RESEARCH_PROVENANCE_GATE.md §5/§6: `prov_strength` is now tri-state (0.0/0.4/1.0).
+The commit-only middle value changes from 0.5→0.4, aligning with CRAG "Ambiguous" semantics.
+Backward compatible — rows with `(NULL, NULL)` or `(non-NULL, non-NULL)` are unaffected.
+
+Per RESEARCH_RLS_PATTERNS.md §5 D4: `recall_lessons_pooled(query_embedding, k, app_id)` is
+the canonical R3-ablation entrypoint — drops the role filter for cross-role recall comparison.
+
+```sql
+-- Pooled cross-role recall (R3 ablation)
+SELECT * FROM pgmnemo.recall_lessons_pooled(query_embedding := $1, app_id := 42);
+```
+
+Upgrade from v0.1.1: `ALTER EXTENSION pgmnemo UPDATE TO '0.1.2';`
 
 ## Citing
 
