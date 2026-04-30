@@ -79,7 +79,6 @@ Apache License 2.0 — see [LICENSE](LICENSE).
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md). Contributions accepted under the DCO sign-off model.
-<<<<<<< Updated upstream
 
 ## v0.1.1 — recency_weight GUC
 
