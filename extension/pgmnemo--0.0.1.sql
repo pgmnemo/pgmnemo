@@ -14,12 +14,6 @@
 \echo Use "CREATE EXTENSION pgmnemo" to load this file. \quit
 
 -- ---------------------------------------------------------------------------
--- Schema
--- ---------------------------------------------------------------------------
-
-CREATE SCHEMA IF NOT EXISTS pgmnemo;
-
--- ---------------------------------------------------------------------------
 -- GUC: pgmnemo.gate_strict
 --
 -- Controls provenance enforcement at INSERT time.  Three modes per §6 decision:
