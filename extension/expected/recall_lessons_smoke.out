@@ -1,0 +1,27 @@
+-- pgmnemo regression test: recall_lessons() smoke
+-- Verifies: function compiles, accepts NULL::vector, returns ≥1 row after insert.
+-- Asserts: NON-EMPTY result set (PGMNEMO-HOTFIX-1 P0 fix verification).
+
+CREATE EXTENSION IF NOT EXISTS vector;
+CREATE EXTENSION pgmnemo;
+
+-- Insert one verified lesson with a non-null embedding so recall can find it.
+INSERT INTO pgmnemo.agent_lesson (
+    role, project_id, topic, lesson_text, importance,
+    embedding, verified_at, is_active
+) VALUES (
+    'agent', 1, 'smoke-test', 'hotfix v0.1.4.1 recall smoke lesson', 3,
+    array_fill(0.0, ARRAY[1024])::vector(1024),
+    NOW(), TRUE
+);
+INSERT 0 1
+
+-- recall_lessons(NULL::vector, k:=5) must compile and return ≥1 row.
+SET pgmnemo.include_unverified = 'false';
+SELECT count(*) >= 1 AS has_results
+FROM pgmnemo.recall_lessons(NULL::vector(1024), 5);
+ has_results
+-------------
+ t
+(1 row)
+
