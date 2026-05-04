@@ -5,19 +5,11 @@
 SELECT
     (NULL::TEXT IS NULL OR 'writer' = NULL::TEXT) AS pooled_matches_writer,
     (NULL::TEXT IS NULL OR 'reader' = NULL::TEXT) AS pooled_matches_reader;
- pooled_matches_writer | pooled_matches_reader 
------------------------+----------------------
- t                     | t
-(1 row)
 
 -- Verify role_filter='writer' scopes correctly.
 SELECT
     ('writer'::TEXT IS NULL OR 'writer' = 'writer'::TEXT) AS filter_matches_writer,
     ('writer'::TEXT IS NULL OR 'reader' = 'writer'::TEXT) AS filter_misses_reader;
- filter_matches_writer | filter_misses_reader 
------------------------+--------------------
- t                     | f
-(1 row)
 
 -- Confirm parameter name is role_filter (not role) — structural assertion via pg_proc.
 SELECT
@@ -29,10 +21,6 @@ WHERE n.nspname = 'pgmnemo'
   AND p.proname = 'recall_lessons'
   AND pronargs = 5
 LIMIT 1;
- param_is_role_filter | param_is_role_collision
-----------------------+------------------------
- t                    | f
-(1 row)
 
 -- Functional smoke: INSERT 1 verified lesson, confirm recall_lessons() returns ≥1 row.
 -- gate_strict=off so we can insert without commit_sha; include_unverified=on since no
@@ -41,11 +29,6 @@ SET pgmnemo.gate_strict = 'off';
 SET pgmnemo.include_unverified = 'on';
 INSERT INTO pgmnemo.agent_lesson (role, topic, lesson_text, importance)
 VALUES ('smoke_role', 'hotfix smoke', 'hotfix validation lesson for recall', 3);
-INSERT 0 1
+
 SELECT count(*) >= 1 AS has_results
 FROM pgmnemo.recall_lessons(NULL::vector(1024), 5, NULL, NULL, 'hotfix validation');
- has_results
--------------
- t
-(1 row)
-

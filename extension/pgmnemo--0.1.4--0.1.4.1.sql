@@ -2,9 +2,9 @@
 -- PGMNEMO-HOTFIX-1: recall_lessons() role IN/OUT param collision
 -- SPDX-License-Identifier: Apache-2.0
 --
--- ROOT CAUSE: IN-param `role text` collided with RETURNS TABLE column `role text`.
--- PL/pgSQL raises: ERROR: parameter name "role" used more than once.
--- FIX: rename IN-param `role` → `role_filter` throughout signature and body.
+-- ROOT CAUSE: IN-param `role TEXT` collided with RETURNS TABLE column `role TEXT`.
+-- PL/pgSQL raised ERROR: parameter name "role" used more than once.
+-- FIX: rename IN-param role → role_filter. RETURNS TABLE column `role` unchanged.
 -- Refs: INS-029, EXT_USER_TEST_RESULTS_WAVE2.md
 
 CREATE OR REPLACE FUNCTION pgmnemo.recall_lessons(
@@ -94,7 +94,7 @@ BEGIN
         WHERE al.is_active
           AND (_include_unverified OR al.verified_at IS NOT NULL)
           AND (recall_lessons.role_filter IS NULL OR al.role = recall_lessons.role_filter)
-          AND (recall_lessons.project_id  IS NULL OR al.project_id = recall_lessons.project_id)
+          AND (recall_lessons.project_id IS NULL OR al.project_id = recall_lessons.project_id)
           AND (al.embedding IS NOT NULL OR _has_text)
     )
     SELECT

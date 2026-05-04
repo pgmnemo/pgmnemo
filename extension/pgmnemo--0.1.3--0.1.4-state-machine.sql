@@ -10,7 +10,7 @@ ALTER TABLE pgmnemo.agent_lesson
 ALTER TABLE pgmnemo.agent_lesson
     ADD COLUMN IF NOT EXISTS state_changed_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
 
-CREATE TABLE pgmnemo.agent_lesson_state_transition (
+CREATE TABLE IF NOT EXISTS pgmnemo.agent_lesson_state_transition (
     from_state TEXT NOT NULL,
     to_state   TEXT NOT NULL,
     PRIMARY KEY (from_state, to_state)
@@ -33,7 +33,8 @@ INSERT INTO pgmnemo.agent_lesson_state_transition (from_state, to_state) VALUES
     ('superseded', 'archived'),
     ('conflicted', 'canonical'),
     ('conflicted', 'rejected'),
-    ('conflicted', 'archived');
+    ('conflicted', 'archived')
+ON CONFLICT DO NOTHING;
 
 CREATE OR REPLACE FUNCTION pgmnemo.transition_lesson(lesson_id BIGINT, new_state TEXT)
 RETURNS pgmnemo.agent_lesson
