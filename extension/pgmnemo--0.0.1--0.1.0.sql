@@ -6,7 +6,7 @@
 -- HNSW natively and is available in all supported benchmark environments.
 
 DROP INDEX IF EXISTS pgmnemo.pgmnemo_agent_lesson_embedding_idx;
-CREATE INDEX pgmnemo_agent_lesson_embedding_idx
+CREATE INDEX IF NOT EXISTS pgmnemo_agent_lesson_embedding_idx
   ON pgmnemo.agent_lesson
   USING hnsw (embedding vector_cosine_ops)
   WITH (m=16, ef_construction=64)
