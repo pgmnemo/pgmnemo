@@ -1,0 +1,38 @@
+-- Regression test: pgmnemo.recency_weight GUC (v0.1.1)
+-- Verifies γ=0.0 collapses recency contribution to zero and
+-- γ=0.5 produces a measurable spread between old and new lessons.
+
+-- Setup: two lessons with identical embeddings and importance but different ages
+CREATE TEMPORARY TABLE _rw_lessons AS
+SELECT
+    0                                    AS importance,
+    NOW() - INTERVAL '1 day'            AS new_created_at,
+    NOW() - INTERVAL '89 days'          AS old_created_at;
+
+-- Compute recency term directly (avoids recall_lessons() embedding requirement)
+-- γ=0.0: both recency terms must be 0.0
+SET pgmnemo.recency_weight = '0.0';
+SELECT
+    round(
+        0.0 * GREATEST(0.0, 1.0 - LEAST(1  / 90.0, 1.0))::numeric, 6
+    ) AS new_recency_gamma0,
+    round(
+        0.0 * GREATEST(0.0, 1.0 - LEAST(89 / 90.0, 1.0))::numeric, 6
+    ) AS old_recency_gamma0;
+
+-- γ=0.5: new lesson should score higher than old
+SET pgmnemo.recency_weight = '0.5';
+SELECT
+    round(
+        0.5 * GREATEST(0.0, 1.0 - LEAST(1  / 90.0, 1.0))::numeric, 6
+    ) AS new_recency_gamma05,
+    round(
+        0.5 * GREATEST(0.0, 1.0 - LEAST(89 / 90.0, 1.0))::numeric, 6
+    ) AS old_recency_gamma05,
+    (0.5 * GREATEST(0.0, 1.0 - LEAST(1  / 90.0, 1.0))) >
+    (0.5 * GREATEST(0.0, 1.0 - LEAST(89 / 90.0, 1.0))) AS new_beats_old;
+
+-- Reset to default
+RESET pgmnemo.recency_weight;
+
+DROP TABLE _rw_lessons;

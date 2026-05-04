@@ -130,6 +130,40 @@ SELECT * FROM pgmnemo.agent_lesson WHERE verifier_role = 'PI';
 
 Upgrade from v0.1.2: `ALTER EXTENSION pgmnemo UPDATE TO '0.1.3';`
 
+## v0.1.4 — TTL / expires_at
+
+Adds an optional `expires_at TIMESTAMPTZ` column to `pgmnemo.agent_lesson`.
+`NULL` means the lesson never expires. Rows with `expires_at < NOW()` are removed by calling the helper function below.
+
+```sql
+-- Write a lesson that expires in 30 days
+INSERT INTO pgmnemo.agent_lesson (role, project_id, topic, lesson_text, expires_at)
+VALUES ('developer', 1, 'auth', 'Rotate JWT secrets monthly.', NOW() + INTERVAL '30 days');
+
+-- Manually evict stale lessons (returns number of rows deleted)
+SELECT pgmnemo.evict_expired_lessons();
+```
+
+### Scheduling eviction
+
+**pg_cron (recommended — runs inside PostgreSQL):**
+
+```sql
+-- Install pg_cron first, then:
+SELECT cron.schedule('pgmnemo-evict', '*/15 * * * *', 'SELECT pgmnemo.evict_expired_lessons()');
+```
+
+**External cron (any host with psql access):**
+
+```
+# /etc/cron.d/pgmnemo  — runs every 15 minutes
+*/15 * * * *  postgres  psql -d mydb -c "SELECT pgmnemo.evict_expired_lessons();"
+```
+
+**pg_timetable or other schedulers** can invoke the same SQL statement on the same cadence.
+
+Upgrade from v0.1.3: `ALTER EXTENSION pgmnemo UPDATE TO '0.1.4-ttl';`
+
 ## Citing
 
 ```bibtex
