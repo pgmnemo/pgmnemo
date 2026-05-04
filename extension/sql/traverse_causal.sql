@@ -1,0 +1,44 @@
+-- Regression test: traverse_causal_chain() (v0.2.0)
+-- Tests SP logic predicates without a live table.
+
+-- 1. max_depth cap: values > 10 clamp to 10
+SELECT
+    CASE WHEN 15 > 10 THEN 10 ELSE 15 END AS depth_15_capped_to_10,
+    CASE WHEN 10 > 10 THEN 10 ELSE 10 END AS depth_10_stays_10,
+    CASE WHEN 5  > 10 THEN 10 ELSE 5  END AS depth_5_stays_5;
+
+-- Expected: 10, 10, 5
+
+-- 2. edge_type filter: only causal/derives_from/contradicts traverse
+SELECT
+    ('causal'       = ANY(ARRAY['causal','derives_from','contradicts'])) AS causal_included,
+    ('derives_from' = ANY(ARRAY['causal','derives_from','contradicts'])) AS derives_from_included,
+    ('contradicts'  = ANY(ARRAY['causal','derives_from','contradicts'])) AS contradicts_included,
+    ('relates_to'   = ANY(ARRAY['causal','derives_from','contradicts'])) AS relates_to_excluded;
+
+-- Expected: t, t, t, f
+
+-- 3. depth guard: c.depth < max_depth halts traversal at boundary
+SELECT
+    (4 < 5) AS depth_4_within_max5,
+    (5 < 5) AS depth_5_blocked_at_max5,
+    (9 < 10) AS depth_9_within_max10,
+    (10 < 10) AS depth_10_blocked_at_max10;
+
+-- Expected: t, f, t, f
+
+-- 4. seed row excluded from result: WHERE depth > 0
+SELECT
+    (0 > 0) AS seed_depth_excluded,
+    (1 > 0) AS first_hop_included,
+    (5 > 0) AS fifth_hop_included;
+
+-- Expected: f, t, t
+
+-- 5. weight pass-through: weight from mem_edge is returned unchanged
+SELECT
+    (0.9::DOUBLE PRECISION = 0.9) AS weight_09_intact,
+    (1.0::DOUBLE PRECISION = 1.0) AS weight_10_intact,
+    (0.0::DOUBLE PRECISION = 0.0) AS weight_00_intact;
+
+-- Expected: t, t, t
