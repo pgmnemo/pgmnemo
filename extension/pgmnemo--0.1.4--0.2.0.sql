@@ -45,17 +45,17 @@ COMMENT ON TABLE pgmnemo.mem_edge IS
     'valid_until IS NULL = currently valid edge.';
 
 -- Forward traversal: source → all outbound edges of a given type
-CREATE INDEX pgmnemo_mem_edge_source_type_idx
+CREATE INDEX IF NOT EXISTS pgmnemo_mem_edge_source_type_idx
     ON pgmnemo.mem_edge (source_id, relation_type)
     WHERE valid_until IS NULL;
 
 -- Reverse traversal: target → all inbound edges
-CREATE INDEX pgmnemo_mem_edge_target_type_idx
+CREATE INDEX IF NOT EXISTS pgmnemo_mem_edge_target_type_idx
     ON pgmnemo.mem_edge (target_id, relation_type)
     WHERE valid_until IS NULL;
 
 -- Temporal range scans (traverse_temporal_window)
-CREATE INDEX pgmnemo_mem_edge_valid_range_idx
+CREATE INDEX IF NOT EXISTS pgmnemo_mem_edge_valid_range_idx
     ON pgmnemo.mem_edge (valid_from, valid_until);
 
 CREATE TRIGGER mem_edge_updated_at

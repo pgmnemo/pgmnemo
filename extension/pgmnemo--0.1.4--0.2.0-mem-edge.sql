@@ -12,8 +12,8 @@ CREATE TABLE pgmnemo.mem_edge (
     created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX ix_pgmnemo_mem_edge_source    ON pgmnemo.mem_edge (source_id, edge_type);
-CREATE INDEX ix_pgmnemo_mem_edge_target    ON pgmnemo.mem_edge (target_id, edge_type);
-CREATE INDEX ix_pgmnemo_mem_edge_type_time ON pgmnemo.mem_edge (edge_type, created_at DESC);
+CREATE INDEX IF NOT EXISTS ix_pgmnemo_mem_edge_source    ON pgmnemo.mem_edge (source_id, edge_type);
+CREATE INDEX IF NOT EXISTS ix_pgmnemo_mem_edge_target    ON pgmnemo.mem_edge (target_id, edge_type);
+CREATE INDEX IF NOT EXISTS ix_pgmnemo_mem_edge_type_time ON pgmnemo.mem_edge (edge_type, created_at DESC);
 
 COMMENT ON TABLE pgmnemo.mem_edge IS 'Multi-graph relations between lessons. v0.2.0 RFC §3.';
