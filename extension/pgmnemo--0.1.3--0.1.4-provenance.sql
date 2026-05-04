@@ -3,14 +3,14 @@
 -- Closes: https://github.com/pgmnemo/pgmnemo/issues/4
 -- SPDX-License-Identifier: Apache-2.0
 
-ALTER TABLE pgmnemo.agent_lesson ADD COLUMN source_run_id  BIGINT NULL;
-ALTER TABLE pgmnemo.agent_lesson ADD COLUMN source_task_id BIGINT NULL;
+ALTER TABLE pgmnemo.agent_lesson ADD COLUMN IF NOT EXISTS source_run_id  BIGINT NULL;
+ALTER TABLE pgmnemo.agent_lesson ADD COLUMN IF NOT EXISTS source_task_id BIGINT NULL;
 
-CREATE INDEX ix_pgmnemo_lesson_source_run
+CREATE INDEX IF NOT EXISTS ix_pgmnemo_lesson_source_run
     ON pgmnemo.agent_lesson (source_run_id)
     WHERE source_run_id IS NOT NULL;
 
-CREATE INDEX ix_pgmnemo_lesson_source_task
+CREATE INDEX IF NOT EXISTS ix_pgmnemo_lesson_source_task
     ON pgmnemo.agent_lesson (source_task_id)
     WHERE source_task_id IS NOT NULL;
 
