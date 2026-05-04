@@ -10,7 +10,7 @@
 -- § 3  pgmnemo.mem_edge DDL
 -- ─────────────────────────────────────────────────────────────────
 
-CREATE TABLE pgmnemo.mem_edge (
+CREATE TABLE IF NOT EXISTS pgmnemo.mem_edge (
     id              BIGSERIAL       PRIMARY KEY,
     source_id       BIGINT          NOT NULL
                         REFERENCES pgmnemo.agent_lesson(id) ON DELETE CASCADE,

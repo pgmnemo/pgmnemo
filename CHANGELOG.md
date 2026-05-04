@@ -5,6 +5,38 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [0.2.0.1] — 2026-05-04
+
+### Fixed
+
+- **`traverse_temporal_window()` numeric → double precision cast** (INS-030) — comparison between a `NUMERIC` intermediate value and `DOUBLE PRECISION` caused a type-mismatch error at runtime on PostgreSQL 14/15. Cast now explicit throughout the function body.
+- **`recall_lessons()` IN-param/RETURNS TABLE collision** (INS-029) — IN-param `role` renamed to `role_filter` (backport of v0.1.4.1 fix; see below).
+- **Idempotent upgrade DDL** (INS-031) — `ADD COLUMN IF NOT EXISTS` and `CREATE INDEX IF NOT EXISTS` guards added across all `0.1.4→0.2.0` upgrade scripts (backport of v0.1.4.1 fix).
+- **`recall_lessons_pooled()` post-collision smoke** (Action #7) — confirmed pooled wrapper correctly delegates to the renamed `role_filter` parameter after the collision fix.
+
+### Upgrade
+
+```sql
+ALTER EXTENSION pgmnemo UPDATE TO '0.2.0.1';
+```
+
+---
+
+## [0.1.4.1] — 2026-05-04 (maintenance branch)
+
+### Fixed
+
+- **`recall_lessons()` IN-param/RETURNS TABLE collision** (INS-029, P0) — PL/pgSQL raised `ERROR: parameter name "role" used more than once` because the IN-param `role TEXT` collided with the `RETURNS TABLE` column of the same name. The flagship function never compiled on a fresh install. Fix: IN-param renamed to `role_filter`; all callers updated.
+- **Idempotent upgrade DDL** (INS-031) — `ADD COLUMN IF NOT EXISTS` and `CREATE INDEX IF NOT EXISTS` guards applied across all upgrade scripts so re-running a patch on an already-upgraded database no longer raises duplicate-object errors.
+
+### Upgrade
+
+```sql
+ALTER EXTENSION pgmnemo UPDATE TO '0.1.4.1';
+```
+
+---
+
 ## [0.2.0] — 2026-05-04
 
 ### Added
