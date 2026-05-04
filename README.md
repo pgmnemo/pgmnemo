@@ -130,6 +130,28 @@ SELECT * FROM pgmnemo.agent_lesson WHERE verifier_role = 'PI';
 
 Upgrade from v0.1.2: `ALTER EXTENSION pgmnemo UPDATE TO '0.1.3';`
 
+## v0.1.4 — state machine + TTL + provenance FKs
+
+Three features bundled:
+
+- **State machine** (`closes #3`): `agent_lesson.state` column (9 states) + `agent_lesson_state_transition` table (17 allowed moves) + `pgmnemo.transition_lesson(id, new_state)` function that enforces valid transitions.
+- **TTL / expires_at** (`closes #5`): `agent_lesson.expires_at TIMESTAMPTZ NULL` + partial index + `pgmnemo.evict_expired_lessons()` eviction helper.
+- **Provenance FKs** (`closes #4`): `agent_lesson.source_run_id` + `agent_lesson.source_task_id` soft-FK columns with partial indexes.
+- **version() fix** (`closes #1`): `pgmnemo.version()` now reads `extversion` from `pg_catalog.pg_extension` instead of a hard-coded string.
+
+```sql
+-- Lifecycle state machine
+SELECT pgmnemo.transition_lesson(lesson_id := 42, new_state := 'validated');
+
+-- TTL-based eviction (schedule with pg_cron at 15-min cadence)
+SELECT pgmnemo.evict_expired_lessons();
+
+-- Provenance traceability
+SELECT * FROM pgmnemo.agent_lesson WHERE source_run_id = 6795;
+```
+
+Upgrade from v0.1.3: `ALTER EXTENSION pgmnemo UPDATE TO '0.1.4';`
+
 ## Citing
 
 ```bibtex
