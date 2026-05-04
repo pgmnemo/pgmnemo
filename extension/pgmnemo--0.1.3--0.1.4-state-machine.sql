@@ -4,11 +4,11 @@
 -- SPDX-License-Identifier: Apache-2.0
 
 ALTER TABLE pgmnemo.agent_lesson
-    ADD COLUMN state TEXT NOT NULL DEFAULT 'draft'
+    ADD COLUMN IF NOT EXISTS state TEXT NOT NULL DEFAULT 'draft'
         CHECK (state IN ('draft','candidate','validated','canonical','deprecated','superseded','archived','rejected','conflicted'));
 
 ALTER TABLE pgmnemo.agent_lesson
-    ADD COLUMN state_changed_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
+    ADD COLUMN IF NOT EXISTS state_changed_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
 
 CREATE TABLE pgmnemo.agent_lesson_state_transition (
     from_state TEXT NOT NULL,
