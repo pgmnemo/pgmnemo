@@ -37,7 +37,7 @@ BEGIN
     RETURN QUERY
     SELECT
         al.id                                                         AS lesson_id,
-        ABS(EXTRACT(EPOCH FROM (al.created_at - _anchor_ts)))        AS time_delta_sec,
+        ABS(EXTRACT(EPOCH FROM (al.created_at - _anchor_ts)))::DOUBLE PRECISION AS time_delta_sec,
         e.weight                                                      AS edge_weight,
         (e.weight IS NOT NULL)                                        AS linked
     FROM pgmnemo.agent_lesson al
