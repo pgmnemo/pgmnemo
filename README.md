@@ -132,7 +132,7 @@ Upgrade from v0.1.2: `ALTER EXTENSION pgmnemo UPDATE TO '0.1.3';`
 
 ## v0.1.4 — state machine + TTL + provenance FKs
 
-Three features bundled:
+Four features bundled:
 
 - **State machine** (`closes #3`): `agent_lesson.state` column (9 states) + `agent_lesson_state_transition` table (17 allowed moves) + `pgmnemo.transition_lesson(id, new_state)` function that enforces valid transitions.
 - **TTL / expires_at** (`closes #5`): `agent_lesson.expires_at TIMESTAMPTZ NULL` + partial index + `pgmnemo.evict_expired_lessons()` eviction helper.
@@ -143,11 +143,29 @@ Three features bundled:
 -- Lifecycle state machine
 SELECT pgmnemo.transition_lesson(lesson_id := 42, new_state := 'validated');
 
--- TTL-based eviction (schedule with pg_cron at 15-min cadence)
+-- Write a lesson that expires in 30 days
+INSERT INTO pgmnemo.agent_lesson (role, project_id, topic, lesson_text, expires_at)
+VALUES ('developer', 1, 'auth', 'Rotate JWT secrets monthly.', NOW() + INTERVAL '30 days');
+
+-- TTL eviction — schedule with pg_cron at 15-min cadence
 SELECT pgmnemo.evict_expired_lessons();
 
 -- Provenance traceability
 SELECT * FROM pgmnemo.agent_lesson WHERE source_run_id = 6795;
+```
+
+### Scheduling TTL eviction
+
+**pg_cron (recommended):**
+
+```sql
+SELECT cron.schedule('pgmnemo-evict', '*/15 * * * *', 'SELECT pgmnemo.evict_expired_lessons()');
+```
+
+**External cron:**
+
+```
+*/15 * * * *  postgres  psql -d mydb -c "SELECT pgmnemo.evict_expired_lessons();"
 ```
 
 Upgrade from v0.1.3: `ALTER EXTENSION pgmnemo UPDATE TO '0.1.4';`
