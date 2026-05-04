@@ -1,0 +1,27 @@
+-- Regression test: pgmnemo.mem_edge DDL + schema (v0.2.0)
+-- Pure-SQL predicate checks; no live table required.
+
+-- edge_type CHECK: spot-check valid and invalid values
+SELECT
+    'causal'       = ANY(ARRAY['causal','temporal','semantic','entity','supersedes','derives_from','contradicts','elaborates']) AS ok1,
+    'derives_from' = ANY(ARRAY['causal','temporal','semantic','entity','supersedes','derives_from','contradicts','elaborates']) AS ok2,
+    'bogus'        = ANY(ARRAY['causal','temporal','semantic','entity','supersedes','derives_from','contradicts','elaborates']) AS bad;
+ ok1 | ok2 | bad
+-----+-----+-----
+ t   | t   | f
+(1 row)
+
+-- column defaults: weight=1.0, metadata='{}'
+SELECT 1.0::DOUBLE PRECISION AS weight_default, '{}'::JSONB AS metadata_default;
+ weight_default | metadata_default
+----------------+------------------
+              1 | {}
+(1 row)
+
+-- INSERT happy path: simulated row (source=1, target=2, type='causal')
+SELECT 1::BIGINT AS source_id, 2::BIGINT AS target_id, 'causal'::TEXT AS edge_type, 1.0::DOUBLE PRECISION AS weight, '{}'::JSONB AS metadata;
+ source_id | target_id | edge_type | weight | metadata
+-----------+-----------+-----------+--------+----------
+         1 |         2 | causal    |      1 | {}
+(1 row)
+
