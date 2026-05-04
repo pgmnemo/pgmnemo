@@ -5,6 +5,44 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [0.2.0] — 2026-05-04
+
+### Added
+
+- **`pgmnemo.mem_edge` DDL** (closes RFC §3) — directed typed edge table between `agent_lesson` rows.
+  - Columns: `source_id`, `target_id`, `relation_type` (CAUSED_BY, SUPERSEDES, CO_OCCURRED, DERIVED_FROM, or user-defined), `weight REAL` [0.0–1.0], bitemporality (`valid_from`/`valid_until`), `commit_sha`, `metadata JSONB`.
+  - Three covering indexes: forward/reverse traversal on `(source_id, relation_type)` and `(target_id, relation_type)` with `WHERE valid_until IS NULL`; temporal range index on `(valid_from, valid_until)`.
+  - `CONSTRAINT ck_no_self_loop`: prevents `source_id = target_id`.
+
+- **`pgmnemo.traverse_causal_chain(start_id, max_depth, relation_types, only_active)`** (closes RFC §4) — recursive CTE walk of the causal edge graph.
+  - Returns `(lesson_id, depth, path BIGINT[], path_weight, role, topic, lesson_text, importance, created_at, commit_sha, verified_at)`.
+  - Cycle-safe via accumulated path array. Fail-safe: returns zero rows if `start_id` missing.
+  - `max_depth` default 5; `relation_types` default `ARRAY['CAUSED_BY']`; `only_active` default `TRUE`.
+
+- **`pgmnemo.traverse_temporal_window(start_id, window_interval, include_unlinked, role_filter, project_id_filter, k)`** (closes RFC §5) — co-temporal episode discovery.
+  - Returns lessons whose `created_at` falls within `±window_interval` of the anchor lesson. Window hard-capped at 30 days.
+  - `linked=TRUE` when a `mem_edge` (either direction) exists between the row and `start_id`.
+  - Ghost-lesson exclusion controlled by `pgmnemo.include_unverified` GUC (default off).
+
+- **Graph-proximity mixin for `recall_lessons()`** (PGMNEMO-V020-4) — integrates BFS graph traversal into scoring.
+  - Updated scoring formula: `0.4×cosine + 0.2×importance + γ×recency + 0.1×prov_strength + δ×graph_proximity`.
+  - `graph_proximity = MAX(1 - depth/max_depth)` via BFS through `CAUSED_BY`, `CO_OCCURRED`, `DERIVED_FROM` edges from top-5 cosine anchors (max_depth=5).
+  - New GUC `pgmnemo.graph_proximity_weight` (default `0.2`, clamped to `[0.0, 0.5]`).
+
+### Upgrade
+
+```sql
+ALTER EXTENSION pgmnemo UPDATE TO '0.2.0';
+```
+
+Or from a fresh install:
+
+```sql
+CREATE EXTENSION pgmnemo CASCADE;   -- installs 0.2.0 directly
+```
+
+---
+
 ## [0.1.4] — 2026-05-04
 
 ### Added
