@@ -250,7 +250,7 @@ COMMENT ON FUNCTION pgmnemo._enforce_provenance_gate() IS
 CREATE OR REPLACE FUNCTION pgmnemo.recall_lessons(
     query_embedding  vector(1024),
     k                INT     DEFAULT 10,
-    role             TEXT    DEFAULT NULL,
+    role_filter      TEXT    DEFAULT NULL,
     project_id       INT     DEFAULT NULL,
     query_text       TEXT    DEFAULT NULL
 )
@@ -331,7 +331,7 @@ BEGIN
         FROM pgmnemo.agent_lesson al
         WHERE al.is_active
           AND (_include_unverified OR al.verified_at IS NOT NULL)
-          AND (recall_lessons.role     IS NULL OR al.role       = recall_lessons.role)
+          AND (recall_lessons.role_filter IS NULL OR al.role = recall_lessons.role_filter)
           AND (recall_lessons.project_id IS NULL OR al.project_id = recall_lessons.project_id)
           -- Require embedding when no text query (avoid returning random unrelated rows)
           AND (al.embedding IS NOT NULL OR _has_text)
