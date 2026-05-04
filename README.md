@@ -57,8 +57,8 @@ v0.1.0 — HNSW + recency scoring + `ingest()` API. Pre-release; targeting publi
 
 - [INSTALL.md](INSTALL.md) — build, install, configure, upgrade
 - [docs/USAGE.md](docs/USAGE.md) — API reference and tuning guide
-- [design/STRATEGY.md](design/STRATEGY.md) — vision and roadmap
-- [design/POSITIONING.md](design/POSITIONING.md) — competitive landscape
+- [docs/STRATEGY.md](docs/STRATEGY.md) — vision and roadmap
+- [docs/POSITIONING.md](docs/POSITIONING.md) — competitive landscape
 - [design/](design/) — architecture and build plan
 
 ## Why pgmnemo
@@ -79,96 +79,6 @@ Apache License 2.0 — see [LICENSE](LICENSE).
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md). Contributions accepted under the DCO sign-off model.
-
-## v0.1.1 — recency_weight GUC
-
-Per BENCHMARK_FEATURE_REQUIREMENTS.md item 4: `pgmnemo.recency_weight` (default 0.2)
-controls the γ coefficient in `recall_lessons()` scoring. Used for paper §5 R1 ablation.
-Range: 0.0–1.0.
-
-```sql
--- Disable recency for R1 ablation (γ=0)
-SET pgmnemo.recency_weight = '0.0';
-SELECT * FROM pgmnemo.recall_lessons(query_embedding := $1);
-
--- Restore default
-RESET pgmnemo.recency_weight;
-```
-
-Upgrade from v0.1.0: `ALTER EXTENSION pgmnemo UPDATE TO '0.1.1';`
-
-## v0.1.2 — tri-state provenance + pooled recall
-
-Per RESEARCH_PROVENANCE_GATE.md §5/§6: `prov_strength` is now tri-state (0.0/0.4/1.0).
-The commit-only middle value changes from 0.5→0.4, aligning with CRAG "Ambiguous" semantics.
-Backward compatible — rows with `(NULL, NULL)` or `(non-NULL, non-NULL)` are unaffected.
-
-Per RESEARCH_RLS_PATTERNS.md §5 D4: `recall_lessons_pooled(query_embedding, k, app_id)` is
-the canonical R3-ablation entrypoint — drops the role filter for cross-role recall comparison.
-
-```sql
--- Pooled cross-role recall (R3 ablation)
-SELECT * FROM pgmnemo.recall_lessons_pooled(query_embedding := $1, app_id := 42);
-```
-
-Upgrade from v0.1.1: `ALTER EXTENSION pgmnemo UPDATE TO '0.1.2';`
-
-## v0.1.3 — verifier_role column
-
-Per RESEARCH_PROVENANCE_GATE.md §5 HIGH-priority; Insight INS-007.
-Adds `verifier_role TEXT` (NULL-safe) to `pgmnemo.agent_lesson` for ranked-input provenance gate.
-NULL = unverified or unknown. Values: `PI`, `automated`, `founder`, `peer`, etc.
-No function changes; backward compatible.
-
-```sql
--- Record verifier role on lesson insert
-INSERT INTO pgmnemo.agent_lesson (role, verifier_role, ...) VALUES ('developer', 'PI', ...);
-
--- Query lessons verified by a specific role
-SELECT * FROM pgmnemo.agent_lesson WHERE verifier_role = 'PI';
-```
-
-Upgrade from v0.1.2: `ALTER EXTENSION pgmnemo UPDATE TO '0.1.3';`
-
-## v0.1.4 — state machine + TTL + provenance FKs
-
-Four features bundled:
-
-- **State machine** (`closes #3`): `agent_lesson.state` column (9 states) + `agent_lesson_state_transition` table (17 allowed moves) + `pgmnemo.transition_lesson(id, new_state)` function that enforces valid transitions.
-- **TTL / expires_at** (`closes #5`): `agent_lesson.expires_at TIMESTAMPTZ NULL` + partial index + `pgmnemo.evict_expired_lessons()` eviction helper.
-- **Provenance FKs** (`closes #4`): `agent_lesson.source_run_id` + `agent_lesson.source_task_id` soft-FK columns with partial indexes.
-- **version() fix** (`closes #1`): `pgmnemo.version()` now reads `extversion` from `pg_catalog.pg_extension` instead of a hard-coded string.
-
-```sql
--- Lifecycle state machine
-SELECT pgmnemo.transition_lesson(lesson_id := 42, new_state := 'validated');
-
--- Write a lesson that expires in 30 days
-INSERT INTO pgmnemo.agent_lesson (role, project_id, topic, lesson_text, expires_at)
-VALUES ('developer', 1, 'auth', 'Rotate JWT secrets monthly.', NOW() + INTERVAL '30 days');
-
--- TTL eviction — schedule with pg_cron at 15-min cadence
-SELECT pgmnemo.evict_expired_lessons();
-
--- Provenance traceability
-SELECT * FROM pgmnemo.agent_lesson WHERE source_run_id = 6795;
-```
-
-### Scheduling TTL eviction
-
-**pg_cron (recommended):**
-
-```sql
-SELECT cron.schedule('pgmnemo-evict', '*/15 * * * *', 'SELECT pgmnemo.evict_expired_lessons()');
-```
-
-**External cron:**
-
-```
-*/15 * * * *  postgres  psql -d mydb -c "SELECT pgmnemo.evict_expired_lessons();"
-```
-
-Upgrade from v0.1.3: `ALTER EXTENSION pgmnemo UPDATE TO '0.1.4';`
 
 ## Citing
 
