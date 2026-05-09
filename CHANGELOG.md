@@ -5,6 +5,27 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [0.2.1] — 2026-05-09
+
+### Added
+
+- **`traverse_causal_chain(direction)` parameter** (W2.2 / F5) — adds `direction TEXT DEFAULT 'forward'` parameter. `'forward'` follows source→target edges (existing behaviour, backward-compatible). `'backward'` follows target→source edges for reverse traversal. `'both'` traverses all edges. Input validation raises `EXCEPTION` on invalid values. Cycle guard via path array applies to all directions.
+- **`pgmnemo.ef_search` GUC** (F2) — `SET LOCAL pgvector.hnsw.ef_search` applied at `recall_lessons()` entry from `pgmnemo.ef_search` GUC (default 100, clamped 10–500).
+- **Graph-proximity mixin in standard upgrade path** (F3) — `pgmnemo--0.2.0-step4-recall-mixin.sql` content folded into the v0.2.0.1→0.2.1 upgrade script (was supplemental-only).
+- **Row-Level Security multi-tenant isolation** (W2.3 / Q5) — `pgmnemo.tenant_id` GUC gates `agent_lesson` by `project_id` and `mem_edge` by endpoint ownership. Empty/unset = service-account bypass. Policies are idempotent (DROP IF EXISTS before CREATE).
+
+### Changed
+
+- **`pgmnemo.recency_weight` default lowered** (F1) — from `0.20` to `0.08` (pending REC-1 ablation confirmation). Operator can override via `ALTER SYSTEM SET pgmnemo.recency_weight = '<value>'; SELECT pg_reload_conf();`.
+
+### Upgrade
+
+```sql
+ALTER EXTENSION pgmnemo UPDATE TO '0.2.1';
+```
+
+---
+
 ## [0.2.0.1] — 2026-05-04
 
 ### Fixed
