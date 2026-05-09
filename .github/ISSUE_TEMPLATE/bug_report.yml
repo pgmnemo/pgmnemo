@@ -1,0 +1,33 @@
+name: Bug report
+description: Report a reproducible bug in pgmnemo
+title: "[bug] "
+labels: ["bug", "needs-repro"]
+body:
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: pgmnemo version
+    validations:
+      required: true
+  - type: input
+    id: postgres
+    attributes:
+      label: PostgreSQL version
+    validations:
+      required: true
+  - type: input
+    id: pgvector
+    attributes:
+      label: pgvector version
+  - type: textarea
+    id: repro
+    attributes:
+      label: Minimal reproduction
+    validations:
+      required: true

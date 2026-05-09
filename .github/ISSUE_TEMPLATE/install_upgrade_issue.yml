@@ -1,0 +1,29 @@
+name: Install or upgrade issue
+description: Report install, build, packaging, or upgrade-path problems
+title: "[install] "
+labels: ["install", "needs-repro"]
+body:
+  - type: dropdown
+    id: kind
+    attributes:
+      label: Problem type
+      options:
+        - fresh install
+        - upgrade
+        - build from source
+        - Docker path
+        - packaging / distribution
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+    validations:
+      required: true
+  - type: textarea
+    id: details
+    attributes:
+      label: Reproduction and error output
+    validations:
+      required: true

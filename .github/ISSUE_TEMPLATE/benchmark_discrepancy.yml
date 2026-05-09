@@ -1,0 +1,17 @@
+name: Benchmark discrepancy
+description: Report a benchmark reproduction mismatch or methodology concern
+title: "[benchmark] "
+labels: ["benchmark", "needs-repro"]
+body:
+  - type: input
+    id: benchmark
+    attributes:
+      label: Benchmark
+    validations:
+      required: true
+  - type: textarea
+    id: discrepancy
+    attributes:
+      label: Expected vs observed
+    validations:
+      required: true
