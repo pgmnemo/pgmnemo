@@ -1,76 +1,68 @@
 # pgmnemo
 
-> Multi-agent memory layer for PostgreSQL — provenance-gated, HNSW-accelerated, zero-dependency, Apache-2.0.
+**Multi-agent memory substrate for PostgreSQL — provenance-gated, vector-hybrid recall.**
 
-`pgmnemo` is a PostgreSQL extension that gives multi-agent AI systems durable, auditable memory
-without a separate service, a SaaS dependency, or vendor lock-in. Install it with one SQL command
-and read/write agent memory directly inside your existing database.
+[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
+[![Version](https://img.shields.io/badge/version-0.2.0.1-green.svg)](CHANGELOG.md)
+[![CI](https://github.com/pgmnemo/pgmnemo/actions/workflows/ci.yml/badge.svg)](https://github.com/pgmnemo/pgmnemo/actions/workflows/ci.yml)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-17-4169E1.svg)](https://www.postgresql.org/)
 
-Built for indie AI builders and enterprise teams under data-sovereignty constraints who already run
-PostgreSQL and want their agent memory in the same perimeter.
+## Why this exists
 
-## Quick start
+- **One differentiator none of Pinecone, Letta, Mem0, or Zep have:** a write-time provenance gate. Every `ingest()` call must carry a `commit_sha` or `artifact_hash`; rows without provenance are blocked (or warned) by default. Hallucinated agent memories cannot silently accumulate.
+- **No new service.** `CREATE EXTENSION pgmnemo;` in your existing PostgreSQL — no separate API server, no SaaS endpoint, no vendor lock-in.
+- **Hybrid recall in-database.** Cosine similarity (HNSW) + BM25 full-text + recency decay + importance weighting, scored in one SQL call.
+- **Role isolation built in.** First-class `role + project_id` composite scoping; no hand-rolled RLS.
+
+## 30-second quickstart
 
 ```bash
+# 1. Start PG 17 + pgvector
+docker run --name pgmnemo-dev -e POSTGRES_PASSWORD=pass -p 5432:5432 -d pgvector/pgvector:pg17
+
+# 2. Build and install the extension (requires make, gcc, pg_config on PATH)
 git clone https://github.com/pgmnemo/pgmnemo.git
-cd pgmnemo/extension
-make
-sudo make install
+docker exec pgmnemo-dev bash -c "apt-get install -y postgresql-server-dev-17 make gcc 2>/dev/null; true"
+docker cp pgmnemo/extension pgmnemo-dev:/tmp/pgmnemo
+docker exec pgmnemo-dev bash -c "cd /tmp/pgmnemo && make && make install"
 ```
 
 ```sql
--- In psql:
+-- psql -h localhost -U postgres
+
 CREATE EXTENSION pgmnemo CASCADE;
 
--- Write a lesson (provenance gate fires on INSERT)
 SELECT pgmnemo.ingest(
     p_role        := 'developer',
     p_project_id  := 1,
-    p_topic       := 'authentication',
-    p_lesson_text := 'Always rotate JWT secrets after a key-compromise incident.',
+    p_topic       := 'auth',
+    p_lesson_text := 'Rotate JWT secrets after any key-compromise incident.',
     p_commit_sha  := 'abc1234'
 );
 
--- Read back with hybrid scoring
 SELECT lesson_text, score
 FROM pgmnemo.recall_lessons(
-    query_embedding := <your_vector>,
+    query_embedding := array_fill(0, ARRAY[1024])::vector(1024),
     query_text      := 'JWT secret rotation',
-    role            := 'developer'
+    role_filter     := 'developer'
 );
 ```
+
+> For a native install (no Docker), see [INSTALL.md](INSTALL.md).
 
 ## Features
 
 - **HNSW vector search** — fast approximate nearest-neighbour recall via `pgvector` HNSW indexes
-- **Provenance gate** — writes are blocked (or warned) unless a `commit_sha` or `artifact_hash` is supplied; eliminates ghost lessons from hallucinating agents
-- **Recency-weighted scoring** — hybrid score combines cosine similarity + BM25 full-text + recency decay
-- **Role scoping** — first-class `role + project_id` composite isolation; no hand-rolled RLS required
-
-## Status
-
-[![CI](https://github.com/pgmnemo/pgmnemo/actions/workflows/ci.yml/badge.svg)](https://github.com/pgmnemo/pgmnemo/actions/workflows/ci.yml)
-
-v0.1.0 — HNSW + recency scoring + `ingest()` API. Pre-release; targeting public launch after ICSE-SEIP paper submission (~T+8w from 2026-04-29).
+- **Provenance gate** — `enforce` / `warn` / `off` modes; controlled by `pgmnemo.gate_strict` GUC
+- **Recency-weighted scoring** — `0.5×cosine + 0.2×importance + γ×recency(90d) + 0.1×prov_strength`; γ tunable via `pgmnemo.recency_weight`
+- **Role scoping** — `role + project_id` composite isolation; `role_filter=NULL` pools across roles
+- **Graph traversal** — `traverse_causal_chain()` and `traverse_temporal_window()` walk typed `mem_edge` relationships between lessons
 
 ## Documentation
 
 - [INSTALL.md](INSTALL.md) — build, install, configure, upgrade
 - [docs/USAGE.md](docs/USAGE.md) — API reference and tuning guide
-- [design/STRATEGY.md](design/STRATEGY.md) — vision and roadmap
-- [design/POSITIONING.md](design/POSITIONING.md) — competitive landscape
-- [design/](design/) — architecture and build plan
-
-## Why pgmnemo
-
-| | Other memory layers | `pgmnemo` |
-|---|---|---|
-| Form factor | separate service / SaaS / MCP server | `CREATE EXTENSION pgmnemo;` |
-| Data location | their cloud / their server | your existing PostgreSQL |
-| Trust gate on writes | none | **provenance gate** — requires commit SHA or artifact hash |
-| Multi-agent role isolation | RLS or none | first-class `role + project_id` composite |
-| Vendor lock-in | yes | none (Apache-2.0, plain SQL) |
-| Embeddings | provider-coupled | bring your own |
+- [CHANGELOG.md](CHANGELOG.md) — version history
 
 ## License
 
@@ -79,96 +71,6 @@ Apache License 2.0 — see [LICENSE](LICENSE).
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md). Contributions accepted under the DCO sign-off model.
-
-## v0.1.1 — recency_weight GUC
-
-Per BENCHMARK_FEATURE_REQUIREMENTS.md item 4: `pgmnemo.recency_weight` (default 0.2)
-controls the γ coefficient in `recall_lessons()` scoring. Used for paper §5 R1 ablation.
-Range: 0.0–1.0.
-
-```sql
--- Disable recency for R1 ablation (γ=0)
-SET pgmnemo.recency_weight = '0.0';
-SELECT * FROM pgmnemo.recall_lessons(query_embedding := $1);
-
--- Restore default
-RESET pgmnemo.recency_weight;
-```
-
-Upgrade from v0.1.0: `ALTER EXTENSION pgmnemo UPDATE TO '0.1.1';`
-
-## v0.1.2 — tri-state provenance + pooled recall
-
-Per RESEARCH_PROVENANCE_GATE.md §5/§6: `prov_strength` is now tri-state (0.0/0.4/1.0).
-The commit-only middle value changes from 0.5→0.4, aligning with CRAG "Ambiguous" semantics.
-Backward compatible — rows with `(NULL, NULL)` or `(non-NULL, non-NULL)` are unaffected.
-
-Per RESEARCH_RLS_PATTERNS.md §5 D4: `recall_lessons_pooled(query_embedding, k, app_id)` is
-the canonical R3-ablation entrypoint — drops the role filter for cross-role recall comparison.
-
-```sql
--- Pooled cross-role recall (R3 ablation)
-SELECT * FROM pgmnemo.recall_lessons_pooled(query_embedding := $1, app_id := 42);
-```
-
-Upgrade from v0.1.1: `ALTER EXTENSION pgmnemo UPDATE TO '0.1.2';`
-
-## v0.1.3 — verifier_role column
-
-Per RESEARCH_PROVENANCE_GATE.md §5 HIGH-priority; Insight INS-007.
-Adds `verifier_role TEXT` (NULL-safe) to `pgmnemo.agent_lesson` for ranked-input provenance gate.
-NULL = unverified or unknown. Values: `PI`, `automated`, `founder`, `peer`, etc.
-No function changes; backward compatible.
-
-```sql
--- Record verifier role on lesson insert
-INSERT INTO pgmnemo.agent_lesson (role, verifier_role, ...) VALUES ('developer', 'PI', ...);
-
--- Query lessons verified by a specific role
-SELECT * FROM pgmnemo.agent_lesson WHERE verifier_role = 'PI';
-```
-
-Upgrade from v0.1.2: `ALTER EXTENSION pgmnemo UPDATE TO '0.1.3';`
-
-## v0.1.4 — state machine + TTL + provenance FKs
-
-Four features bundled:
-
-- **State machine** (`closes #3`): `agent_lesson.state` column (9 states) + `agent_lesson_state_transition` table (17 allowed moves) + `pgmnemo.transition_lesson(id, new_state)` function that enforces valid transitions.
-- **TTL / expires_at** (`closes #5`): `agent_lesson.expires_at TIMESTAMPTZ NULL` + partial index + `pgmnemo.evict_expired_lessons()` eviction helper.
-- **Provenance FKs** (`closes #4`): `agent_lesson.source_run_id` + `agent_lesson.source_task_id` soft-FK columns with partial indexes.
-- **version() fix** (`closes #1`): `pgmnemo.version()` now reads `extversion` from `pg_catalog.pg_extension` instead of a hard-coded string.
-
-```sql
--- Lifecycle state machine
-SELECT pgmnemo.transition_lesson(lesson_id := 42, new_state := 'validated');
-
--- Write a lesson that expires in 30 days
-INSERT INTO pgmnemo.agent_lesson (role, project_id, topic, lesson_text, expires_at)
-VALUES ('developer', 1, 'auth', 'Rotate JWT secrets monthly.', NOW() + INTERVAL '30 days');
-
--- TTL eviction — schedule with pg_cron at 15-min cadence
-SELECT pgmnemo.evict_expired_lessons();
-
--- Provenance traceability
-SELECT * FROM pgmnemo.agent_lesson WHERE source_run_id = 6795;
-```
-
-### Scheduling TTL eviction
-
-**pg_cron (recommended):**
-
-```sql
-SELECT cron.schedule('pgmnemo-evict', '*/15 * * * *', 'SELECT pgmnemo.evict_expired_lessons()');
-```
-
-**External cron:**
-
-```
-*/15 * * * *  postgres  psql -d mydb -c "SELECT pgmnemo.evict_expired_lessons();"
-```
-
-Upgrade from v0.1.3: `ALTER EXTENSION pgmnemo UPDATE TO '0.1.4';`
 
 ## Citing
 

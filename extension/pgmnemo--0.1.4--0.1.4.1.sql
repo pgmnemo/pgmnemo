@@ -1,18 +1,11 @@
--- pgmnemo upgrade: 0.1.1 → 0.1.2
--- D-RMD-V012: tri-state prov_strength (0.0/0.4/1.0) + recall_lessons_pooled() wrapper
+-- pgmnemo hotfix upgrade: 0.1.4 → 0.1.4.1
+-- PGMNEMO-HOTFIX-1: recall_lessons() role IN/OUT param collision
 -- SPDX-License-Identifier: Apache-2.0
 --
--- Changes:
---   1. recall_lessons(): prov_strength middle value 0.5→0.4 (commit-only case),
---      per RESEARCH_PROVENANCE_GATE.md §6.1 tri-state recommendation.
---   2. recall_lessons_pooled(query_embedding, k, app_id): thin wrapper that calls
---      recall_lessons() with role=NULL (pooled/cross-role recall), per
---      RESEARCH_RLS_PATTERNS.md §5 D4 Option C recommendation.
---   No new GUCs. No schema changes. Backward compatible.
---
--- Deviation from §6.1: formula uses `commit_sha IS NOT NULL` (not OR artifact_hash)
--- for the 0.4 case. artifact_hash bonus is DEFERRED to v0.2.x per research D2 note
--- ("artifact_hash presence is rare in current Agentura usage").
+-- ROOT CAUSE: IN-param `role TEXT` collided with RETURNS TABLE column `role TEXT`.
+-- PL/pgSQL raised ERROR: parameter name "role" used more than once.
+-- FIX: rename IN-param role → role_filter. RETURNS TABLE column `role` unchanged.
+-- Refs: INS-029, EXT_USER_TEST_RESULTS_WAVE2.md
 
 CREATE OR REPLACE FUNCTION pgmnemo.recall_lessons(
     query_embedding  vector(1024),
@@ -159,36 +152,5 @@ COMMENT ON FUNCTION pgmnemo.recall_lessons(vector, INT, TEXT, INT, TEXT) IS
     '0.5×cosine_similarity + 0.2×(importance/5) + γ×recency(90d) + 0.1×prov_strength. '
     'prov_strength: 1.0=commit+verified, 0.4=commit-only, 0.0=no provenance (tri-state v0.1.2). '
     'γ = pgmnemo.recency_weight (default 0.2). '
-    'role=NULL returns all roles pooled; use recall_lessons_pooled() for explicit cross-role recall.';
-
-
-CREATE OR REPLACE FUNCTION pgmnemo.recall_lessons_pooled(
-    query_embedding  vector(1024),
-    k                INT  DEFAULT 10,
-    app_id           INT  DEFAULT NULL
-)
-RETURNS TABLE (
-    lesson_id     BIGINT,
-    score         DOUBLE PRECISION,
-    role          TEXT,
-    project_id    INT,
-    topic         TEXT,
-    lesson_text   TEXT,
-    importance    SMALLINT,
-    metadata      JSONB,
-    commit_sha    TEXT,
-    artifact_hash TEXT,
-    verified_at   TIMESTAMPTZ,
-    created_at    TIMESTAMPTZ
-)
-LANGUAGE sql
-STABLE
-PARALLEL SAFE
-AS $$
-    SELECT * FROM pgmnemo.recall_lessons(query_embedding, k, NULL, app_id, NULL);
-$$;
-
-COMMENT ON FUNCTION pgmnemo.recall_lessons_pooled(vector, INT, INT) IS
-    'Cross-role recall wrapper for R3 ablation: calls recall_lessons() with role=NULL '
-    '(pooled — no role filter). Returns lessons from all roles within the given app_id. '
-    'Per RESEARCH_RLS_PATTERNS.md §5 D4: canonical entrypoint for RO-1/RO-2 ablation.';
+    'role_filter=NULL returns all roles pooled; use recall_lessons_pooled() for explicit cross-role recall. '
+    'v0.1.4.1: renamed IN-param role→role_filter to resolve PL/pgSQL OUT-param collision (PGMNEMO-HOTFIX-1).';
