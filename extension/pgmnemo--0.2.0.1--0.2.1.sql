@@ -46,6 +46,10 @@ END;
 $$;
 
 -- ─────────────────────────────────────────────────────────────────────────────
+-- INS-029-v2 FIX: DROP first because IN-param names change (project_id -> project_id_filter).
+-- PostgreSQL forbids CREATE OR REPLACE FUNCTION when parameter NAMES differ from existing.
+DROP FUNCTION IF EXISTS pgmnemo.recall_lessons(vector, INT, TEXT, INT, TEXT);
+
 -- F3 + F2: recall_lessons() with ef_search SET LOCAL + graph_proximity mixin
 -- Folded from pgmnemo--0.2.0-step4-recall-mixin.sql (was supplemental-only)
 -- Adds ef_search SET LOCAL at function entry (F2)
