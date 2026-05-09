@@ -11,7 +11,7 @@ honest comparison vs published baselines.
 
 | Benchmark | pgmnemo v0.2.1 | Notable comparison |
 |---|---|---|
-| **LoCoMo** retrieval (DRAGON, n=1982) | recall@10 = **0.366**, MRR = **0.237** | Below paper-class retrievers — see issues #TBA |
+| **LoCoMo** retrieval (DRAGON, n=1982) | recall@10 = **0.795**, MRR = **0.548** (session-level, paper-class) | paper-class range (DRAGON canonical, session granularity) |
 | **LongMemEval** retrieval (bge-m3, n=500, s_cleaned) | recall@10 = **0.933**, MRR = **0.855** | Below in-repo BM25 baseline (0.982) |
 
 Reports + raw_retrievals + reproduction commands:
