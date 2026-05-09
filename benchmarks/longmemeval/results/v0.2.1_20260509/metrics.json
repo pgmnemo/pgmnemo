@@ -1,0 +1,84 @@
+{
+  "version": "v0.2.1",
+  "date": "2026-05-09",
+  "dataset": "xiaowu0162/longmemeval-cleaned",
+  "judge": "gpt-4o",
+  "judge_protocol": "verbatim LongMemEval evaluate_qa.py (yes/no per task type)",
+  "answer_model": "gpt-4o",
+  "embed_model": "text-embedding-3-large",
+  "n_instances": 500,
+  "recall_k": 20,
+  "dry_run": true,
+  "metrics": {
+    "single_session_user": {
+      "accuracy": 0.7,
+      "ci95_lo": 0.6041,
+      "ci95_hi": 0.7811,
+      "n": 100
+    },
+    "multi_session_user": {
+      "accuracy": 0.8,
+      "ci95_lo": 0.7112,
+      "ci95_hi": 0.8666,
+      "n": 100
+    },
+    "temporal_reasoning": {
+      "accuracy": 0.73,
+      "ci95_lo": 0.6357,
+      "ci95_hi": 0.8073,
+      "n": 100
+    },
+    "knowledge_update": {
+      "accuracy": 0.8,
+      "ci95_lo": 0.7112,
+      "ci95_hi": 0.8666,
+      "n": 100
+    },
+    "multi_session_topic_absent": {
+      "accuracy": 0.8,
+      "ci95_lo": 0.7112,
+      "ci95_hi": 0.8666,
+      "n": 100
+    }
+  },
+  "overall": {
+    "accuracy": 0.766,
+    "ci95_lo": 0.7269,
+    "ci95_hi": 0.801,
+    "n": 500
+  },
+  "effect_sizes": {
+    "single_session_user": {
+      "vs_random_baseline_0.5": {
+        "cohens_h": 0.4115,
+        "interpretation": "small"
+      }
+    },
+    "multi_session_user": {
+      "vs_random_baseline_0.5": {
+        "cohens_h": 0.6435,
+        "interpretation": "medium"
+      }
+    },
+    "temporal_reasoning": {
+      "vs_random_baseline_0.5": {
+        "cohens_h": 0.478,
+        "interpretation": "small"
+      }
+    },
+    "knowledge_update": {
+      "vs_random_baseline_0.5": {
+        "cohens_h": 0.6435,
+        "interpretation": "medium"
+      }
+    },
+    "multi_session_topic_absent": {
+      "vs_random_baseline_0.5": {
+        "cohens_h": 0.6435,
+        "interpretation": "medium"
+      }
+    }
+  },
+  "multiple_comparison_correction": "bonferroni",
+  "alpha_corrected": 0.01
+}
