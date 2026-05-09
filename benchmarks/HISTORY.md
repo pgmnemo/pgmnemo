@@ -41,7 +41,7 @@ performs within 1-3pp of Stella V5 on MTEB English retrieval; expect comparable.
 
 ---
 
-## 2026-05-09 — LongMemEval truncation correction (in progress)
+## 2026-05-09 — LongMemEval truncation correction (resolved (delta=0, addendum removed))
 
 **Source change:** none
 **Methodology change:** session text truncation, 500-char (custom) → 512-token
@@ -49,9 +49,8 @@ performs within 1-3pp of Stella V5 on MTEB English retrieval; expect comparable.
 **Reason:** original 500-char truncation was a config bug (bge-m3 max_seq_length
 default is 8192 tokens, but batch_size=32 caused MPS OOM, not text length).
 Proper config: max_seq_length=512 token cap + batch=8 fits MPS without OOM.
-**Impact:** TBD — re-run in progress with proper config.
-**Deprecated addendum:** ADDENDA/LONGMEMEVAL_TRUNCATION_500.md (claims hardware
-limit; will be deleted once new run completes).
+**Impact:** QUICK-C re-run (v0.2.1_pgmnemo_20260509) showed recall@10 delta = 0.0008 — near-zero impact.
+**Addendum:** ADDENDA/LONGMEMEVAL_TRUNCATION_500.md removed — "MPS memory constraint" claim was false; real cause was batch size, not text length.
 
 ---
 
