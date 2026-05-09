@@ -5,6 +5,101 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [0.2.1] — 2026-05-09
+
+### Added
+
+- **`traverse_causal_chain(direction)` parameter** (W2.2 / F5) — adds `direction TEXT DEFAULT 'forward'` parameter. `'forward'` follows source→target edges (existing behaviour, backward-compatible). `'backward'` follows target→source edges for reverse traversal. `'both'` traverses all edges. Input validation raises `EXCEPTION` on invalid values. Cycle guard via path array applies to all directions.
+- **`pgmnemo.ef_search` GUC** (F2) — `SET LOCAL pgvector.hnsw.ef_search` applied at `recall_lessons()` entry from `pgmnemo.ef_search` GUC (default 100, clamped 10–500).
+- **Graph-proximity mixin in standard upgrade path** (F3) — `pgmnemo--0.2.0-step4-recall-mixin.sql` content folded into the v0.2.0.1→0.2.1 upgrade script (was supplemental-only).
+- **Row-Level Security multi-tenant isolation** (W2.3 / Q5) — `pgmnemo.tenant_id` GUC gates `agent_lesson` by `project_id` and `mem_edge` by endpoint ownership. Empty/unset = service-account bypass. Policies are idempotent (DROP IF EXISTS before CREATE).
+
+### Fixed
+
+- **`recall_lessons()` IN-param/RETURNS TABLE collision on `project_id`** (INS-029 v2) — IN-param `project_id INT` collided with the `RETURNS TABLE` column of the same name. Fix: IN-param renamed to `project_id_filter`; all internal `recall_lessons.project_id` references updated accordingly. Backport of the same pattern as the `role`→`role_filter` fix in v0.1.4.1/v0.2.0.1.
+
+### Changed
+
+- **`pgmnemo.recency_weight` default lowered** (F1) — from `0.20` to `0.08` (pending REC-1 ablation confirmation). Operator can override via `ALTER SYSTEM SET pgmnemo.recency_weight = '<value>'; SELECT pg_reload_conf();`.
+
+### Upgrade
+
+```sql
+ALTER EXTENSION pgmnemo UPDATE TO '0.2.1';
+```
+
+---
+
+## [0.2.0.1] — 2026-05-04
+
+### Fixed
+
+- **`traverse_temporal_window()` numeric → double precision cast** (INS-030) — comparison between a `NUMERIC` intermediate value and `DOUBLE PRECISION` caused a type-mismatch error at runtime on PostgreSQL 14/15. Cast now explicit throughout the function body.
+- **`recall_lessons()` IN-param/RETURNS TABLE collision** (INS-029) — IN-param `role` renamed to `role_filter` (backport of v0.1.4.1 fix; see below).
+- **Idempotent upgrade DDL** (INS-031) — `ADD COLUMN IF NOT EXISTS` and `CREATE INDEX IF NOT EXISTS` guards added across all `0.1.4→0.2.0` upgrade scripts (backport of v0.1.4.1 fix).
+- **`recall_lessons_pooled()` post-collision smoke** (Action #7) — confirmed pooled wrapper correctly delegates to the renamed `role_filter` parameter after the collision fix.
+
+### Upgrade
+
+```sql
+ALTER EXTENSION pgmnemo UPDATE TO '0.2.0.1';
+```
+
+---
+
+## [0.1.4.1] — 2026-05-04 (maintenance branch)
+
+### Fixed
+
+- **`recall_lessons()` IN-param/RETURNS TABLE collision** (INS-029, P0) — PL/pgSQL raised `ERROR: parameter name "role" used more than once` because the IN-param `role TEXT` collided with the `RETURNS TABLE` column of the same name. The flagship function never compiled on a fresh install. Fix: IN-param renamed to `role_filter`; all callers updated.
+- **Idempotent upgrade DDL** (INS-031) — `ADD COLUMN IF NOT EXISTS` and `CREATE INDEX IF NOT EXISTS` guards applied across all upgrade scripts so re-running a patch on an already-upgraded database no longer raises duplicate-object errors.
+
+### Upgrade
+
+```sql
+ALTER EXTENSION pgmnemo UPDATE TO '0.1.4.1';
+```
+
+---
+
+## [0.2.0] — 2026-05-04
+
+### Added
+
+- **`pgmnemo.mem_edge` DDL** (closes RFC §3) — directed typed edge table between `agent_lesson` rows.
+  - Columns: `source_id`, `target_id`, `relation_type` (CAUSED_BY, SUPERSEDES, CO_OCCURRED, DERIVED_FROM, or user-defined), `weight REAL` [0.0–1.0], bitemporality (`valid_from`/`valid_until`), `commit_sha`, `metadata JSONB`.
+  - Three covering indexes: forward/reverse traversal on `(source_id, relation_type)` and `(target_id, relation_type)` with `WHERE valid_until IS NULL`; temporal range index on `(valid_from, valid_until)`.
+  - `CONSTRAINT ck_no_self_loop`: prevents `source_id = target_id`.
+
+- **`pgmnemo.traverse_causal_chain(start_id, max_depth, relation_types, only_active)`** (closes RFC §4) — recursive CTE walk of the causal edge graph.
+  - Returns `(lesson_id, depth, path BIGINT[], path_weight, role, topic, lesson_text, importance, created_at, commit_sha, verified_at)`.
+  - Cycle-safe via accumulated path array. Fail-safe: returns zero rows if `start_id` missing.
+  - `max_depth` default 5; `relation_types` default `ARRAY['CAUSED_BY']`; `only_active` default `TRUE`.
+
+- **`pgmnemo.traverse_temporal_window(start_id, window_interval, include_unlinked, role_filter, project_id_filter, k)`** (closes RFC §5) — co-temporal episode discovery.
+  - Returns lessons whose `created_at` falls within `±window_interval` of the anchor lesson. Window hard-capped at 30 days.
+  - `linked=TRUE` when a `mem_edge` (either direction) exists between the row and `start_id`.
+  - Ghost-lesson exclusion controlled by `pgmnemo.include_unverified` GUC (default off).
+
+- **Graph-proximity mixin for `recall_lessons()`** (PGMNEMO-V020-4) — integrates BFS graph traversal into scoring.
+  - Updated scoring formula: `0.4×cosine + 0.2×importance + γ×recency + 0.1×prov_strength + δ×graph_proximity`.
+  - `graph_proximity = MAX(1 - depth/max_depth)` via BFS through `CAUSED_BY`, `CO_OCCURRED`, `DERIVED_FROM` edges from top-5 cosine anchors (max_depth=5).
+  - New GUC `pgmnemo.graph_proximity_weight` (default `0.2`, clamped to `[0.0, 0.5]`).
+
+### Upgrade
+
+```sql
+ALTER EXTENSION pgmnemo UPDATE TO '0.2.0';
+```
+
+Or from a fresh install:
+
+```sql
+CREATE EXTENSION pgmnemo CASCADE;   -- installs 0.2.0 directly
+```
+
+---
+
 ## [0.1.4] — 2026-05-04
 
 ### Added
