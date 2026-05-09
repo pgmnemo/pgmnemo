@@ -1,0 +1,115 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*'
+
+jobs:
+  installcheck:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg17
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install build deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-server-dev-17 build-essential
+      - name: Build extension
+        run: cd extension && make
+      - name: Install extension
+        run: cd extension && sudo make install
+      - name: Run installcheck
+        env:
+          PGUSER: postgres
+          PGPASSWORD: postgres
+          PGHOST: localhost
+          PGPORT: 5432
+        run: cd extension && make installcheck
+
+  pgxn-release:
+    needs: installcheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Extract version from tag
+        id: version
+        run: echo "VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Build PGXN bundle
+        run: |
+          VERSION=${{ steps.version.outputs.VERSION }}
+          BUNDLE="pgmnemo-${VERSION}.zip"
+
+          # Create a clean bundle directory
+          mkdir -p "pgmnemo-${VERSION}"
+
+          # Copy required PGXN files
+          cp -r extension/ "pgmnemo-${VERSION}/extension/"
+          cp Makefile README.md LICENSE CHANGELOG.md "pgmnemo-${VERSION}/"
+
+          # Write META.json for PGXN
+          cat > "pgmnemo-${VERSION}/META.json" <<EOF
+          {
+            "name": "pgmnemo",
+            "abstract": "Multi-agent memory substrate for PostgreSQL — provenance-gated, vector-hybrid recall",
+            "version": "${VERSION}",
+            "maintainer": "pgmnemo contributors",
+            "license": "apache_2_0",
+            "provides": {
+              "pgmnemo": {
+                "abstract": "Multi-agent memory substrate for PostgreSQL",
+                "file": "extension/pgmnemo.control",
+                "version": "${VERSION}"
+              }
+            },
+            "prereqs": {
+              "runtime": {
+                "requires": {
+                  "PostgreSQL": "17.0"
+                }
+              }
+            },
+            "resources": {
+              "repository": {
+                "type": "git",
+                "url": "https://github.com/${{ github.repository }}.git"
+              }
+            },
+            "generated_by": "GitHub Actions release workflow",
+            "meta-spec": {
+              "version": "1.0.0",
+              "url": "https://pgxn.org/meta/spec.txt"
+            }
+          }
+          EOF
+
+          zip -r "${BUNDLE}" "pgmnemo-${VERSION}/"
+          echo "BUNDLE=${BUNDLE}" >> "$GITHUB_ENV"
+
+      - name: Upload bundle to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ env.BUNDLE }}
+          generate_release_notes: true
+
+      - name: Upload to PGXN
+        if: ${{ env.PGXN_USERNAME != '' && env.PGXN_PASSWORD != '' }}
+        env:
+          PGXN_USERNAME: ${{ secrets.PGXN_USERNAME }}
+          PGXN_PASSWORD: ${{ secrets.PGXN_PASSWORD }}
+        run: |
+          pip install pgxnclient
+          pgxn upload --username "$PGXN_USERNAME" --password "$PGXN_PASSWORD" "${{ env.BUNDLE }}"
