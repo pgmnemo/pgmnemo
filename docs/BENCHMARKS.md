@@ -40,7 +40,7 @@ Reports + raw_retrievals + reproduction commands:
 | Paper requirement | Our implementation | Status |
 |---|---|---|
 | Dataset | `xiaowu0162/longmemeval-cleaned` (longmemeval_s_cleaned.json, 500 questions × ~47.7 sessions/haystack) | ✅ |
-| Embedder | NovaSearch/stella_en_1.5B_v5 1024d | ⚠️ **DEVIATION**: bundled `modeling_qwen.py` incompatible with transformers 5.8 (`Qwen2Config.rope_theta` AttributeError); substituted **BAAI/bge-m3** (1024d, MTEB-strong, matches Agency production). See `ADDENDA/LONGMEMEVAL_EMBEDDER_BGE_M3.md`. |
+| Embedder | NovaSearch/stella_en_1.5B_v5 1024d | ⚠️ **DEVIATION**: bundled `modeling_qwen.py` incompatible with transformers 5.8 (`Qwen2Config.rope_theta` AttributeError); substituted **BAAI/bge-m3** (1024d, MTEB-strong, matches common production). See `ADDENDA/LONGMEMEVAL_EMBEDDER_BGE_M3.md`. |
 | Retrieval (recall@K, NDCG@K, MRR) | recall@{1,5,10,20} + MRR | ✅ |
 | Question types | 5 (single-session-{user,assistant,preference}, multi-session, temporal-reasoning, knowledge-update + abstention variant) | ✅ |
 | LLM-as-judge accuracy via `evaluate_qa.py` | n/a — retrieval-only mode | ⚠️ deferred (no API key; paper supports retrieval-only) |
@@ -119,7 +119,7 @@ WG goals:
 2. Identify scoring formula tuning paths to close the gap
 3. Reproduce paper-canonical Stella V5 (transformers downgrade or API-compat shim)
 4. Compare against MAGMA (arxiv 2601.03236), Mem0, Zep, HippoRAG on same benchmarks
-5. Roadmap pgmnemo v0.2.2 (calibration) → v0.3.0 (multi-graph + dim-flex per #5269)
+5. Roadmap pgmnemo v0.2.2 (calibration) → v0.3.0 (multi-graph + dim-flex)
 
 ---
 

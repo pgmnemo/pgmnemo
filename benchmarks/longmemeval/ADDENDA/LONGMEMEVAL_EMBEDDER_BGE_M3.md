@@ -29,8 +29,7 @@ We substituted BAAI/bge-m3:
 - **Same dimensionality** (1024d) — no padding required, native fit
 - **MTEB top-tier** for English retrieval
 - **Multilingual** (bonus over Stella V5 English-only)
-- **Matches Agency production embedder** — consistent across pgmnemo benchmarks
-  and Agency-side dogfooding
+- **Production-tested in real-world deployments** at the same dimensionality
 
 ## Methodological impact
 
@@ -39,7 +38,7 @@ our numbers used bge-m3. They are not apples-to-apples.
 
 The pgmnemo retrieval-pipeline behavior (HNSW, 5-component scoring) is identical;
 only the embedder differs. So recall@K reflects pgmnemo *with* bge-m3, which is
-what an open-source adopter using Agency's stack would see.
+what an open-source adopter following the standard pgmnemo stack would see.
 
 ## Future fix
 
