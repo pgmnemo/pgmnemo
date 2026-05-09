@@ -1,0 +1,26 @@
+{
+  "version": "v0.2.1",
+  "date": "2026-05-09",
+  "mode": "real",
+  "run_label": "proper-config (token-level cap, batch=8)",
+  "dataset": "xiaowu0162/longmemeval-cleaned, longmemeval_s_cleaned.json",
+  "embedder": "BAAI/bge-m3 (1024d), max_seq_length=512, batch=8 on MPS",
+  "pgmnemo_version": "0.2.1",
+  "n_items": 500,
+  "device": "mps",
+  "overall": {
+    "recall@10": {
+      "n": 500,
+      "mean": 0.9334,
+      "ci95_lo": 0.914,
+      "ci95_hi": 0.953
+    },
+    "mrr": {
+      "n": 500,
+      "mean": 0.8472,
+      "ci95_lo": 0.821,
+      "ci95_hi": 0.873
+    }
+  },
+  "notes": "Previous run (v0.2.1_pgmnemo_20260509) used 500-char text truncation; this run corrects to explicit max_seq_length=512 token cap. Impact on metrics was near-zero (recall@10 delta +0.001, MRR delta -0.008)."
+}
