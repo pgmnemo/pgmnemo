@@ -1,0 +1,257 @@
+{
+  "version": "v0.2.1",
+  "date": "2026-05-09",
+  "dry_run": false,
+  "mode": "real",
+  "retrieval_method": "pgmnemo.recall_lessons() vector + 5-component scoring",
+  "dataset": "xiaowu0162/longmemeval-cleaned (longmemeval_s_cleaned.json \u2014 full haystacks, ~47.7 sessions/item)",
+  "dataset_sha256": "d6f21ea9d60a0d56f34a05b609c79c88a451d2ae03597821ea3d5a9678c3a442",
+  "embedder": "BAAI/bge-m3 (1024d) \u2014 DEVIATION from Stella V5 paper canonical",
+  "deviation_rationale": "Stella V5 modeling_qwen.py incompat with transformers 5.8; bge-m3 same dim, MTEB-strong, matches Agency production",
+  "pgmnemo_version": "0.2.1",
+  "n_items": 500,
+  "n_evaluated": 500,
+  "qtype_distribution": {
+    "single-session-user": 70,
+    "multi-session": 133,
+    "single-session-preference": 30,
+    "temporal-reasoning": 133,
+    "knowledge-update": 78,
+    "single-session-assistant": 56
+  },
+  "by_qtype": {
+    "knowledge-update": {
+      "n": 78,
+      "recall@1": {
+        "n": 78,
+        "mean": 0.3974,
+        "ci95_lo": 0.3523,
+        "ci95_hi": 0.4425
+      },
+      "recall@5": {
+        "n": 78,
+        "mean": 0.8397,
+        "ci95_lo": 0.7694,
+        "ci95_hi": 0.9101
+      },
+      "recall@10": {
+        "n": 78,
+        "mean": 0.9231,
+        "ci95_lo": 0.879,
+        "ci95_hi": 0.9672
+      },
+      "recall@20": {
+        "n": 78,
+        "mean": 0.9679,
+        "ci95_lo": 0.9353,
+        "ci95_hi": 1
+      },
+      "mrr": {
+        "n": 78,
+        "mean": 0.8558,
+        "ci95_lo": 0.79,
+        "ci95_hi": 0.9216
+      }
+    },
+    "multi-session": {
+      "n": 133,
+      "recall@1": {
+        "n": 133,
+        "mean": 0.3881,
+        "ci95_lo": 0.3623,
+        "ci95_hi": 0.4139
+      },
+      "recall@5": {
+        "n": 133,
+        "mean": 0.9232,
+        "ci95_lo": 0.8911,
+        "ci95_hi": 0.9552
+      },
+      "recall@10": {
+        "n": 133,
+        "mean": 0.9565,
+        "ci95_lo": 0.9327,
+        "ci95_hi": 0.9803
+      },
+      "recall@20": {
+        "n": 133,
+        "mean": 0.9887,
+        "ci95_lo": 0.9772,
+        "ci95_hi": 1
+      },
+      "mrr": {
+        "n": 133,
+        "mean": 0.9528,
+        "ci95_lo": 0.9239,
+        "ci95_hi": 0.9818
+      }
+    },
+    "single-session-assistant": {
+      "n": 56,
+      "recall@1": {
+        "n": 56,
+        "mean": 0.9286,
+        "ci95_lo": 0.8605,
+        "ci95_hi": 0.9966
+      },
+      "recall@5": {
+        "n": 56,
+        "mean": 0.9821,
+        "ci95_lo": 0.9471,
+        "ci95_hi": 1
+      },
+      "recall@10": {
+        "n": 56,
+        "mean": 0.9821,
+        "ci95_lo": 0.9471,
+        "ci95_hi": 1
+      },
+      "recall@20": {
+        "n": 56,
+        "mean": 1.0,
+        "ci95_lo": 1.0,
+        "ci95_hi": 1
+      },
+      "mrr": {
+        "n": 56,
+        "mean": 0.9537,
+        "ci95_lo": 0.9078,
+        "ci95_hi": 0.9995
+      }
+    },
+    "single-session-preference": {
+      "n": 30,
+      "recall@1": {
+        "n": 30,
+        "mean": 0.5333,
+        "ci95_lo": 0.3518,
+        "ci95_hi": 0.7149
+      },
+      "recall@5": {
+        "n": 30,
+        "mean": 0.8,
+        "ci95_lo": 0.6544,
+        "ci95_hi": 0.9456
+      },
+      "recall@10": {
+        "n": 30,
+        "mean": 0.9,
+        "ci95_lo": 0.7908,
+        "ci95_hi": 1
+      },
+      "recall@20": {
+        "n": 30,
+        "mean": 0.9667,
+        "ci95_lo": 0.9013,
+        "ci95_hi": 1
+      },
+      "mrr": {
+        "n": 30,
+        "mean": 0.6553,
+        "ci95_lo": 0.5147,
+        "ci95_hi": 0.796
+      }
+    },
+    "single-session-user": {
+      "n": 70,
+      "recall@1": {
+        "n": 70,
+        "mean": 0.4857,
+        "ci95_lo": 0.3678,
+        "ci95_hi": 0.6036
+      },
+      "recall@5": {
+        "n": 70,
+        "mean": 0.7,
+        "ci95_lo": 0.5919,
+        "ci95_hi": 0.8081
+      },
+      "recall@10": {
+        "n": 70,
+        "mean": 0.8714,
+        "ci95_lo": 0.7924,
+        "ci95_hi": 0.9504
+      },
+      "recall@20": {
+        "n": 70,
+        "mean": 0.9714,
+        "ci95_lo": 0.9321,
+        "ci95_hi": 1
+      },
+      "mrr": {
+        "n": 70,
+        "mean": 0.6024,
+        "ci95_lo": 0.5067,
+        "ci95_hi": 0.6982
+      }
+    },
+    "temporal-reasoning": {
+      "n": 133,
+      "recall@1": {
+        "n": 133,
+        "mean": 0.4373,
+        "ci95_lo": 0.3911,
+        "ci95_hi": 0.4836
+      },
+      "recall@5": {
+        "n": 133,
+        "mean": 0.8896,
+        "ci95_lo": 0.8498,
+        "ci95_hi": 0.9294
+      },
+      "recall@10": {
+        "n": 133,
+        "mean": 0.933,
+        "ci95_lo": 0.897,
+        "ci95_hi": 0.9689
+      },
+      "recall@20": {
+        "n": 133,
+        "mean": 0.9674,
+        "ci95_lo": 0.9419,
+        "ci95_hi": 0.9929
+      },
+      "mrr": {
+        "n": 133,
+        "mean": 0.8946,
+        "ci95_lo": 0.8513,
+        "ci95_hi": 0.9379
+      }
+    }
+  },
+  "overall": {
+    "recall@1": {
+      "n": 500,
+      "mean": 0.4856,
+      "ci95_lo": 0.4557,
+      "ci95_hi": 0.5154
+    },
+    "recall@5": {
+      "n": 500,
+      "mean": 0.8692,
+      "ci95_lo": 0.8433,
+      "ci95_hi": 0.8951
+    },
+    "recall@10": {
+      "n": 500,
+      "mean": 0.9326,
+      "ci95_lo": 0.9135,
+      "ci95_hi": 0.9517
+    },
+    "recall@20": {
+      "n": 500,
+      "mean": 0.9773,
+      "ci95_lo": 0.9661,
+      "ci95_hi": 0.9886
+    },
+    "mrr": {
+      "n": 500,
+      "mean": 0.8554,
+      "ci95_lo": 0.8292,
+      "ci95_hi": 0.8816
+    }
+  },
+  "wall_clock_sec": 944.1,
+  "device": "mps",
+  "dataset_split_corrected_2026_05_09": "earlier label said 'oracle' due to runner sed-patch incomplete; sha256 matches s_cleaned baseline"
+}
