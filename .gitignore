@@ -7,8 +7,9 @@
 *.lo
 *.a
 
-# pgxs build outputs (results/ is OUTPUT, sql/ and expected/ are TEST FIXTURES — track them)
-results/
+# pgxs build outputs (extension/results/ is OUTPUT, sql/ and expected/ are TEST FIXTURES — track them)
+# Note: benchmarks/*/results/ ARE tracked (TACTICS R8: benchmark files are first-class repo assets)
+extension/results/
 tmp_check/
 log/
 *.log
