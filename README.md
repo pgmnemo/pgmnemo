@@ -1,76 +1,68 @@
 # pgmnemo
 
-> Multi-agent memory layer for PostgreSQL — provenance-gated, HNSW-accelerated, zero-dependency, Apache-2.0.
+**Multi-agent memory substrate for PostgreSQL — provenance-gated, vector-hybrid recall.**
 
-`pgmnemo` is a PostgreSQL extension that gives multi-agent AI systems durable, auditable memory
-without a separate service, a SaaS dependency, or vendor lock-in. Install it with one SQL command
-and read/write agent memory directly inside your existing database.
+[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
+[![Version](https://img.shields.io/badge/version-0.2.0.1-green.svg)](CHANGELOG.md)
+[![CI](https://github.com/pgmnemo/pgmnemo/actions/workflows/ci.yml/badge.svg)](https://github.com/pgmnemo/pgmnemo/actions/workflows/ci.yml)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-17-4169E1.svg)](https://www.postgresql.org/)
 
-Built for indie AI builders and enterprise teams under data-sovereignty constraints who already run
-PostgreSQL and want their agent memory in the same perimeter.
+## Why this exists
 
-## Quick start
+- **One differentiator none of Pinecone, Letta, Mem0, or Zep have:** a write-time provenance gate. Every `ingest()` call must carry a `commit_sha` or `artifact_hash`; rows without provenance are blocked (or warned) by default. Hallucinated agent memories cannot silently accumulate.
+- **No new service.** `CREATE EXTENSION pgmnemo;` in your existing PostgreSQL — no separate API server, no SaaS endpoint, no vendor lock-in.
+- **Hybrid recall in-database.** Cosine similarity (HNSW) + BM25 full-text + recency decay + importance weighting, scored in one SQL call.
+- **Role isolation built in.** First-class `role + project_id` composite scoping; no hand-rolled RLS.
+
+## 30-second quickstart
 
 ```bash
+# 1. Start PG 17 + pgvector
+docker run --name pgmnemo-dev -e POSTGRES_PASSWORD=pass -p 5432:5432 -d pgvector/pgvector:pg17
+
+# 2. Build and install the extension (requires make, gcc, pg_config on PATH)
 git clone https://github.com/pgmnemo/pgmnemo.git
-cd pgmnemo/extension
-make
-sudo make install
+docker exec pgmnemo-dev bash -c "apt-get install -y postgresql-server-dev-17 make gcc 2>/dev/null; true"
+docker cp pgmnemo/extension pgmnemo-dev:/tmp/pgmnemo
+docker exec pgmnemo-dev bash -c "cd /tmp/pgmnemo && make && make install"
 ```
 
 ```sql
--- In psql:
+-- psql -h localhost -U postgres
+
 CREATE EXTENSION pgmnemo CASCADE;
 
--- Write a lesson (provenance gate fires on INSERT)
 SELECT pgmnemo.ingest(
     p_role        := 'developer',
     p_project_id  := 1,
-    p_topic       := 'authentication',
-    p_lesson_text := 'Always rotate JWT secrets after a key-compromise incident.',
+    p_topic       := 'auth',
+    p_lesson_text := 'Rotate JWT secrets after any key-compromise incident.',
     p_commit_sha  := 'abc1234'
 );
 
--- Read back with hybrid scoring
 SELECT lesson_text, score
 FROM pgmnemo.recall_lessons(
-    query_embedding := <your_vector>,
+    query_embedding := array_fill(0, ARRAY[1024])::vector(1024),
     query_text      := 'JWT secret rotation',
-    role            := 'developer'
+    role_filter     := 'developer'
 );
 ```
+
+> For a native install (no Docker), see [INSTALL.md](INSTALL.md).
 
 ## Features
 
 - **HNSW vector search** — fast approximate nearest-neighbour recall via `pgvector` HNSW indexes
-- **Provenance gate** — writes are blocked (or warned) unless a `commit_sha` or `artifact_hash` is supplied; eliminates ghost lessons from hallucinating agents
-- **Recency-weighted scoring** — hybrid score combines cosine similarity + BM25 full-text + recency decay
-- **Role scoping** — first-class `role + project_id` composite isolation; no hand-rolled RLS required
-
-## Status
-
-[![CI](https://github.com/pgmnemo/pgmnemo/actions/workflows/ci.yml/badge.svg)](https://github.com/pgmnemo/pgmnemo/actions/workflows/ci.yml)
-
-v0.1.0 — HNSW + recency scoring + `ingest()` API. Pre-release; targeting public launch after ICSE-SEIP paper submission (~T+8w from 2026-04-29).
+- **Provenance gate** — `enforce` / `warn` / `off` modes; controlled by `pgmnemo.gate_strict` GUC
+- **Recency-weighted scoring** — `0.5×cosine + 0.2×importance + γ×recency(90d) + 0.1×prov_strength`; γ tunable via `pgmnemo.recency_weight`
+- **Role scoping** — `role + project_id` composite isolation; `role_filter=NULL` pools across roles
+- **Graph traversal** — `traverse_causal_chain()` and `traverse_temporal_window()` walk typed `mem_edge` relationships between lessons
 
 ## Documentation
 
 - [INSTALL.md](INSTALL.md) — build, install, configure, upgrade
 - [docs/USAGE.md](docs/USAGE.md) — API reference and tuning guide
-- [docs/STRATEGY.md](docs/STRATEGY.md) — vision and roadmap
-- [docs/POSITIONING.md](docs/POSITIONING.md) — competitive landscape
-- [design/](design/) — architecture and build plan
-
-## Why pgmnemo
-
-| | Other memory layers | `pgmnemo` |
-|---|---|---|
-| Form factor | separate service / SaaS / MCP server | `CREATE EXTENSION pgmnemo;` |
-| Data location | their cloud / their server | your existing PostgreSQL |
-| Trust gate on writes | none | **provenance gate** — requires commit SHA or artifact hash |
-| Multi-agent role isolation | RLS or none | first-class `role + project_id` composite |
-| Vendor lock-in | yes | none (Apache-2.0, plain SQL) |
-| Embeddings | provider-coupled | bring your own |
+- [CHANGELOG.md](CHANGELOG.md) — version history
 
 ## License
 

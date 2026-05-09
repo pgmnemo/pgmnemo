@@ -2,6 +2,14 @@
 -- PGMNEMO-V020-4: integrates graph traversal into recall_lessons() scoring
 -- SPDX-License-Identifier: Apache-2.0
 --
+-- ⚠️  SUPPLEMENTAL / OPTIONAL SCRIPT — NOT PART OF THE STANDARD UPGRADE PATH
+-- This file is intentionally excluded from the Makefile DATA field.
+-- It is NOT a valid pgxs extension upgrade script (non-standard naming convention).
+-- To apply the graph_proximity mixin to recall_lessons(), run this script manually:
+--   psql -d <your_db> -f extension/pgmnemo--0.2.0-step4-recall-mixin.sql
+-- Requires: pgmnemo v0.2.0 or later (mem_edge table must exist).
+-- Future versions will incorporate this mixin into a properly named upgrade script.
+--
 -- Formula: 0.4*cosine + 0.2*importance + γ*recency + 0.1*prov_strength + δ*graph_proximity
 --   graph_proximity = COALESCE(MAX(1.0 - depth/max_depth), 0)
 --                     over causal+temporal traversal from top-5 cosine anchors
@@ -27,7 +35,7 @@ CREATE OR REPLACE FUNCTION pgmnemo.recall_lessons(
     query_embedding  vector(1024),
     k                INT     DEFAULT 10,
     role_filter      TEXT    DEFAULT NULL,
-    project_id       INT     DEFAULT NULL,
+    project_id_filter INT     DEFAULT NULL,
     query_text       TEXT    DEFAULT NULL
 )
 RETURNS TABLE (
@@ -123,7 +131,7 @@ BEGIN
         WHERE al.is_active
           AND (_include_unverified OR al.verified_at IS NOT NULL)
           AND (recall_lessons.role_filter IS NULL OR al.role = recall_lessons.role_filter)
-          AND (recall_lessons.project_id IS NULL OR al.project_id = recall_lessons.project_id)
+          AND (recall_lessons.project_id_filter IS NULL OR al.project_id = recall_lessons.project_id_filter)
           AND (al.embedding IS NOT NULL OR _has_text)
     ),
     -- Top-5 cosine anchors used as traversal seeds
@@ -143,7 +151,7 @@ BEGIN
         SELECT gw.anchor_id, gw.depth + 1, me.target_id
         FROM graph_walk gw
         JOIN pgmnemo.mem_edge me ON me.source_id = gw.reached_id
-        WHERE me.edge_type IN ('causal', 'temporal', 'derives_from')
+        WHERE me.relation_type IN ('CAUSED_BY', 'CO_OCCURRED', 'DERIVED_FROM')
           AND gw.depth < _max_depth
     ),
     -- Best proximity per reached lesson (MAX = closest anchor path)
