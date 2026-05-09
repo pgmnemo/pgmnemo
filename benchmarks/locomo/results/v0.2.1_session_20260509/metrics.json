@@ -1,0 +1,158 @@
+{
+  "version": "v0.2.1_session_oracle",
+  "date": "2026-05-09",
+  "mode": "oracle_reanalysis",
+  "description": "Session-level oracle recall computed from turn-level raw_retrievals.jsonl. Turn-level retrieved_top10 mapped to session-level by stripping ':turn' suffix. This is a LOWER BOUND on actual session-level recall from re-embedded sessions.",
+  "source_run": "v0.2.1_20260509",
+  "n_corpus_segments_turn_level": 5882,
+  "n_corpus_segments_session_level": 272,
+  "n_questions_analyzed": 1982,
+  "methodology": "session_oracle_from_turn_level_top10",
+  "by_category": {
+    "single_hop": {
+      "n": 282,
+      "recall@5": {
+        "n": 282,
+        "mean": 0.4147,
+        "ci95_lo": 0.3757,
+        "ci95_hi": 0.4538
+      },
+      "recall@10": {
+        "n": 282,
+        "mean": 0.5394,
+        "ci95_lo": 0.4995,
+        "ci95_hi": 0.5794
+      },
+      "mrr": {
+        "n": 282,
+        "mean": 0.5075,
+        "ci95_lo": 0.4611,
+        "ci95_hi": 0.5539
+      }
+    },
+    "multi_hop": {
+      "n": 321,
+      "recall@5": {
+        "n": 321,
+        "mean": 0.6885,
+        "ci95_lo": 0.6391,
+        "ci95_hi": 0.7379
+      },
+      "recall@10": {
+        "n": 321,
+        "mean": 0.7783,
+        "ci95_lo": 0.7342,
+        "ci95_hi": 0.8224
+      },
+      "mrr": {
+        "n": 321,
+        "mean": 0.5177,
+        "ci95_lo": 0.4728,
+        "ci95_hi": 0.5625
+      }
+    },
+    "temporal": {
+      "n": 92,
+      "recall@5": {
+        "n": 92,
+        "mean": 0.3944,
+        "ci95_lo": 0.3032,
+        "ci95_hi": 0.4856
+      },
+      "recall@10": {
+        "n": 92,
+        "mean": 0.5884,
+        "ci95_lo": 0.5008,
+        "ci95_hi": 0.6761
+      },
+      "mrr": {
+        "n": 92,
+        "mean": 0.3758,
+        "ci95_lo": 0.2946,
+        "ci95_hi": 0.4569
+      }
+    },
+    "open_domain": {
+      "n": 841,
+      "recall@5": {
+        "n": 841,
+        "mean": 0.7598,
+        "ci95_lo": 0.7309,
+        "ci95_hi": 0.7887
+      },
+      "recall@10": {
+        "n": 841,
+        "mean": 0.8383,
+        "ci95_lo": 0.8134,
+        "ci95_hi": 0.8632
+      },
+      "mrr": {
+        "n": 841,
+        "mean": 0.5934,
+        "ci95_lo": 0.5656,
+        "ci95_hi": 0.6211
+      }
+    },
+    "adversarial": {
+      "n": 446,
+      "recall@5": {
+        "n": 446,
+        "mean": 0.7556,
+        "ci95_lo": 0.7157,
+        "ci95_hi": 0.7955
+      },
+      "recall@10": {
+        "n": 446,
+        "mean": 0.8363,
+        "ci95_lo": 0.802,
+        "ci95_hi": 0.8707
+      },
+      "mrr": {
+        "n": 446,
+        "mean": 0.5954,
+        "ci95_lo": 0.5569,
+        "ci95_hi": 0.634
+      }
+    }
+  },
+  "overall": {
+    "recall@5": {
+      "n": 1982,
+      "mean": 0.6812,
+      "ci95_lo": 0.6618,
+      "ci95_hi": 0.7007
+    },
+    "recall@10": {
+      "n": 1982,
+      "mean": 0.774,
+      "ci95_lo": 0.7568,
+      "ci95_hi": 0.7912
+    },
+    "mrr": {
+      "n": 1982,
+      "mean": 0.5592,
+      "ci95_lo": 0.5411,
+      "ci95_hi": 0.5774
+    },
+    "recall@25": {
+      "n": 1982,
+      "mean": "N/A (top-10 data only)",
+      "note": "need top-25 turn retrievals"
+    },
+    "recall@50": {
+      "n": 1982,
+      "mean": "N/A (top-10 data only)",
+      "note": "need top-50 turn retrievals"
+    }
+  },
+  "turn_level_baseline": {
+    "recall@5": 0.3023,
+    "recall@10": 0.366,
+    "recall@25": 0.477,
+    "recall@50": 0.574,
+    "mrr": 0.2369
+  },
+  "delta_recall@5": 0.3789,
+  "delta_recall@10": 0.408,
+  "delta_mrr": 0.3223
+}
