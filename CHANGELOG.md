@@ -14,6 +14,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Graph-proximity mixin in standard upgrade path** (F3) — `pgmnemo--0.2.0-step4-recall-mixin.sql` content folded into the v0.2.0.1→0.2.1 upgrade script (was supplemental-only).
 - **Row-Level Security multi-tenant isolation** (W2.3 / Q5) — `pgmnemo.tenant_id` GUC gates `agent_lesson` by `project_id` and `mem_edge` by endpoint ownership. Empty/unset = service-account bypass. Policies are idempotent (DROP IF EXISTS before CREATE).
 
+### Fixed
+
+- **`recall_lessons()` IN-param/RETURNS TABLE collision on `project_id`** (INS-029 v2) — IN-param `project_id INT` collided with the `RETURNS TABLE` column of the same name. Fix: IN-param renamed to `project_id_filter`; all internal `recall_lessons.project_id` references updated accordingly. Backport of the same pattern as the `role`→`role_filter` fix in v0.1.4.1/v0.2.0.1.
+
 ### Changed
 
 - **`pgmnemo.recency_weight` default lowered** (F1) — from `0.20` to `0.08` (pending REC-1 ablation confirmation). Operator can override via `ALTER SYSTEM SET pgmnemo.recency_weight = '<value>'; SELECT pg_reload_conf();`.

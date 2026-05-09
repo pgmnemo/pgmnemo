@@ -54,7 +54,7 @@ CREATE OR REPLACE FUNCTION pgmnemo.recall_lessons(
     query_embedding  vector(1024),
     k                INT     DEFAULT 10,
     role_filter      TEXT    DEFAULT NULL,
-    project_id       INT     DEFAULT NULL,
+    project_id_filter INT     DEFAULT NULL,
     query_text       TEXT    DEFAULT NULL
 )
 RETURNS TABLE (
@@ -165,7 +165,7 @@ BEGIN
         WHERE al.is_active
           AND (_include_unverified OR al.verified_at IS NOT NULL)
           AND (recall_lessons.role_filter IS NULL OR al.role = recall_lessons.role_filter)
-          AND (recall_lessons.project_id IS NULL OR al.project_id = recall_lessons.project_id)
+          AND (recall_lessons.project_id_filter IS NULL OR al.project_id = recall_lessons.project_id_filter)
           AND (al.embedding IS NOT NULL OR _has_text)
     ),
     -- Top-5 cosine anchors used as traversal seeds
