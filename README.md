@@ -3,7 +3,7 @@
 **Multi-agent memory substrate for PostgreSQL — provenance-gated, vector-hybrid recall.**
 
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.2.0.1-green.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.2.1-green.svg)](CHANGELOG.md)
 [![CI](https://github.com/pgmnemo/pgmnemo/actions/workflows/ci.yml/badge.svg)](https://github.com/pgmnemo/pgmnemo/actions/workflows/ci.yml)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-17-4169E1.svg)](https://www.postgresql.org/)
 
