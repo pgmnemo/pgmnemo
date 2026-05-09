@@ -7,7 +7,7 @@
 
 LoCoMo paper canonical retriever: `facebook/dragon-plus` (768-dimensional dense encoder, Lin et al. 2023).
 
-pgmnemo v0.2.1 schema enforces `embedding vector(1024)` (hardcoded — fixed in v0.2.2 per #5269 roadmap).
+pgmnemo v0.2.1 schema enforces `embedding vector(1024)` (hardcoded — fixed in v0.2.2 (planned in next minor release)).
 
 ## Mathematical equivalence
 
@@ -39,5 +39,5 @@ this run; not a benchmark concern).
 
 ## Future fix
 
-pgmnemo v0.2.2 (#5269) introduces dim-configurable schema, removing the need
+pgmnemo v0.2.2 introduces dim-configurable schema, removing the need
 for padding. Future LoCoMo runs on v0.2.2 will use native vector(768) DRAGON.
