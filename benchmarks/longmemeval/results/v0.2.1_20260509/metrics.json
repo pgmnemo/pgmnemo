@@ -1,84 +1,141 @@
 {
   "version": "v0.2.1",
   "date": "2026-05-09",
-  "dataset": "xiaowu0162/longmemeval-cleaned",
-  "judge": "gpt-4o",
-  "judge_protocol": "verbatim LongMemEval evaluate_qa.py (yes/no per task type)",
-  "answer_model": "gpt-4o",
-  "embed_model": "text-embedding-3-large",
+  "mode": "real",
+  "dry_run": false,
+  "dataset": "xiaowu0162/longmemeval-cleaned (longmemeval_s_cleaned.json)",
+  "dataset_sha256": "d6f21ea9d60a0d56f34a05b609c79c88a451d2ae03597821ea3d5a9678c3a442",
+  "retrieval_method": "BM25 k1=1.5 b=0.75",
   "n_instances": 500,
-  "recall_k": 20,
-  "dry_run": true,
-  "metrics": {
+  "category_distribution": {
+    "single_session_user": 150,
+    "multi_session_topic_absent": 30,
+    "multi_session_user": 121,
+    "temporal_reasoning": 127,
+    "knowledge_update": 72
+  },
+  "by_category": {
     "single_session_user": {
-      "accuracy": 0.7,
-      "ci95_lo": 0.6041,
-      "ci95_hi": 0.7811,
-      "n": 100
+      "recall@10": {
+        "mean": 0.9733,
+        "ci95_lo": 0.9475,
+        "ci95_hi": 0.9992,
+        "n": 150
+      },
+      "recall@20": {
+        "mean": 1.0,
+        "ci95_lo": 1.0,
+        "ci95_hi": 1.0,
+        "n": 150
+      },
+      "f1": {
+        "mean": 0.0069,
+        "ci95_lo": 0.0055,
+        "ci95_hi": 0.0084,
+        "n": 150
+      }
     },
     "multi_session_user": {
-      "accuracy": 0.8,
-      "ci95_lo": 0.7112,
-      "ci95_hi": 0.8666,
-      "n": 100
+      "recall@10": {
+        "mean": 0.9835,
+        "ci95_lo": 0.9607,
+        "ci95_hi": 1.0,
+        "n": 121
+      },
+      "recall@20": {
+        "mean": 0.9917,
+        "ci95_lo": 0.9755,
+        "ci95_hi": 1.0,
+        "n": 121
+      },
+      "f1": {
+        "mean": 0.0018,
+        "ci95_lo": 0.0011,
+        "ci95_hi": 0.0025,
+        "n": 121
+      }
     },
     "temporal_reasoning": {
-      "accuracy": 0.73,
-      "ci95_lo": 0.6357,
-      "ci95_hi": 0.8073,
-      "n": 100
+      "recall@10": {
+        "mean": 0.9764,
+        "ci95_lo": 0.9499,
+        "ci95_hi": 1.0,
+        "n": 127
+      },
+      "recall@20": {
+        "mean": 0.9921,
+        "ci95_lo": 0.9767,
+        "ci95_hi": 1.0,
+        "n": 127
+      },
+      "f1": {
+        "mean": 0.0038,
+        "ci95_lo": 0.0031,
+        "ci95_hi": 0.0044,
+        "n": 127
+      }
     },
     "knowledge_update": {
-      "accuracy": 0.8,
-      "ci95_lo": 0.7112,
-      "ci95_hi": 0.8666,
-      "n": 100
+      "recall@10": {
+        "mean": 1.0,
+        "ci95_lo": 1.0,
+        "ci95_hi": 1.0,
+        "n": 72
+      },
+      "recall@20": {
+        "mean": 1.0,
+        "ci95_lo": 1.0,
+        "ci95_hi": 1.0,
+        "n": 72
+      },
+      "f1": {
+        "mean": 0.0017,
+        "ci95_lo": 0.0012,
+        "ci95_hi": 0.0022,
+        "n": 72
+      }
     },
     "multi_session_topic_absent": {
-      "accuracy": 0.8,
-      "ci95_lo": 0.7112,
-      "ci95_hi": 0.8666,
-      "n": 100
+      "recall@10": {
+        "mean": 1.0,
+        "ci95_lo": 1.0,
+        "ci95_hi": 1.0,
+        "n": 30
+      },
+      "recall@20": {
+        "mean": 1.0,
+        "ci95_lo": 1.0,
+        "ci95_hi": 1.0,
+        "n": 30
+      },
+      "f1": {
+        "mean": 0.0091,
+        "ci95_lo": 0.0081,
+        "ci95_hi": 0.0101,
+        "n": 30
+      }
     }
   },
   "overall": {
-    "accuracy": 0.766,
-    "ci95_lo": 0.7269,
-    "ci95_hi": 0.801,
-    "n": 500
-  },
-  "effect_sizes": {
-    "single_session_user": {
-      "vs_random_baseline_0.5": {
-        "cohens_h": 0.4115,
-        "interpretation": "small"
-      }
+    "recall@10": {
+      "mean": 0.982,
+      "ci95_lo": 0.9703,
+      "ci95_hi": 0.9937,
+      "n": 500
     },
-    "multi_session_user": {
-      "vs_random_baseline_0.5": {
-        "cohens_h": 0.6435,
-        "interpretation": "medium"
-      }
+    "recall@20": {
+      "mean": 0.996,
+      "ci95_lo": 0.9905,
+      "ci95_hi": 1.0,
+      "n": 500
     },
-    "temporal_reasoning": {
-      "vs_random_baseline_0.5": {
-        "cohens_h": 0.478,
-        "interpretation": "small"
-      }
-    },
-    "knowledge_update": {
-      "vs_random_baseline_0.5": {
-        "cohens_h": 0.6435,
-        "interpretation": "medium"
-      }
-    },
-    "multi_session_topic_absent": {
-      "vs_random_baseline_0.5": {
-        "cohens_h": 0.6435,
-        "interpretation": "medium"
-      }
+    "f1": {
+      "mean": 0.0043,
+      "ci95_lo": 0.0037,
+      "ci95_hi": 0.0048,
+      "n": 500
     }
   },
-  "multiple_comparison_correction": "bonferroni",
-  "alpha_corrected": 0.01
+  "bonferroni_alpha": 0.01,
+  "multiple_comparison_correction": "bonferroni"
 }
