@@ -7,6 +7,17 @@
 [![CI](https://github.com/pgmnemo/pgmnemo/actions/workflows/ci.yml/badge.svg)](https://github.com/pgmnemo/pgmnemo/actions/workflows/ci.yml)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-17-4169E1.svg)](https://www.postgresql.org/)
 
+**Current maturity:** Beta. Primary validation target is PostgreSQL 17 with `pgvector >= 0.7.0`.
+
+Quick links:
+- [Quickstart](#30-second-quickstart)
+- [Install / Upgrade](INSTALL.md)
+- [Examples](examples/README.md)
+- [Roadmap / Status](docs/ROADMAP.md)
+- [Compatibility](docs/COMPATIBILITY.md)
+- [Production Readiness](docs/PRODUCTION_READINESS.md)
+- [Benchmarks](docs/BENCHMARKS.md)
+
 ## Why this exists
 
 - **One differentiator none of Pinecone, Letta, Mem0, or Zep have:** a write-time provenance gate. Every `ingest()` call must carry a `commit_sha` or `artifact_hash`; rows without provenance are blocked (or warned) by default. Hallucinated agent memories cannot silently accumulate.
@@ -62,6 +73,9 @@ FROM pgmnemo.recall_lessons(
 
 - [INSTALL.md](INSTALL.md) — build, install, configure, upgrade
 - [docs/USAGE.md](docs/USAGE.md) — API reference and tuning guide
+- [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md) — supported versions and environment assumptions
+- [docs/PRODUCTION_READINESS.md](docs/PRODUCTION_READINESS.md) — beta posture and operator checklist
+- [docs/ROADMAP.md](docs/ROADMAP.md) — near-term public roadmap
 - [CHANGELOG.md](CHANGELOG.md) — version history
 
 ## License
@@ -71,6 +85,11 @@ Apache License 2.0 — see [LICENSE](LICENSE).
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md). Contributions accepted under the DCO sign-off model.
+
+## Security and Conduct
+
+- [SECURITY.md](SECURITY.md) — how to report vulnerabilities
+- [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) — collaboration expectations
 
 ## Citing
 

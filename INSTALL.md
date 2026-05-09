@@ -63,13 +63,38 @@ SELECT pg_reload_conf();
 - `warn` — INSERT succeeds but emits a `WARNING`; `verified_at` remains `NULL`
 - `off` — gate is disabled; all inserts pass through unchecked
 
-## Upgrade from v0.0.1
+## Upgrade
+
+Supported upgrade paths currently documented:
+
+- `0.0.1 -> 0.1.0`
+- `0.1.4.1 -> 0.2.0.1`
+- `0.2.0.1 -> 0.2.1`
+
+### Upgrade from v0.0.1
 
 ```sql
 ALTER EXTENSION pgmnemo UPDATE TO '0.1.0';
 ```
 
 This applies `pgmnemo--0.0.1--0.1.0.sql`: adds the HNSW index, `ingest()` function, and recency-scoring changes to `recall_lessons()`.
+
+### Upgrade from v0.1.4.1 to v0.2.0.1
+
+```sql
+ALTER EXTENSION pgmnemo UPDATE TO '0.2.0.1';
+```
+
+### Upgrade from v0.2.0.1 to v0.2.1
+
+```sql
+ALTER EXTENSION pgmnemo UPDATE TO '0.2.1';
+```
+
+For version/API notes, always check:
+- [CHANGELOG.md](CHANGELOG.md)
+- [docs/USAGE.md](docs/USAGE.md)
+- [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md)
 
 ## Troubleshooting
 

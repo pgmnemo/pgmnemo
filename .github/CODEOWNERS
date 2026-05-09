@@ -1,0 +1,21 @@
+# Core trust surface
+README.md @psychologistgbi-beep
+INSTALL.md @psychologistgbi-beep
+CHANGELOG.md @psychologistgbi-beep
+META.json @psychologistgbi-beep
+SECURITY.md @psychologistgbi-beep
+CODE_OF_CONDUCT.md @psychologistgbi-beep
+CONTRIBUTING.md @psychologistgbi-beep
+
+# GitHub governance
+.github/ @psychologistgbi-beep
+
+# Extension contract and upgrade path
+extension/ @psychologistgbi-beep
+
+# Public docs
+docs/ @psychologistgbi-beep
+
+# Benchmarks and examples
+benchmarks/ @psychologistgbi-beep
+examples/ @psychologistgbi-beep
