@@ -57,10 +57,11 @@ minimal reproduction SQL, expected vs actual behavior.
 Do **not** open a public issue. Email security@pgmnemo.dev (or until that domain exists,
 the maintainer's GitHub-listed email) with details. We aim to respond within 72 hours.
 
+See [SECURITY.md](SECURITY.md) for the project policy.
+
 ## Code of conduct
 
-Be kind, be precise, assume good intent, criticize ideas not people. The maintainers reserve the
-right to remove disruptive comments and ban repeat offenders.
+See [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md).
 
 ## Decision-making
 
@@ -75,7 +76,7 @@ will go through a community RFC once the community exists.
 
 ## Getting help
 
-- General questions → GitHub Discussions (after public release)
+- General questions → GitHub Discussions or Issues, depending on what is enabled in the repo
 - Bug reports → GitHub Issues
 - Security → security email above
 
