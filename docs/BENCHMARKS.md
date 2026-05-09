@@ -44,7 +44,7 @@ Reports + raw_retrievals + reproduction commands:
 | Retrieval (recall@K, NDCG@K, MRR) | recall@{1,5,10,20} + MRR | ✅ |
 | Question types | 5 (single-session-{user,assistant,preference}, multi-session, temporal-reasoning, knowledge-update + abstention variant) | ✅ |
 | LLM-as-judge accuracy via `evaluate_qa.py` | n/a — retrieval-only mode | ⚠️ deferred (no API key; paper supports retrieval-only) |
-| Session truncation | 500 chars per session for MPS memory | ⚠️ **DEVIATION**: paper does not truncate. May affect recall on long sessions. See `ADDENDA/LONGMEMEVAL_TRUNCATION_500.md`. |
+| Session truncation | 500 chars per session (config bug, not hardware limit) | ✅ **no significant impact**: QUICK-C re-run (v0.2.1_pgmnemo_20260509) recall@10 delta = 0.0008; addendum withdrawn. |
 
 ---
 
@@ -63,7 +63,7 @@ Hypothesized causes (under WG investigation):
 - LongMemEval questions have high keyword overlap with relevant sessions — BM25-friendly task
 - pgmnemo's 5-component scoring may over-penalize on short queries
 - bge-m3 substitution (vs paper canonical Stella V5) may explain part of the gap
-- 500-char session truncation may discard critical context
+- session truncation had near-zero impact (QUICK-C delta = 0.0008)
 
 ### 2. pgmnemo wins on certain question types
 
