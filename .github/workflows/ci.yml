@@ -3,50 +3,36 @@ on: [push, pull_request]
 jobs:
   installcheck:
     runs-on: ubuntu-latest
-    services:
-      postgres:
-        image: pgvector/pgvector:pg17
-        env:
-          POSTGRES_PASSWORD: postgres
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U postgres"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
     steps:
       - uses: actions/checkout@v4
-      - name: Install build deps
+      - name: Install PostgreSQL 17 + pgvector + build deps
         run: |
           sudo sh -c 'echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
           curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo gpg --dearmor -o /etc/apt/trusted.gpg.d/postgresql.gpg
           sudo apt-get update
-          sudo apt-get install -y postgresql-server-dev-17 build-essential
+          sudo apt-get install -y postgresql-17 postgresql-17-pgvector postgresql-server-dev-17 build-essential
+      - name: Start PostgreSQL and create role/database
+        run: |
+          sudo systemctl start postgresql
+          sudo -u postgres psql -c "CREATE USER runner SUPERUSER PASSWORD 'runner';"
+          sudo -u postgres psql -c "CREATE DATABASE pgmnemo_test OWNER runner;"
       - name: Build extension
         run: cd extension && make
       - name: Install extension
         run: cd extension && sudo make install
-      # Note: CREATE EXTENSION verification + installcheck require pgmnemo.so/sql
-      # to be present in the *service container* (pgvector/pgvector:pg17), not the
-      # runner host where `make install` puts it. Refactor planned: switch to
-      # host-PG install (postgresql-17 on runner + pgvector via apt) so CI primary
-      # gate can include CREATE EXTENSION + regress. Tracked: issue #ci-host-pg-refactor
-      - name: Verify extension loads (non-blocking — CI host-PG refactor pending)
-        continue-on-error: true
+      - name: Verify extension loads
         env:
-          PGUSER: postgres
-          PGPASSWORD: postgres
+          PGUSER: runner
+          PGPASSWORD: runner
           PGHOST: localhost
           PGPORT: 5432
-        run: |
-          PGPASSWORD=postgres psql -h localhost -U postgres -c "CREATE EXTENSION pgmnemo CASCADE;" || \
-            echo "::warning::CREATE EXTENSION pgmnemo failed in service container (expected — install was on runner host); refactor to host-PG planned"
-      - name: Run installcheck (non-blocking — fixtures + host-PG refactor pending)
-        continue-on-error: true
+          PGDATABASE: pgmnemo_test
+        run: psql -c "CREATE EXTENSION pgmnemo CASCADE;"
+      - name: Run installcheck
         env:
-          PGUSER: postgres
-          PGPASSWORD: postgres
+          PGUSER: runner
+          PGPASSWORD: runner
           PGHOST: localhost
           PGPORT: 5432
-        run: cd extension && make installcheck || echo "::warning::installcheck non-blocking pending fixture reconciliation"
+          PGDATABASE: pgmnemo_test
+        run: cd extension && make installcheck
