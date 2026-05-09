@@ -1,7 +1,6 @@
 -- Regression test: tri-state prov_strength formula (v0.1.2)
 -- Verifies: no-prov→0.0, commit-only→0.4, commit+verified→1.0
 -- Tests the CASE expression directly (no live table required).
-
 SELECT
     CASE
         WHEN NULL::TEXT IS NOT NULL AND NULL::TIMESTAMPTZ IS NOT NULL THEN 1.0
@@ -18,7 +17,7 @@ SELECT
         WHEN 'abc123'::TEXT IS NOT NULL                       THEN 0.4
         ELSE                                                       0.0
     END AS prov_commit_verified;
- prov_no_prov | prov_commit_only | prov_commit_verified
+ prov_no_prov | prov_commit_only | prov_commit_verified 
 --------------+------------------+----------------------
           0.0 |              0.4 |                  1.0
 (1 row)
@@ -27,8 +26,8 @@ SELECT
 SELECT
     0.0 < 0.4  AS no_prov_lt_commit_only,
     0.4 < 1.0  AS commit_only_lt_fully_verified;
- no_prov_lt_commit_only | commit_only_lt_fully_verified
-------------------------+------------------------------
+ no_prov_lt_commit_only | commit_only_lt_fully_verified 
+------------------------+-------------------------------
  t                      | t
 (1 row)
 
@@ -36,7 +35,7 @@ SELECT
 SELECT
     round((0.1 * 1.0 - 0.1 * 0.4)::numeric, 4) AS delta_score_full_vs_commit_only,
     round((0.1 * 0.4 - 0.1 * 0.0)::numeric, 4) AS delta_score_commit_only_vs_none;
- delta_score_full_vs_commit_only | delta_score_commit_only_vs_none
+ delta_score_full_vs_commit_only | delta_score_commit_only_vs_none 
 ---------------------------------+---------------------------------
                           0.0600 |                          0.0400
 (1 row)

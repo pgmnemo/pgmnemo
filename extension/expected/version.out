@@ -1,6 +1,6 @@
 -- Regression: version() returns the live extversion from pg_catalog
 SELECT pgmnemo.version() = (SELECT extversion FROM pg_extension WHERE extname = 'pgmnemo') AS version_matches_catalog;
- version_matches_catalog
+ version_matches_catalog 
 -------------------------
  t
 (1 row)
@@ -9,7 +9,7 @@ SELECT pgmnemo.version() = (SELECT extversion FROM pg_extension WHERE extname = 
 SELECT pg_extension.extnamespace::regnamespace::text = 'pgmnemo' AS schema_is_pgmnemo
 FROM pg_extension
 WHERE extname = 'pgmnemo';
- schema_is_pgmnemo
+ schema_is_pgmnemo 
 -------------------
  t
 (1 row)
