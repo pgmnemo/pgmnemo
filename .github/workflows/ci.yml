@@ -14,7 +14,7 @@ jobs:
       - name: Switch to PostgreSQL 17
         run: |
           sudo pg_ctlcluster 16 main stop || true
-          sudo pg_ctlcluster 17 main start
+          sudo pg_createcluster --start 17 main || sudo pg_ctlcluster 17 main start
           sudo -u postgres /usr/lib/postgresql/17/bin/psql -p 5432 -c "CREATE USER runner SUPERUSER PASSWORD 'runner';"
           sudo -u postgres /usr/lib/postgresql/17/bin/psql -p 5432 -c "CREATE DATABASE pgmnemo_test OWNER runner;"
       - name: Build extension
