@@ -36,3 +36,6 @@ jobs:
           PGPORT: 5433
           PGDATABASE: pgmnemo_test
         run: cd extension && make installcheck PG_CONFIG=/usr/lib/postgresql/17/bin/pg_config
+      - name: Show regression diffs on failure
+        if: failure()
+        run: cat extension/regression.diffs || echo "no diffs file"
