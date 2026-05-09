@@ -11,12 +11,11 @@ jobs:
           curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo gpg --dearmor -o /etc/apt/trusted.gpg.d/postgresql.gpg
           sudo apt-get update
           sudo apt-get install -y postgresql-17 postgresql-17-pgvector postgresql-server-dev-17 build-essential
-      - name: Switch to PostgreSQL 17
+      - name: Start PostgreSQL 17 and create role/database
         run: |
-          sudo pg_ctlcluster 16 main stop || true
           sudo pg_createcluster --start 17 main || sudo pg_ctlcluster 17 main start
-          sudo -u postgres /usr/lib/postgresql/17/bin/psql -p 5432 -c "CREATE USER runner SUPERUSER PASSWORD 'runner';"
-          sudo -u postgres /usr/lib/postgresql/17/bin/psql -p 5432 -c "CREATE DATABASE pgmnemo_test OWNER runner;"
+          sudo -u postgres /usr/lib/postgresql/17/bin/psql -p 5433 -c "CREATE USER runner SUPERUSER PASSWORD 'runner';"
+          sudo -u postgres /usr/lib/postgresql/17/bin/psql -p 5433 -c "CREATE DATABASE pgmnemo_test OWNER runner;"
       - name: Build extension
         run: cd extension && make PG_CONFIG=/usr/lib/postgresql/17/bin/pg_config
       - name: Install extension
@@ -26,7 +25,7 @@ jobs:
           PGUSER: runner
           PGPASSWORD: runner
           PGHOST: localhost
-          PGPORT: 5432
+          PGPORT: 5433
           PGDATABASE: pgmnemo_test
         run: /usr/lib/postgresql/17/bin/psql -c "CREATE EXTENSION pgmnemo CASCADE;"
       - name: Run installcheck
@@ -34,6 +33,6 @@ jobs:
           PGUSER: runner
           PGPASSWORD: runner
           PGHOST: localhost
-          PGPORT: 5432
+          PGPORT: 5433
           PGDATABASE: pgmnemo_test
         run: cd extension && make installcheck PG_CONFIG=/usr/lib/postgresql/17/bin/pg_config
