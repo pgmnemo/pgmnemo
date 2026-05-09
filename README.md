@@ -6,6 +6,24 @@
 [![Version](https://img.shields.io/badge/version-0.2.1-green.svg)](CHANGELOG.md)
 [![CI](https://github.com/pgmnemo/pgmnemo/actions/workflows/ci.yml/badge.svg)](https://github.com/pgmnemo/pgmnemo/actions/workflows/ci.yml)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-17-4169E1.svg)](https://www.postgresql.org/)
+[![LoCoMo recall@10](https://img.shields.io/badge/LoCoMo_recall%4010-0.795-success.svg)](benchmarks/locomo/results/v0.2.1_session_20260509/report.md)
+[![LongMemEval recall@10](https://img.shields.io/badge/LongMemEval_recall%4010-0.933-success.svg)](benchmarks/longmemeval/results/v0.2.1_pgmnemo_20260509/report.md)
+
+## Benchmarks (v0.2.1, retrieval-only)
+
+Real numbers vs published academic benchmarks. Full methodology + reproduction commands in [docs/BENCHMARKS.md](docs/BENCHMARKS.md). Methodology change log in [benchmarks/HISTORY.md](benchmarks/HISTORY.md).
+
+| Benchmark | Embedder | Metric | pgmnemo | Comparison |
+|---|---|---|---|---|
+| **LoCoMo** ([Maharana ACL 2024](https://arxiv.org/abs/2402.17753)) | DRAGON (paper canonical) | recall@10 / MRR | **0.795** / **0.548** | session-level granularity, paper-class range |
+| **LongMemEval** ([Wu ICLR 2025](https://arxiv.org/abs/2410.10813)) | bge-m3 (subst. for Stella V5)¹ | recall@10 / MRR | **0.933** / **0.855** | BM25 baseline² 0.982 |
+
+¹ Stella V5 paper canonical incompatible with transformers 5.8 — substituted bge-m3 (1024d, MTEB-strong). [Addendum](benchmarks/longmemeval/ADDENDA/LONGMEMEVAL_EMBEDDER_BGE_M3.md).
+² Pure-Python BM25 baseline included for reference: [run_nollm.py](benchmarks/longmemeval/run_nollm.py).
+
+**Reproduce in 3 commands:** see [docs/BENCHMARKS.md#reproducibility](docs/BENCHMARKS.md#reproducibility).
+
+**Honest caveats:** BM25 outperforms pgmnemo vector retrieval on LongMemEval (keyword-friendly task). [Hybrid retrieval (vector + BM25 RRF)](benchmarks/scripts/run_longmemeval_pgmnemo.py) is on the v0.2.2 roadmap.
 
 ## Why this exists
 
