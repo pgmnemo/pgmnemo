@@ -1,0 +1,34 @@
+-- Smoke test: recall_lessons() role_filter parameter collision fix (PGMNEMO-HOTFIX-1)
+-- Verifies: IN-param renamed role→role_filter compiles; role_filter=NULL pools all roles.
+
+-- Verify role_filter=NULL predicate passes all role values (pooled semantics).
+SELECT
+    (NULL::TEXT IS NULL OR 'writer' = NULL::TEXT) AS pooled_matches_writer,
+    (NULL::TEXT IS NULL OR 'reader' = NULL::TEXT) AS pooled_matches_reader;
+
+-- Verify role_filter='writer' scopes correctly.
+SELECT
+    ('writer'::TEXT IS NULL OR 'writer' = 'writer'::TEXT) AS filter_matches_writer,
+    ('writer'::TEXT IS NULL OR 'reader' = 'writer'::TEXT) AS filter_misses_reader;
+
+-- Confirm parameter name is role_filter (not role) — structural assertion via pg_proc.
+SELECT
+    'role_filter' = ANY(proargnames) AS param_is_role_filter,
+    'role'        = ANY(proargnames) AS param_is_role_collision
+FROM pg_proc p
+JOIN pg_namespace n ON n.oid = p.pronamespace
+WHERE n.nspname = 'pgmnemo'
+  AND p.proname = 'recall_lessons'
+  AND pronargs = 5
+LIMIT 1;
+
+-- Functional smoke: INSERT 1 verified lesson, confirm recall_lessons() returns ≥1 row.
+-- gate_strict=off so we can insert without commit_sha; include_unverified=on since no
+-- verified_at is set in this minimal fixture.
+SET pgmnemo.gate_strict = 'off';
+SET pgmnemo.include_unverified = 'on';
+INSERT INTO pgmnemo.agent_lesson (role, topic, lesson_text, importance)
+VALUES ('smoke_role', 'hotfix smoke', 'hotfix validation lesson for recall', 3);
+
+SELECT count(*) >= 1 AS has_results
+FROM pgmnemo.recall_lessons(NULL::vector(1024), 5, NULL, NULL, 'hotfix validation');

@@ -25,13 +25,13 @@ COMMENT ON FUNCTION pgmnemo.version() IS
 -- Feature #3: State machine for agent_lesson
 -- ─────────────────────────────────────────────────────────────────
 ALTER TABLE pgmnemo.agent_lesson
-    ADD COLUMN state TEXT NOT NULL DEFAULT 'draft'
+    ADD COLUMN IF NOT EXISTS state TEXT NOT NULL DEFAULT 'draft'
         CHECK (state IN ('draft','candidate','validated','canonical','deprecated','superseded','archived','rejected','conflicted'));
 
 ALTER TABLE pgmnemo.agent_lesson
-    ADD COLUMN state_changed_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
+    ADD COLUMN IF NOT EXISTS state_changed_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
 
-CREATE TABLE pgmnemo.agent_lesson_state_transition (
+CREATE TABLE IF NOT EXISTS pgmnemo.agent_lesson_state_transition (
     from_state TEXT NOT NULL,
     to_state   TEXT NOT NULL,
     PRIMARY KEY (from_state, to_state)
@@ -54,7 +54,8 @@ INSERT INTO pgmnemo.agent_lesson_state_transition (from_state, to_state) VALUES
     ('superseded', 'archived'),
     ('conflicted', 'canonical'),
     ('conflicted', 'rejected'),
-    ('conflicted', 'archived');
+    ('conflicted', 'archived')
+ON CONFLICT DO NOTHING;
 
 CREATE OR REPLACE FUNCTION pgmnemo.transition_lesson(lesson_id BIGINT, new_state TEXT)
 RETURNS pgmnemo.agent_lesson
@@ -98,14 +99,14 @@ COMMENT ON FUNCTION pgmnemo.transition_lesson(BIGINT, TEXT) IS
 -- ─────────────────────────────────────────────────────────────────
 -- Feature #4: Provenance FKs — source_run_id / source_task_id
 -- ─────────────────────────────────────────────────────────────────
-ALTER TABLE pgmnemo.agent_lesson ADD COLUMN source_run_id  BIGINT NULL;
-ALTER TABLE pgmnemo.agent_lesson ADD COLUMN source_task_id BIGINT NULL;
+ALTER TABLE pgmnemo.agent_lesson ADD COLUMN IF NOT EXISTS source_run_id  BIGINT NULL;
+ALTER TABLE pgmnemo.agent_lesson ADD COLUMN IF NOT EXISTS source_task_id BIGINT NULL;
 
-CREATE INDEX ix_pgmnemo_lesson_source_run
+CREATE INDEX IF NOT EXISTS ix_pgmnemo_lesson_source_run
     ON pgmnemo.agent_lesson (source_run_id)
     WHERE source_run_id IS NOT NULL;
 
-CREATE INDEX ix_pgmnemo_lesson_source_task
+CREATE INDEX IF NOT EXISTS ix_pgmnemo_lesson_source_task
     ON pgmnemo.agent_lesson (source_task_id)
     WHERE source_task_id IS NOT NULL;
 
