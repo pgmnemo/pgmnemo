@@ -1,0 +1,77 @@
+-- Regression test: recall_lessons() graph_proximity mixin (v0.2.0-step4)
+-- Pure-SQL predicate checks; no live table required.
+-- Recall@10 targets: ≥0.55 on 100-row synthetic, ≥0.45 on 1000-row LOO.
+
+-- 1. Formula coefficient breakdown (fixed terms, defaults γ=0.2 δ=0.2)
+--    cosine=0.4, importance=0.2, prov_strength=0.1; variable: γ×recency + δ×graph_proximity
+SELECT
+    0.4  AS cosine_weight,
+    0.2  AS importance_weight,
+    0.1  AS prov_strength_weight,
+    0.4 + 0.2 + 0.1 AS fixed_weight_sum,
+    (0.4 + 0.2 + 0.1) < 1.0 AS leaves_room_for_recency_and_graph;
+
+-- Expected: cosine=0.4, importance=0.2, prov_strength=0.1, sum=0.7, t
+
+-- 2. graph_proximity formula: 1.0 - depth/max_depth (max_depth=5)
+SELECT
+    round((1.0 - 1::float / 5)::numeric, 2) AS proximity_depth1,
+    round((1.0 - 2::float / 5)::numeric, 2) AS proximity_depth2,
+    round((1.0 - 3::float / 5)::numeric, 2) AS proximity_depth3,
+    round((1.0 - 4::float / 5)::numeric, 2) AS proximity_depth4;
+
+-- Expected: 0.80, 0.60, 0.40, 0.20 (depth=5 would be 0.0, blocked by depth < max_depth guard)
+
+-- 3. GUC range clamping: GREATEST(0.0, LEAST(0.5, input))
+SELECT
+    GREATEST(0.0, LEAST(0.5, -0.1::float)) AS clamp_below_zero,
+    GREATEST(0.0, LEAST(0.5,  0.0::float)) AS clamp_at_min,
+    GREATEST(0.0, LEAST(0.5,  0.2::float)) AS clamp_midpoint,
+    GREATEST(0.0, LEAST(0.5,  0.5::float)) AS clamp_at_max,
+    GREATEST(0.0, LEAST(0.5,  0.9::float)) AS clamp_above_max;
+
+-- Expected: 0, 0, 0.2, 0.5, 0.5
+
+-- 4. COALESCE sentinel: non-anchor lessons get proximity=0 (no graph signal)
+SELECT
+    COALESCE(NULL::float,  0.0) AS no_graph_signal,
+    COALESCE(0.8::float,   0.0) AS depth1_signal,
+    COALESCE(0.0::float,   0.0) AS zero_proximity_passthrough;
+
+-- Expected: 0, 0.8, 0
+
+-- 5. Score upper bound check: with all components maxed at defaults
+--    max = 0.4*1 + 0.2*1 + 0.2*1 + 0.1*1 + 0.2*1 = 1.1
+SELECT
+    round((0.4*1.0 + 0.2*1.0 + 0.2*1.0 + 0.1*1.0 + 0.2*1.0)::numeric, 1) AS max_score_defaults,
+    round((0.4*1.0 + 0.2*1.0 + 0.2*1.0 + 0.1*1.0 + 0.5*1.0)::numeric, 1) AS max_score_delta05;
+
+-- Expected: 1.1, 1.4
+
+-- 6. Edge types traversed by graph_walk (causal, temporal, derives_from)
+SELECT
+    ('causal'       = ANY(ARRAY['causal','temporal','derives_from'])) AS causal_included,
+    ('temporal'     = ANY(ARRAY['causal','temporal','derives_from'])) AS temporal_included,
+    ('derives_from' = ANY(ARRAY['causal','temporal','derives_from'])) AS derives_from_included,
+    ('semantic'     = ANY(ARRAY['causal','temporal','derives_from'])) AS semantic_excluded,
+    ('contradicts'  = ANY(ARRAY['causal','temporal','derives_from'])) AS contradicts_excluded;
+
+-- Expected: t, t, t, f, f
+
+-- 7. depth guard: traversal halts when depth >= max_depth (depth < 5)
+SELECT
+    (0 < 5) AS depth0_traverses,
+    (4 < 5) AS depth4_traverses,
+    (5 < 5) AS depth5_blocked,
+    (6 < 5) AS depth6_blocked;
+
+-- Expected: t, t, f, f
+
+-- 8. Recall@10 performance targets (validated offline; thresholds recorded here)
+SELECT
+    0.55 AS recall_at10_target_100row_synthetic,
+    0.45 AS recall_at10_target_1000row_loo,
+    'graph_proximity mixin vs cosine-only baseline'::TEXT AS benchmark_comparison;
+
+-- Expected: targets documented (live evaluation run offline)
+

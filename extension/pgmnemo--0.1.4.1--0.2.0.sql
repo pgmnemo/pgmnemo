@@ -1,4 +1,9 @@
--- pgmnemo upgrade: 0.1.4.1 → 0.2.0 (identical to 0.1.4 → 0.2.0; v0.1.4.1 was a hotfix for IN-param naming)
+-- pgmnemo upgrade: 0.1.4.1 → 0.2.0
+-- 0.1.4.1 is identical to 0.1.4 except for the role_filter rename in recall_lessons().
+-- The 0.1.4 → 0.2.0 DDL is fully idempotent (IF NOT EXISTS guards), so this script
+-- can safely duplicate it.
+-- PGMNEMO-HOTFIX-1 (role_filter rename) is already applied at 0.1.4.1; no action needed here.
+-- SPDX-License-Identifier: Apache-2.0
 -- Delivers three v0.2.0 primitives (RFC §3–§5):
 --   § 3 mem_edge DDL — directed typed edges between agent_lesson rows
 --   § 4 traverse_causal_chain() — recursive CTE walk of CAUSED_BY graph
