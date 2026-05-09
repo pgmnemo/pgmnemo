@@ -7,13 +7,11 @@
 *.lo
 *.a
 
-# pgxs build outputs
+# pgxs build outputs (results/ is OUTPUT, sql/ and expected/ are TEST FIXTURES — track them)
 results/
 tmp_check/
 log/
 *.log
-sql/
-expected/
 
 # editor files
 .idea/
@@ -43,3 +41,7 @@ node_modules/
 # local benchmark data
 benchmarks/data/
 benchmarks/results/
+
+# pg_regress outputs
+extension/regression.diffs
+extension/regression.out

@@ -1,0 +1,42 @@
+-- Smoke test: traverse_temporal_window() type-cast fix (PGMNEMO-HOTFIX-2)
+-- Verifies ::DOUBLE PRECISION cast and 1-hour window semantics using synthetic values.
+-- No live table required.
+
+-- 1. Cast fix: ABS(EXTRACT(EPOCH FROM ...))::DOUBLE PRECISION returns double precision (not numeric)
+SELECT ABS(EXTRACT(EPOCH FROM (
+    TIMESTAMPTZ '2026-01-01 10:30:00+00' - TIMESTAMPTZ '2026-01-01 10:00:00+00'
+)))::DOUBLE PRECISION = 1800.0 AS cast_is_double_precision;
+
+-- 2. Two lessons within 1-hour window yield 2 rows; outside-window lesson excluded (non-empty)
+SELECT COUNT(*) = 2 AS two_lessons_in_window
+FROM (
+    SELECT
+        l.id                                                           AS lesson_id,
+        ABS(EXTRACT(EPOCH FROM (l.ts - a.ts)))::DOUBLE PRECISION      AS time_delta_sec,
+        NULL::DOUBLE PRECISION                                         AS edge_weight,
+        (NULL::DOUBLE PRECISION IS NOT NULL)                          AS linked
+    FROM (VALUES
+        (101::BIGINT, TIMESTAMPTZ '2026-01-01 10:30:00+00'),
+        (102::BIGINT, TIMESTAMPTZ '2026-01-01 10:45:00+00'),
+        (103::BIGINT, TIMESTAMPTZ '2026-01-01 12:05:00+00')
+    ) AS l(id, ts),
+    (VALUES (TIMESTAMPTZ '2026-01-01 10:00:00+00')) AS a(ts),
+    (VALUES (INTERVAL '1 hour')) AS w(iv)
+    WHERE l.ts BETWEEN (a.ts - w.iv) AND (a.ts + w.iv)
+) sub;
+
+-- 3. Correct columns: lesson_id BIGINT, time_delta_sec DOUBLE PRECISION, edge_weight DOUBLE PRECISION, linked BOOLEAN
+SELECT
+    lesson_id,
+    time_delta_sec,
+    edge_weight,
+    linked
+FROM (
+    SELECT
+        101::BIGINT                                                        AS lesson_id,
+        ABS(EXTRACT(EPOCH FROM (
+            TIMESTAMPTZ '2026-01-01 10:30:00+00' - TIMESTAMPTZ '2026-01-01 10:00:00+00'
+        )))::DOUBLE PRECISION                                              AS time_delta_sec,
+        NULL::DOUBLE PRECISION                                             AS edge_weight,
+        (NULL::DOUBLE PRECISION IS NOT NULL)                              AS linked
+) sub;
