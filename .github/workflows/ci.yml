@@ -11,13 +11,12 @@ jobs:
           curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo gpg --dearmor -o /etc/apt/trusted.gpg.d/postgresql.gpg
           sudo apt-get update
           sudo apt-get install -y postgresql-17 postgresql-17-pgvector postgresql-server-dev-17 build-essential
-          echo "/usr/lib/postgresql/17/bin" >> $GITHUB_PATH
-      - name: Start PostgreSQL 17 and create role/database
+      - name: Switch to PostgreSQL 17
         run: |
-          sudo systemctl stop postgresql || true
-          sudo systemctl start postgresql@17-main
-          sudo -u postgres /usr/lib/postgresql/17/bin/psql -c "CREATE USER runner SUPERUSER PASSWORD 'runner';"
-          sudo -u postgres /usr/lib/postgresql/17/bin/psql -c "CREATE DATABASE pgmnemo_test OWNER runner;"
+          sudo pg_ctlcluster 16 main stop || true
+          sudo pg_ctlcluster 17 main start
+          sudo -u postgres /usr/lib/postgresql/17/bin/psql -p 5432 -c "CREATE USER runner SUPERUSER PASSWORD 'runner';"
+          sudo -u postgres /usr/lib/postgresql/17/bin/psql -p 5432 -c "CREATE DATABASE pgmnemo_test OWNER runner;"
       - name: Build extension
         run: cd extension && make PG_CONFIG=/usr/lib/postgresql/17/bin/pg_config
       - name: Install extension
