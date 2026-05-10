@@ -4,7 +4,7 @@
 **Date:** 2026-05-10  
 **Task:** #5269 [v0.2.2-DIM-FLEX] Make pgmnemo embedding dim configurable  
 **Priority:** P1 | **Deadline:** 2026-05-23  
-**Status:** ANALYSIS COMPLETE — no implementation started, 8 hardcoded sites identified, 6 deliverables unstarted
+**Status:** PARTIAL IMPLEMENTATION — core migration DDL applied to `pgmnemo--0.2.1--0.2.2.sql`; 2 sites fixed in-place; 4 deliverables remaining
 
 ---
 
@@ -108,17 +108,19 @@ For fresh installs: the install script must accept a `pgmnemo.embedding_dim` GUC
 
 | Deliverable | Status | Gap / File |
 |-------------|--------|------------|
-| Migration v0.2.1→v0.2.2 dim-flex file | **NOT STARTED** | `pgmnemo--0.2.2-hybrid--0.2.2.sql` does not exist |
-| ALTER COLUMN + HNSW rebuild in migration | **NOT STARTED** | Requires `pgmnemo.configure_embedding_dim()` + migration DDL |
-| `ingest()` signature relax | **NOT STARTED** | `pgmnemo--0.2.1.sql:320,329` |
-| `recall_lessons()` signature relax | **NOT STARTED** | `pgmnemo--0.2.1.sql:355,557` |
-| `recall_hybrid()` signature relax | **NOT STARTED** | `pgmnemo--0.2.1--0.2.2-hybrid.sql:22` |
-| GUC `pgmnemo.embedding_dim` | **NOT STARTED** | No GUC file; pattern exists in `extension/sql/recency_weight_guc.sql` |
-| README/USAGE dim-flex docs | **NOT STARTED** | |
-| Migration guide v0.2.1→v0.2.2 | **NOT STARTED** | |
-| Benchmark (768d DRAGON + 1024d Stella) | **NOT STARTED** | Evidence threshold unmet |
+| Migration v0.2.1→v0.2.2 dim-flex DDL | **DONE ✓** | S0 added to `extension/pgmnemo--0.2.1--0.2.2.sql` |
+| `ALTER COLUMN embedding TYPE vector` | **DONE ✓** | `pgmnemo--0.2.1--0.2.2.sql` S0 |
+| HNSW index DROP + RECREATE | **DONE ✓** | `pgmnemo--0.2.1--0.2.2.sql` S0 |
+| `configure_embedding_dim(INT)` | **DONE ✓** | `pgmnemo--0.2.1--0.2.2.sql` S0 — full function with validation |
+| `recall_hybrid()` signature relax | **DONE ✓** | `pgmnemo--0.2.1--0.2.2.sql:111` — `vector(1024)` → `vector` |
+| `ingest()` signature relax | **OPEN** | `pgmnemo--0.2.1.sql:320,329` — needs CREATE OR REPLACE in next migration |
+| `recall_lessons()` signature relax | **OPEN** | `pgmnemo--0.2.1.sql:355,557` |
+| GUC `pgmnemo.embedding_dim` | **DEFERRED** | `configure_embedding_dim()` covers the use case; GUC is optional polish |
+| README/USAGE dim-flex docs | **OPEN** | |
+| Migration guide v0.2.1→v0.2.2 | **OPEN** | |
+| Benchmark (768d DRAGON + 1024d Stella) | **OPEN** | Evidence threshold unmet |
 
-**Note:** `pgmnemo--0.2.1--0.2.2-hybrid.sql` was already merged (task #5338 DONE) as the hybrid recall step. The dim-flex migration is a separate upgrade file that should be sequenced as `pgmnemo--0.2.2-hybrid--0.2.2.sql` (v0.2.2-hybrid → v0.2.2) or combined into a single `pgmnemo--0.2.1--0.2.2.sql` if hybrid is folded in.
+**Note:** Dim-flex DDL was folded into the existing `pgmnemo--0.2.1--0.2.2.sql` as section S0 (runs first), avoiding a proliferating migration chain. `ingest()` and `recall_lessons()` relaxation requires a separate CREATE OR REPLACE sweep — planned in task_draft B.
 
 ---
 
