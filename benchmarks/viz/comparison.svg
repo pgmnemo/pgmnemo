@@ -1,0 +1,128 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 480" width="720" height="480" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif">
+
+  <!-- Background -->
+  <rect width="720" height="480" fill="#ffffff" rx="6"/>
+
+  <!-- ── Title ── -->
+  <text x="360" y="28" text-anchor="middle" font-size="15" font-weight="700" fill="#111827">pgmnemo v0.2.1 — Retrieval Benchmark Comparison</text>
+  <text x="360" y="46" text-anchor="middle" font-size="11" fill="#6B7280">recall@10 on public academic benchmarks · reproducible runs · docs/BENCHMARKS.md</text>
+
+  <!-- ── Chart area: baseline y=350, top y=60, height=290 ── -->
+  <!-- y(v) = 350 - v*290  |  grid 0.2 steps -->
+
+  <!-- Grid lines -->
+  <line x1="75" y1="350" x2="660" y2="350" stroke="#374151" stroke-width="1.5"/>
+  <line x1="75" y1="292" x2="660" y2="292" stroke="#E5E7EB" stroke-width="1" stroke-dasharray="4,3"/>
+  <line x1="75" y1="234" x2="660" y2="234" stroke="#E5E7EB" stroke-width="1" stroke-dasharray="4,3"/>
+  <line x1="75" y1="176" x2="660" y2="176" stroke="#E5E7EB" stroke-width="1" stroke-dasharray="4,3"/>
+  <line x1="75" y1="118" x2="660" y2="118" stroke="#E5E7EB" stroke-width="1" stroke-dasharray="4,3"/>
+  <line x1="75" y1="60"  x2="660" y2="60"  stroke="#E5E7EB" stroke-width="1" stroke-dasharray="4,3"/>
+  <line x1="75" y1="60"  x2="75"  y2="350" stroke="#374151" stroke-width="1.5"/>
+
+  <!-- Y-axis labels -->
+  <text x="68" y="354" text-anchor="end" font-size="11" fill="#6B7280">0.0</text>
+  <text x="68" y="296" text-anchor="end" font-size="11" fill="#6B7280">0.2</text>
+  <text x="68" y="238" text-anchor="end" font-size="11" fill="#6B7280">0.4</text>
+  <text x="68" y="180" text-anchor="end" font-size="11" fill="#6B7280">0.6</text>
+  <text x="68" y="122" text-anchor="end" font-size="11" fill="#6B7280">0.8</text>
+  <text x="68" y="64"  text-anchor="end" font-size="11" fill="#6B7280">1.0</text>
+
+  <!-- Y-axis title -->
+  <text transform="rotate(-90,20,205)" x="20" y="205" text-anchor="middle" font-size="11" fill="#374151">recall@10</text>
+
+  <!-- ════════════════════════════════════════
+       CLUSTER 1: LoCoMo recall@10
+       bars: x=100 (pgmnemo), x=178 (DRAGON paper)
+       ════════════════════════════════════════ -->
+
+  <!-- pgmnemo LoCoMo: 0.795 → h=230.6, y=119 -->
+  <rect x="100" y="119" width="68" height="231" fill="#2563EB" rx="3"/>
+  <text x="134" y="113" text-anchor="middle" font-size="12" font-weight="700" fill="#1D4ED8">0.795</text>
+
+  <!-- DRAGON paper range bar: midpoint 0.60 → h=174, y=176
+       Error bar from 0.55 (y=190.5) to 0.65 (y=161.5) -->
+  <rect x="178" y="176" width="68" height="174" fill="#9CA3AF" rx="3"/>
+  <!-- uncertainty band from 0.55 to 0.65 (overlay lighter) -->
+  <rect x="178" y="161" width="68" height="30" fill="#D1D5DB" rx="0"/>
+  <!-- dashed border around range -->
+  <rect x="176" y="159" width="72" height="34" fill="none" stroke="#6B7280" stroke-width="1.2" stroke-dasharray="3,2" rx="2"/>
+  <!-- midpoint label -->
+  <text x="212" y="152" text-anchor="middle" font-size="11" font-weight="600" fill="#374151">0.55–0.65</text>
+  <text x="212" y="163" text-anchor="middle" font-size="9" fill="#6B7280">paper range</text>
+
+  <!-- LoCoMo cluster label -->
+  <text x="179" y="372" text-anchor="middle" font-size="13" font-weight="600" fill="#111827">LoCoMo</text>
+  <text x="179" y="387" text-anchor="middle" font-size="10" fill="#6B7280">Maharana ACL 2024 · arxiv 2402.17753</text>
+
+  <!-- Cluster 1 separator -->
+  <line x1="290" y1="70" x2="290" y2="350" stroke="#F3F4F6" stroke-width="2"/>
+
+  <!-- ════════════════════════════════════════
+       CLUSTER 2: LongMemEval recall@10
+       bars: x=330 (pgmnemo), x=408 (BM25), x=486 (competitors N/A)
+       ════════════════════════════════════════ -->
+
+  <!-- pgmnemo LME: 0.933 → h=270.6, y=79 -->
+  <rect x="330" y="79" width="68" height="271" fill="#2563EB" rx="3"/>
+  <text x="364" y="73" text-anchor="middle" font-size="12" font-weight="700" fill="#1D4ED8">0.933</text>
+
+  <!-- BM25 baseline: 0.982 → h=284.8, y=65 -->
+  <rect x="408" y="65" width="68" height="285" fill="#D97706" rx="3"/>
+  <text x="442" y="59" text-anchor="middle" font-size="12" font-weight="700" fill="#92400E">0.982</text>
+
+  <!-- Mem0 / Zep / MemGPT / MAGMA — not published on this benchmark -->
+  <rect x="486" y="270" width="68" height="80" fill="#F3F4F6" rx="3" stroke="#D1D5DB" stroke-width="1.2" stroke-dasharray="4,2"/>
+  <text x="520" y="314" text-anchor="middle" font-size="11" fill="#9CA3AF">N/A</text>
+  <text x="520" y="328" text-anchor="middle" font-size="9" fill="#B0B7C3">not pub.</text>
+
+  <!-- LME cluster label -->
+  <text x="443" y="372" text-anchor="middle" font-size="13" font-weight="600" fill="#111827">LongMemEval</text>
+  <text x="443" y="387" text-anchor="middle" font-size="10" fill="#6B7280">Wu ICLR 2025 · arxiv 2410.10813</text>
+
+  <!-- N/A systems label below the bar -->
+  <text x="520" y="372" text-anchor="middle" font-size="10" fill="#9CA3AF">Mem0/Zep/</text>
+  <text x="520" y="384" text-anchor="middle" font-size="10" fill="#9CA3AF">MemGPT/MAGMA</text>
+
+  <!-- ════════════════════════════════════════
+       CLUSTER 3: LoCoMo MRR + LongMemEval MRR (pgmnemo only)
+       ════════════════════════════════════════ -->
+
+  <!-- Cluster 2 separator -->
+  <line x1="578" y1="70" x2="578" y2="350" stroke="#F3F4F6" stroke-width="2"/>
+
+  <!-- LoCoMo MRR 0.548 → h=158.9, y=191 -->
+  <rect x="590" y="191" width="32" height="159" fill="#2563EB" opacity="0.55" rx="3"/>
+  <text x="606" y="186" text-anchor="middle" font-size="10" font-weight="700" fill="#1D4ED8">0.548</text>
+
+  <!-- LME MRR 0.855 → h=247.95, y=102 -->
+  <rect x="630" y="102" width="32" height="248" fill="#2563EB" opacity="0.75" rx="3"/>
+  <text x="646" y="96" text-anchor="middle" font-size="10" font-weight="700" fill="#1D4ED8">0.855</text>
+
+  <text x="618" y="372" text-anchor="middle" font-size="11" font-weight="600" fill="#111827">MRR</text>
+  <text x="606" y="384" text-anchor="middle" font-size="9" fill="#6B7280">LoCoMo</text>
+  <text x="646" y="384" text-anchor="middle" font-size="9" fill="#6B7280">LME</text>
+
+  <!-- ════════════════════════════════════════
+       LEGEND
+       ════════════════════════════════════════ -->
+  <rect x="75"  y="405" width="12" height="12" fill="#2563EB" rx="2"/>
+  <text x="92"  y="416" font-size="11" fill="#374151">pgmnemo v0.2.1 (measured)</text>
+
+  <rect x="230" y="405" width="12" height="12" fill="#D97706" rx="2"/>
+  <text x="247" y="416" font-size="11" fill="#374151">BM25 baseline (measured)</text>
+
+  <rect x="385" y="405" width="12" height="12" fill="#9CA3AF" rx="2"/>
+  <text x="402" y="416" font-size="11" fill="#374151">Paper DRAGON range (LoCoMo)</text>
+
+  <rect x="555" y="405" width="12" height="12" fill="#F3F4F6" rx="2" stroke="#D1D5DB" stroke-width="1"/>
+  <text x="572" y="416" font-size="11" fill="#9CA3AF">Not benchmarked (N/A)</text>
+
+  <!-- ════════════════════════════════════════
+       FOOTNOTES
+       ════════════════════════════════════════ -->
+  <line x1="75" y1="430" x2="660" y2="430" stroke="#E5E7EB" stroke-width="1"/>
+  <text x="75" y="445" font-size="9" fill="#9CA3AF">pgmnemo: bge-m3 embedder (Stella V5 substituted — see benchmarks/longmemeval/ADDENDA/). LoCoMo: DRAGON 768d zero-padded → 1024d; session-level. Reproduce: docs/BENCHMARKS.md</text>
+  <text x="75" y="458" font-size="9" fill="#9CA3AF">Mem0, Zep, MemGPT, MAGMA have not published recall@10 on LoCoMo or LongMemEval as of 2026-05-10. N/A bars shown for comparison context.</text>
+  <text x="75" y="471" font-size="9" fill="#9CA3AF">LoCoMo paper range: DRAGON retriever, session-level granularity (Maharana 2024 Table 3). BM25 advantage on LME is keyword-task artifact; hybrid retrieval (v0.2.2 roadmap).</text>
+
+</svg>
