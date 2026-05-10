@@ -4,7 +4,7 @@
 **Mode:** real (dry_run=false), retrieval-only
 **Retrieval:** pgmnemo.recall_lessons() vector + 5-component scoring
 **Embedder:** BAAI/bge-m3 (1024d) — DEVIATION from Stella V5 paper canonical
-**Deviation rationale:** Stella V5 modeling_qwen.py incompat with transformers 5.8; bge-m3 same dim, MTEB-strong, matches Agency production
+**Deviation rationale:** Stella V5 modeling_qwen.py incompat with transformers 5.8; bge-m3 same dim, MTEB-strong, matches production embedding setup
 **Dataset:** xiaowu0162/longmemeval-cleaned, **longmemeval_s_cleaned.json** (full haystacks ~47.7 sessions/item)
 **Storage:** pgmnemo v0.2.1, vector(1024) NATIVE
 **Device:** mps

@@ -112,7 +112,7 @@ ALTER EXTENSION pgmnemo UPDATE TO '0.1.4.1';
   - `linked=TRUE` when a `mem_edge` (either direction) exists between the row and `start_id`.
   - Ghost-lesson exclusion controlled by `pgmnemo.include_unverified` GUC (default off).
 
-- **Graph-proximity mixin for `recall_lessons()`** (PGMNEMO-V020-4) — integrates BFS graph traversal into scoring.
+- **Graph-proximity mixin for `recall_lessons()`** — integrates BFS graph traversal into scoring.
   - Updated scoring formula: `0.4×cosine + 0.2×importance + γ×recency + 0.1×prov_strength + δ×graph_proximity`.
   - `graph_proximity = MAX(1 - depth/max_depth)` via BFS through `CAUSED_BY`, `CO_OCCURRED`, `DERIVED_FROM` edges from top-5 cosine anchors (max_depth=5).
   - New GUC `pgmnemo.graph_proximity_weight` (default `0.2`, clamped to `[0.0, 0.5]`).

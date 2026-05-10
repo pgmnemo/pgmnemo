@@ -17,7 +17,7 @@ Mode: retrieval-only.
 
 DEVIATION from paper-canonical Stella V5 1.5B (incompat with transformers 5.8 —
 Qwen2Config.rope_theta AttributeError). Substituted BAAI/bge-m3 (1024d, MTEB-strong,
-matches Agency production embedder).
+matches production embedding setup).
 
 Companion to benchmarks/longmemeval/run_nollm.py (pure BM25 baseline).
 """
@@ -217,7 +217,7 @@ def main():
         "dataset": "xiaowu0162/longmemeval-cleaned (longmemeval_s_cleaned.json — full haystacks, ~47.7 sessions/item)",
         "dataset_sha256": sha256,
         "embedder": "BAAI/bge-m3 (1024d) — DEVIATION from Stella V5 paper canonical",
-        "deviation_rationale": "Stella V5 modeling_qwen.py incompat with transformers 5.8; bge-m3 same dim, MTEB-strong, matches Agency production",
+        "deviation_rationale": "Stella V5 modeling_qwen.py incompat with transformers 5.8; bge-m3 same dim, MTEB-strong, matches production embedding setup",
         "truncation_chars": TRUNCATE_CHARS,
         "truncation_note": f"Sessions truncated to {TRUNCATE_CHARS} chars before embedding (bge-m3 ~8192 token ctx); baseline v0.2.1_pgmnemo used 500-char truncation",
         "device": DEVICE,

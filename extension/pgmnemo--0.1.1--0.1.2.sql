@@ -12,7 +12,7 @@
 --
 -- Deviation from §6.1: formula uses `commit_sha IS NOT NULL` (not OR artifact_hash)
 -- for the 0.4 case. artifact_hash bonus is DEFERRED to v0.2.x per research D2 note
--- ("artifact_hash presence is rare in current Agentura usage").
+-- ("artifact_hash is optional for lightweight ingestion paths").
 
 CREATE OR REPLACE FUNCTION pgmnemo.recall_lessons(
     query_embedding  vector(1024),

@@ -239,7 +239,7 @@ def main():
         "embedder":          "BAAI/bge-m3 (1024d) — DEVIATION from Stella V5 paper canonical",
         "deviation_rationale": (
             "Stella V5 modeling_qwen.py incompat with transformers 5.8; "
-            "bge-m3 same dim, MTEB-strong, matches Agency production"
+            "bge-m3 same dim, MTEB-strong, matches production embedding setup"
         ),
         "pgmnemo_version":   pgmnemo_ver,
         "n_items":           len(items),

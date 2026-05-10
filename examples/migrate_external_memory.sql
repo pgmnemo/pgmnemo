@@ -5,7 +5,7 @@
 -- SPDX-License-Identifier: Apache-2.0
 
 -- ─────────────────────────────────────────────────────────────────────────────
--- STEP 0: Create mock source table (simulates Agency v3 mem.mem_item schema)
+-- STEP 0: Create mock source table (simulates a typical agent memory schema)
 -- Skip this block if you are migrating a real mem.mem_item table.
 -- ─────────────────────────────────────────────────────────────────────────────
 

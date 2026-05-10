@@ -19,7 +19,7 @@ CREATE TABLE IF NOT EXISTS pgmnemo.mem_edge (
     relation_type   TEXT            NOT NULL,
     -- CAUSED_BY | SUPERSEDES | CO_OCCURRED | DERIVED_FROM | user-defined
 
-    -- Bitemporality (mirrors Agency mem.mem_edge)
+    -- Bitemporality: dual valid-time + transaction-time temporal model
     valid_from      TIMESTAMPTZ     NOT NULL DEFAULT now(),
     valid_until     TIMESTAMPTZ,               -- NULL = currently valid
 
