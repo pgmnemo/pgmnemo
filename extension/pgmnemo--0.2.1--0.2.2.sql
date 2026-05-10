@@ -26,6 +26,48 @@
 --     NULL, NULL, 0.40, 0.40);  -- explicit weights always respected.
 
 -- ─────────────────────────────────────────────────────────────────────────────
+-- S0: Dim-flex — remove hardcoded vector(1024) constraint on agent_lesson.embedding
+--     Allows any embedding dimension (DRAGON 768d, Stella V5 1024d, ada-002 1536d, etc.)
+--     HNSW index is rebuilt dimensionless; configure_embedding_dim() lets operators
+--     pin a specific dim post-install and rebuild the index for optimal ANN performance.
+-- ─────────────────────────────────────────────────────────────────────────────
+
+ALTER TABLE pgmnemo.agent_lesson ALTER COLUMN embedding TYPE vector;
+
+DROP INDEX IF EXISTS pgmnemo.pgmnemo_agent_lesson_embedding_idx;
+DROP INDEX IF EXISTS pgmnemo_agent_lesson_embedding_idx;
+
+CREATE INDEX IF NOT EXISTS pgmnemo_agent_lesson_embedding_idx
+    ON pgmnemo.agent_lesson USING hnsw (embedding vector_cosine_ops)
+    WITH (m=16, ef_construction=64)
+    WHERE is_active AND embedding IS NOT NULL;
+
+CREATE OR REPLACE FUNCTION pgmnemo.configure_embedding_dim(target_dim INT)
+RETURNS void
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    IF target_dim < 1 OR target_dim > 65535 THEN
+        RAISE EXCEPTION 'pgmnemo.configure_embedding_dim: target_dim must be between 1 and 65535, got %', target_dim;
+    END IF;
+    DROP INDEX IF EXISTS pgmnemo_agent_lesson_embedding_idx;
+    EXECUTE format('ALTER TABLE pgmnemo.agent_lesson ALTER COLUMN embedding TYPE vector(%s)', target_dim);
+    CREATE INDEX pgmnemo_agent_lesson_embedding_idx
+        ON pgmnemo.agent_lesson USING hnsw (embedding vector_cosine_ops)
+        WITH (m=16, ef_construction=64)
+        WHERE is_active AND embedding IS NOT NULL;
+    RAISE NOTICE 'pgmnemo: embedding dim set to %; HNSW index rebuilt.', target_dim;
+END;
+$$;
+
+COMMENT ON FUNCTION pgmnemo.configure_embedding_dim(INT) IS
+    'Pin the agent_lesson embedding dimension and rebuild the HNSW index. '
+    'Call once after install: SELECT pgmnemo.configure_embedding_dim(768); '
+    'Supported dims: any positive integer (common: 384, 512, 768, 1024, 1536). '
+    'Default post-migration: dimensionless vector (backward compatible). '
+    'HNSW requires all indexed vectors to share the same dimension.';
+
+-- ─────────────────────────────────────────────────────────────────────────────
 -- S1: Add calibrated GUCs via the extension's set_config mechanism
 --     Custom GUCs cannot be created via CREATE without superuser in PG17+;
 --     we use the session-scope set_config pattern (same as existing GUCs).
@@ -66,7 +108,7 @@ SELECT set_config('pgmnemo.graph_proximity_weight', '0.025', FALSE);
 -- ─────────────────────────────────────────────────────────────────────────────
 
 CREATE OR REPLACE FUNCTION pgmnemo.recall_hybrid(
-    query_embedding   vector(1024),
+    query_embedding   vector,
     query_text        TEXT,
     k                 INT              DEFAULT 10,
     role_filter       TEXT             DEFAULT NULL,

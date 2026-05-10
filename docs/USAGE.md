@@ -140,6 +140,68 @@ FROM pgmnemo.recall_lessons(
 
 ---
 
+## Edge taxonomy — `edge_kind` ENUM (v0.3.0)
+
+v0.3.0 introduces a typed edge taxonomy as part of MAGMA §3. Each `mem_edge` row now carries
+a mandatory `edge_kind` column drawn from the ENUM `pgmnemo.edge_kind`.
+
+### `edge_kind` values
+
+| Value | Meaning |
+|-------|---------|
+| `semantic` | Conceptually related lessons (shared topic or entity) |
+| `temporal` | Lessons from overlapping or adjacent time windows |
+| `causal` | Lesson A is a cause or precondition for lesson B |
+| `entity` | Lessons share a named entity (agent, project, artifact) |
+
+### Migration note (upgrading from v0.2.1)
+
+The v0.2.1→v0.3.0 migration (`pgmnemo--0.2.1--0.3.0.sql`) backfills `edge_kind` from the
+existing `relation_type` TEXT column using the mapping:
+
+```
+CAUSED_BY / caused_by / causal / derives_from / DERIVED_FROM / contradicts  → causal
+CO_OCCURRED / co_occurred / temporal                                          → temporal
+DERIVED_FROM / derived_from                                                   → semantic (fallback)
+(all others)                                                                  → semantic
+```
+
+After migration, `edge_kind` is `NOT NULL` on all rows. The original `relation_type` column
+is preserved as a freeform annotation column.
+
+### Per-kind partial indexes
+
+Four partial B-tree indexes are created automatically:
+
+```sql
+pgmnemo_mem_edge_semantic_idx   ON mem_edge (lesson_a_id, lesson_b_id)  WHERE edge_kind = 'semantic'
+pgmnemo_mem_edge_temporal_idx   ON mem_edge (lesson_a_id, lesson_b_id)  WHERE edge_kind = 'temporal'
+pgmnemo_mem_edge_causal_idx     ON mem_edge (lesson_a_id, lesson_b_id)  WHERE edge_kind = 'causal'
+pgmnemo_mem_edge_entity_idx     ON mem_edge (lesson_a_id, lesson_b_id)  WHERE edge_kind = 'entity'
+```
+
+Queries that filter by `edge_kind` (e.g. causal-chain traversal) benefit from index-only scans.
+
+### BFS fix in `recall_lessons()`
+
+v0.3.0 fixes a bug where the BFS step inside `recall_lessons()` referenced the deprecated
+`edge_type` column. The BFS now correctly uses `edge_kind` for graph traversal. This change
+is transparent — the `recall_lessons()` signature is unchanged.
+
+### Writing edges
+
+```sql
+-- Add a causal edge between two lessons
+INSERT INTO pgmnemo.mem_edge (lesson_a_id, lesson_b_id, edge_kind, relation_type)
+VALUES (1001, 1002, 'causal', 'CAUSED_BY');
+
+-- Add a temporal co-occurrence edge
+INSERT INTO pgmnemo.mem_edge (lesson_a_id, lesson_b_id, edge_kind, relation_type)
+VALUES (1003, 1004, 'temporal', 'CO_OCCURRED');
+```
+
+---
+
 ## Hybrid retrieval — `pgmnemo.recall_hybrid()` ⚠ EXPERIMENTAL
 
 > **EXPERIMENTAL — opt-in only.** `recall_hybrid()` is NOT the default retrieval path.

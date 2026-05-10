@@ -1,6 +1,6 @@
 # pgmnemo — Docker Compose example
 
-Drop-in stack to try `pgmnemo` locally without a custom build.
+Drop-in stack to try `pgmnemo` v0.3.0 locally without a custom build.
 
 ## Requirements
 
@@ -14,11 +14,8 @@ cd examples
 docker compose up
 ```
 
-The init script clones pgmnemo v0.1.0, builds it from source, and installs the
+The init script clones pgmnemo v0.3.0, builds it from source, and installs the
 extension into the `pgmnemo` database automatically on first start.
-
-> **Note:** v0.1.0 is a source-build release. A pre-built image is planned for
-> v0.2.0, which will make startup instant.
 
 ## Verify installation
 
@@ -32,20 +29,24 @@ Password: `pgmnemo`
 ## Sample queries
 
 ```sql
--- Store an agent observation (provenance gate off for exploration)
-SELECT pgmnemo.set_gate_mode('warn');
+-- Store an agent observation (provenance gate in warn mode for exploration)
+SET pgmnemo.gate_strict = 'warn';
 
 SELECT pgmnemo.ingest(
-    role    := 'developer',
-    topic   := 'authentication',
-    content := 'Use short-lived JWT tokens with refresh rotation.',
-    source  := 'manual'
+    p_role        := 'developer',
+    p_project_id  := 1,
+    p_topic       := 'authentication',
+    p_lesson_text := 'Use short-lived JWT tokens with refresh rotation.',
+    p_commit_sha  := 'abc1234'
 );
 
 -- Recall memories for a role + topic
-SELECT * FROM pgmnemo.recall_lessons(
-    role  := 'developer',
-    topic := 'authentication'
+SELECT lesson_text, score
+FROM pgmnemo.recall_lessons(
+    query_embedding   := array_fill(0, ARRAY[1024])::vector(1024),
+    query_text        := 'JWT token rotation',
+    role_filter       := 'developer',
+    project_id_filter := 1
 );
 ```
 

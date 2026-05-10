@@ -3,13 +3,16 @@
 **Multi-agent memory substrate for PostgreSQL — provenance-gated, vector-hybrid recall.**
 
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.2.1-green.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.3.0-green.svg)](CHANGELOG.md)
+[![PGXN](https://badge.pgxn.org/stable/pgmnemo.svg)](https://pgxn.org/dist/pgmnemo/)
 [![CI](https://github.com/pgmnemo/pgmnemo/actions/workflows/ci.yml/badge.svg)](https://github.com/pgmnemo/pgmnemo/actions/workflows/ci.yml)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-17-4169E1.svg)](https://www.postgresql.org/)
 [![LoCoMo recall@10](https://img.shields.io/badge/LoCoMo_recall%4010-0.795-success.svg)](benchmarks/locomo/results/v0.2.1_session_20260509/report.md)
 [![LongMemEval recall@10](https://img.shields.io/badge/LongMemEval_recall%4010-0.933-success.svg)](benchmarks/longmemeval/results/v0.2.1_pgmnemo_20260509/report.md)
 
-## Benchmarks (v0.2.1, retrieval-only)
+> **v0.3.0 (2026-05-10):** MAGMA edge taxonomy — edge_kind ENUM, per-kind indexes, recall_lessons() BFS fix.
+
+## Benchmarks (v0.3.0, retrieval-only)
 
 Real numbers vs published academic benchmarks. **Canonical protocol:** [benchmarks/PROTOCOL.md](benchmarks/PROTOCOL.md) (v1.0.0, frozen 2026-05-10) — release notes citing recall improvements must reference it. Full reproduction commands in [docs/BENCHMARKS.md](docs/BENCHMARKS.md). Methodology change log in [benchmarks/HISTORY.md](benchmarks/HISTORY.md).
 
@@ -38,7 +41,22 @@ Real numbers vs published academic benchmarks. **Canonical protocol:** [benchmar
 - **Hybrid recall in-database.** Cosine similarity (HNSW) + BM25 full-text + recency decay + importance weighting, scored in one SQL call.
 - **Role isolation built in.** First-class `role + project_id` composite scoping; no hand-rolled RLS.
 
+| Aspect | pgmnemo | Generic Vector DB | Cloud Memory API |
+|---|---|---|---|
+| Provenance enforcement | ✅ Mandatory | ❌ | ❌ |
+| Zero data egress | ✅ In-database | ❌ | ❌ |
+| Install model | `CREATE EXTENSION` | External service | SaaS API |
+| Self-hosted price | Free (Apache 2.0) | $$$$ | $$$$$ |
+
 ## 30-second quickstart
+
+**PGXN install (if pgxnclient is available):**
+
+```bash
+pgxn install pgmnemo
+```
+
+**From source (Docker):**
 
 ```bash
 # 1. Start PG 17 + pgvector
@@ -81,12 +99,16 @@ FROM pgmnemo.recall_lessons(
 - **Recency-weighted scoring** — `0.5×cosine + 0.2×importance + γ×recency(90d) + 0.1×prov_strength`; γ tunable via `pgmnemo.recency_weight`
 - **Role scoping** — `role + project_id` composite isolation; `role_filter=NULL` pools across roles
 - **Graph traversal** — `traverse_causal_chain()` and `traverse_temporal_window()` walk typed `mem_edge` relationships between lessons
+- **MAGMA edge taxonomy** (v0.3.0, **EXPERIMENTAL**) — `edge_kind` ENUM (`semantic | temporal | causal | entity`) with per-kind partial indexes; `recall_lessons()` BFS graph-proximity now correctly uses `edge_kind` instead of the broken v0.2.x `relation_type` string matching. MAGMA §4 (adaptive traversal policy) and §5 (dual-stream consolidation) are not yet implemented.
 
 ## Documentation
 
 - [INSTALL.md](INSTALL.md) — build, install, configure, upgrade
 - [docs/USAGE.md](docs/USAGE.md) — API reference and tuning guide
 - [CHANGELOG.md](CHANGELOG.md) — version history
+- [docs/MIGRATION.md](docs/MIGRATION.md) — upgrade path and migration notes
+- [docs/PRODUCTION_READINESS.md](docs/PRODUCTION_READINESS.md) — production deployment checklist
+- [examples/](examples/) — annotated runnable examples (init, ingestion, recall)
 
 ## License
 

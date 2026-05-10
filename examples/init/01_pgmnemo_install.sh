@@ -12,7 +12,7 @@ set -euo pipefail
 
 REPO_URL="https://github.com/pgmnemo/pgmnemo.git"
 CLONE_DIR="/tmp/pgmnemo-src"
-VERSION="v0.1.0"
+VERSION="v0.3.0"
 
 echo "[pgmnemo] Cloning $VERSION from $REPO_URL ..."
 git clone --depth 1 --branch "$VERSION" "$REPO_URL" "$CLONE_DIR"

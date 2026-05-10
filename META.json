@@ -11,7 +11,7 @@
       "pgmnemo": {
          "abstract": "Provenance-gated, vector-hybrid memory for LLM agents in PostgreSQL",
          "version": "0.3.0",
-         "file": "extension/pgmnemo--0.2.1--0.3.0.sql",
+         "file": "extension/pgmnemo--0.3.0.sql",
          "docfile": "README.md"
       }
    },
