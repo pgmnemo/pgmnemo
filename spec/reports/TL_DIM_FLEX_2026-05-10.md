@@ -10,17 +10,36 @@
 
 ## 1. Metrics from DB
 
-| Metric | Value |
-|--------|-------|
-| Tasks created since 2026-05-01 | 3243 |
-| DONE (since 2026-05-01) | 858 (26.5%) |
-| ESCALATED | 39 |
-| Active (INBOX/NEXT/NOW/DELEGATED) | 806 |
-| Task #5269 status | DELEGATED |
-| Related dim/embed tasks in DONE | 12 (historical) |
-| Stalled runs for this task | 0 (just delegated) |
+### Agent runs (last 7 days)
 
-Agent success rate (recent window): 26.5% DONE vs 1.2% ESCALATED — escalation rate is low but 806 active tasks represents a large backlog against 39 escalations, suggesting tasks are accumulating faster than completion.
+| Metric | Count | % of total |
+|--------|-------|-----------|
+| Total runs | 2,330 | — |
+| COMPLETED | 974 | 41.8% |
+| FAILED | 716 | 30.7% |
+| ESCALATED | 75 | 3.2% |
+| CANCELLED | 563 | 24.2% |
+| **Agent success rate** | **41.8%** | COMPLETED/total |
+
+### Tasks (all-time snapshot 2026-05-10)
+
+| Status | Count |
+|--------|-------|
+| DONE | 2,333 |
+| CANCELED | 1,717 |
+| INBOX | 844 |
+| SOMEDAY | 296 |
+| **ESCALATED** | **44** |
+| NEXT | 9 |
+| WAITING | 4 |
+| DELEGATED | 3 |
+| NOW | 1 |
+
+**Quality observations:**
+- FAILED rate of 30.7% (7d) is the primary quality concern — nearly 1 in 3 agent runs does not complete.
+- ESCALATED tasks (44) are concentrated in the backlog alongside 844 INBOX items — potential triage debt.
+- No stalled runs identified for this specific task (task #5269 previously DELEGATED, now active).
+- Agent success rate improved from 26.5% (prior snapshot) to 41.8% — positive trend.
 
 ---
 
