@@ -101,6 +101,15 @@ FROM pgmnemo.recall_lessons(
 - **Graph traversal** — `traverse_causal_chain()` and `traverse_temporal_window()` walk typed `mem_edge` relationships between lessons
 - **MAGMA edge taxonomy** (v0.3.0, **EXPERIMENTAL**) — `edge_kind` ENUM (`semantic | temporal | causal | entity`) with per-kind partial indexes; `recall_lessons()` BFS graph-proximity now correctly uses `edge_kind` instead of the broken v0.2.x `relation_type` string matching. MAGMA §4 (adaptive traversal policy) and §5 (dual-stream consolidation) are not yet implemented.
 
+## Compatibility
+
+| PostgreSQL | Status | pgvector | Platform |
+|---|---|---|---|
+| 17 | Fully tested | ≥ 0.7.0 required | amd64 (Docker + native) |
+| 14–16 | Best-effort | ≥ 0.7.0 required | amd64 (Docker + native) |
+| < 14 | Not supported | — | — |
+| arm64 | Source-build only | ≥ 0.7.0 required | No pre-built images |
+
 ## Documentation
 
 - [INSTALL.md](INSTALL.md) — build, install, configure, upgrade
@@ -109,6 +118,7 @@ FROM pgmnemo.recall_lessons(
 - [docs/MIGRATION.md](docs/MIGRATION.md) — upgrade path and migration notes
 - [docs/PRODUCTION_READINESS.md](docs/PRODUCTION_READINESS.md) — production deployment checklist
 - [examples/](examples/) — annotated runnable examples (init, ingestion, recall)
+- [integrations/langchain/](integrations/langchain/) — LangChain retriever integration (`pgmnemo_langchain`)
 
 ## License
 

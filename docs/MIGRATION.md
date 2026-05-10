@@ -1,6 +1,6 @@
 # Migration Guide: External Memory Tables → pgmnemo
 
-This guide is for teams migrating from a `mem.*` schema (Agency v2 / similar) to
+This guide is for teams migrating from a `mem.*` schema (a prior mem.* schema) to
 `pgmnemo.agent_lesson`. It covers field mapping, the backfill policy, and a
 worked verification example.
 

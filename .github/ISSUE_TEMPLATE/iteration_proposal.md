@@ -1,6 +1,6 @@
 ---
 name: Iteration Proposal
-about: PI-authored kickoff document for a new pgmnemo release iteration
+about: Maintainer-authored kickoff document for a new pgmnemo release iteration
 title: "[ITER] v0.X.Y iteration proposal"
 labels: iteration-proposal, wg-required
 assignees: ''
@@ -8,7 +8,7 @@ assignees: ''
 
 ## Iteration: pgmnemo vX.Y.Z
 
-**PI:** @principal_investigator  
+**PI:** @maintainer  
 **Target tag date:** YYYY-MM-DD  
 **Proposed on:** YYYY-MM-DD  
 **Iteration length:** 2 weeks | 3 weeks (reason if 3)

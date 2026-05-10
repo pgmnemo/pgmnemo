@@ -1,5 +1,5 @@
 -- pgmnemo v0.2.0 step4: hybrid recall_lessons() with graph_proximity mixin
--- PGMNEMO-V020-4: integrates graph traversal into recall_lessons() scoring
+-- integrates graph traversal into recall_lessons() scoring
 -- SPDX-License-Identifier: Apache-2.0
 --
 -- ⚠️  SUPPLEMENTAL / OPTIONAL SCRIPT — NOT PART OF THE STANDARD UPGRADE PATH
