@@ -3,6 +3,12 @@
 -- Existing recall_lessons() is UNCHANGED — full backward compatibility.
 -- SPDX-License-Identifier: Apache-2.0
 --
+-- ⚠️  EXPERIMENTAL — pgmnemo.recall_hybrid() is an opt-in experimental function.
+--     It is NOT the default retrieval path. recall_lessons() remains the stable API.
+--     Benchmark evidence is simulation-based (TF-IDF proxy); real-DB confirmation
+--     required before promotion to default. Use in production at your own risk.
+--     Promotion criteria: see ROADMAP.md §H1 v0.2.2 "Promotion criteria".
+--
 -- Migration: v0.2.2_hybrid_001
 -- Task: QUICK-B — Hypothesis B from 2026-05-09 strategy review
 --
@@ -272,6 +278,7 @@ END;
 $$;
 
 COMMENT ON FUNCTION pgmnemo.recall_hybrid(vector, TEXT, INT, TEXT, INT, DOUBLE PRECISION, DOUBLE PRECISION, INT) IS
+    'EXPERIMENTAL — not the default retrieval path; recall_lessons() is the stable API. '
     'Hybrid recall v0.2.2 — weighted linear fusion of dense vector + BM25 sparse retrieval. '
     'Formula: score = vec_weight×cosine + bm25_weight×ts_rank_cd(lesson_tsv,q,32) '
     '               + 0.05×(importance/5) + 0.05×recency_90d '
