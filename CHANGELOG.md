@@ -5,6 +5,21 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [0.3.0] — 2026-05-10
+
+### Fixed
+
+- **P0: `edge_type` → `relation_type` in migration S3 backfill** — the `UPDATE pgmnemo.mem_edge SET edge_kind = ...` backfill in the 0.2.1→0.3.0 migration script referenced a non-existent column `edge_type` instead of the correct `relation_type` column. On any database with existing `mem_edge` rows this caused `ERROR: column "edge_type" does not exist`, preventing the migration from completing. Fixed: all `edge_type` references in S3 replaced with `relation_type`.
+- **P0: `edge_type` → `relation_type` in `traverse_causal_chain()` S8** — the recreated `traverse_causal_chain()` function in S8 of the migration also referenced `me.edge_type` in the WHERE clause (both forward and backward BFS branches). Fixed: all `edge_type` references replaced with `relation_type` in S8.
+
+### Upgrade
+
+```sql
+ALTER EXTENSION pgmnemo UPDATE TO '0.3.0';
+```
+
+---
+
 ## [0.2.2] — 2026-05-10 (candidate)
 
 ### Added
