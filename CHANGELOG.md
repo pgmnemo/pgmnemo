@@ -5,6 +5,22 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [0.2.2] — 2026-05-10 (candidate)
+
+### Added
+
+- **`pgmnemo.recall_hybrid()` — vector + BM25 weighted fusion** (QUICK-B) — new function combining dense cosine retrieval with BM25-class sparse retrieval (`ts_rank_cd` on `lesson_tsv`). Formula: `0.4×cosine + 0.4×ts_rank_cd(lesson_tsv, q, 32) + 0.05×(importance/5) + 0.05×recency_90d + 0.05×prov_strength + graph_weight×graph_proximity`. Union retrieval: candidates matched by **either** embedding cosine **or** BM25 text match. Returns `rrf_score` diagnostic column (`1/(rrf_k+vec_rank) + 1/(rrf_k+bm25_rank)`). Motivation: pure BM25 baseline achieves 0.982 recall@10 vs. 0.933 for vector-only; hybrid closes the gap per Maharana 2024 and Wu ICLR 2025.
+- **Migration script** `extension/pgmnemo--0.2.1--0.2.2-hybrid.sql` — idempotent `CREATE OR REPLACE FUNCTION`, backward-compatible (existing `recall_lessons()` unchanged).
+- **Benchmark script** `benchmarks/scripts/run_longmemeval_hybrid.py` — LongMemEval evaluation harness for `recall_hybrid()` with gap-analysis reporting vs. vector-only and BM25 baselines.
+
+### Upgrade
+
+```sql
+\i extension/pgmnemo--0.2.1--0.2.2-hybrid.sql
+```
+
+---
+
 ## [0.2.1] — 2026-05-09
 
 ### Added
