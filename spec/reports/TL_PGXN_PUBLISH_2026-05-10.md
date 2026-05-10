@@ -52,26 +52,13 @@ META.json is PGXN-ready as stated in the audit.
 
 ## 3. Blockers Found
 
-### BLOCKER-1 (P1): `extension/Makefile` missing `pgmnemo--0.2.1.sql` from DATA list
+### BLOCKER-1 (P1): `extension/Makefile` missing `pgmnemo--0.2.1.sql` from DATA list — **FIXED**
 
-**File:** `extension/Makefile:1-2`
+**File:** `extension/Makefile:19`
 
-The `DATA` variable in `extension/Makefile` lists all SQL files explicitly but stops at `pgmnemo--0.2.0.1--0.2.1.sql`. It does **not** include `pgmnemo--0.2.1.sql` (the fresh-install script).
+`pgmnemo--0.2.1.sql` (fresh-install script) was absent from the `DATA` variable. Without it, `make install` would not copy the file to `$(sharedir)/extension/` and `CREATE EXTENSION pgmnemo VERSION '0.2.1'` would fail on a clean machine.
 
-**Impact:** `pgxn install pgmnemo` installs via `make install` which invokes PGXS using `extension/Makefile`. Since `pgmnemo--0.2.1.sql` is absent from DATA, it will **not** be copied to `$(sharedir)/extension/`. A user running:
-```sql
-CREATE EXTENSION pgmnemo VERSION '0.2.1';
-```
-on a fresh PG instance will get `ERROR: could not open file "pgmnemo--0.2.1.sql"`.
-
-**Fix required:**
-```makefile
-# extension/Makefile line ~2 — append pgmnemo--0.2.1.sql
-DATA = pgmnemo--0.0.1.sql \
-       ... \
-       pgmnemo--0.2.0.1--0.2.1.sql \
-       pgmnemo--0.2.1.sql          # ← ADD THIS
-```
+**Fix applied:** Appended `pgmnemo--0.2.1.sql` to the DATA list in `extension/Makefile` (line 20). Verified via direct edit.
 
 ### BLOCKER-2 (P2): No `pgxn upload` CLI — web upload required
 
@@ -82,9 +69,9 @@ pgxnclient 1.3.2 exposes: `check, download, help, info, install, load, mirror, s
 2. A zip file: `pgmnemo-0.2.1.zip` structured as `pgmnemo-0.2.1/<all bundle files>`
 3. Upload via web form
 
-### ISSUE-3 (cosmetic): `Makefile:2` has `EXTVERSION = 0.0.1`
+### ISSUE-3 (cosmetic): `Makefile:2` had `EXTVERSION = 0.0.1` — **FIXED**
 
-Top-level `Makefile:2` defines `EXTVERSION = 0.0.1`. This variable is never used in any rule (DATA uses `$(wildcard extension/*--*.sql)`), but it is misleading to contributors and auditors. Should be `0.2.1`.
+Top-level `Makefile:2` defined `EXTVERSION = 0.0.1`. Updated to `0.2.1` to match the actual release version. (Variable is not used in rules, but misleading to contributors and auditors.)
 
 ---
 
@@ -96,7 +83,7 @@ Top-level `Makefile:2` defines `EXTVERSION = 0.0.1`. This variable is never used
 - [x] `extension/pgmnemo--0.2.0.1--0.2.1.sql` (upgrade) exists
 - [x] README.md, CHANGELOG.md, LICENSE present
 - [x] Git tag `v0.2.1` exists
-- [ ] **`extension/Makefile` DATA list includes `pgmnemo--0.2.1.sql`** ← BLOCKER
+- [x] **`extension/Makefile` DATA list includes `pgmnemo--0.2.1.sql`** ← FIXED
 - [ ] Maintainer has manager.pgxn.org account
 - [ ] Bundle zip created: `pgmnemo-0.2.1.zip`
 - [ ] Bundle uploaded via manager.pgxn.org web UI
@@ -147,10 +134,14 @@ Blocker: FIX-PGXN-MAKEFILE-DATA must be done first
 |--------|-------|
 | META.json spec compliance | 100% (8/8 required fields valid) |
 | Bundle files present | 8/8 ✓ |
-| Blockers to pgxn install working | 1 (extension/Makefile DATA list) |
+| Blockers to pgxn install working | 0 (Makefile DATA fix applied) |
 | pgxnclient upload command available | NO — web UI required |
 | Git tag v0.2.1 | exists locally |
-| Est. fix time before upload-ready | ~15 min (2 Makefile fixes + zip creation) |
+| extension/Makefile DATA includes pgmnemo--0.2.1.sql | ✓ FIXED |
+| Makefile EXTVERSION | 0.2.1 ✓ FIXED |
+| Agent runs (7d): total/completed/failed/escalated | 2337 / 981 (42%) / 718 (31%) / 75 (3.2%) |
+| Currently RUNNING / total ESCALATED (all-time) | 2 / 174 |
+| Remaining manual step | maintainer zip + upload to manager.pgxn.org |
 
 ---
 
