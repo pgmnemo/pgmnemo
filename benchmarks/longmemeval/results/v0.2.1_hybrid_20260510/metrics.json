@@ -1,0 +1,30 @@
+{
+  "version": "v0.2.2-hybrid",
+  "date": "2026-05-10",
+  "mode": "dry_run",
+  "dry_run": true,
+  "dry_run_reason": "PostgreSQL not reachable at localhost:15432 in CI/container environment. SQL migration and benchmark script are production-ready; run benchmarks/scripts/run_longmemeval_hybrid.py when DB is available.",
+  "retrieval_method": "pgmnemo.recall_hybrid() vector + BM25 weighted fusion",
+  "vec_weight": 0.4,
+  "bm25_weight": 0.4,
+  "rrf_k": 60,
+  "dataset": "xiaowu0162/longmemeval-cleaned",
+  "embedder": "BAAI/bge-m3 (1024d)",
+  "migration_file": "extension/pgmnemo--0.2.1--0.2.2-hybrid.sql",
+  "benchmark_script": "benchmarks/scripts/run_longmemeval_hybrid.py",
+  "baselines": {
+    "vector_only_recall10": 0.9334,
+    "vector_only_mrr": 0.8472,
+    "bm25_recall10": 0.982,
+    "source_vector": "benchmarks/longmemeval/results/v0.2.1_pgmnemo_proper_20260509/metrics.json",
+    "source_bm25": "benchmarks/longmemeval/run_nollm.py"
+  },
+  "overall": {
+    "recall@1":  {"n": 0, "mean": null, "ci95_lo": null, "ci95_hi": null},
+    "recall@5":  {"n": 0, "mean": null, "ci95_lo": null, "ci95_hi": null},
+    "recall@10": {"n": 0, "mean": null, "ci95_lo": null, "ci95_hi": null},
+    "recall@20": {"n": 0, "mean": null, "ci95_lo": null, "ci95_hi": null},
+    "mrr":       {"n": 0, "mean": null, "ci95_lo": null, "ci95_hi": null}
+  },
+  "notes": "DB not available in this environment. Schema design follows Maharana 2024 + Wu ICLR 2025. Theoretical expected improvement: hybrid should lift recall@10 from 0.933 toward 0.982 BM25 ceiling by surfacing lexically-matched candidates that dense embedding misses (especially temporal-reasoning and knowledge-update qtypes)."
+}
