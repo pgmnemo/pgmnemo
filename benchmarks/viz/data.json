@@ -1,0 +1,84 @@
+{
+  "meta": {
+    "generated": "2026-05-10",
+    "pgmnemo_version": "0.2.1",
+    "description": "Source data for comparison.svg — update this file, then re-run scripts/regenerate_viz.py (or manually update SVG coordinates)"
+  },
+  "benchmarks": {
+    "locomo_recall10": {
+      "label": "LoCoMo recall@10",
+      "paper": "Maharana et al. ACL 2024",
+      "paper_url": "https://arxiv.org/abs/2402.17753",
+      "systems": {
+        "pgmnemo": {
+          "value": 0.795,
+          "source": "measured",
+          "run": "benchmarks/locomo/results/v0.2.1_session_20260509/report.md",
+          "notes": "DRAGON 768d zero-padded to 1024d; session-level granularity"
+        },
+        "paper_dragon": {
+          "value": 0.60,
+          "value_range": [0.55, 0.65],
+          "source": "paper_reported",
+          "paper_url": "https://arxiv.org/abs/2402.17753",
+          "notes": "Paper-reported DRAGON retriever range (session-level). Midpoint 0.60."
+        },
+        "mem0":    { "value": null, "source": "not_published", "notes": "No published LoCoMo recall@10 as of 2026-05-10" },
+        "zep":     { "value": null, "source": "not_published", "notes": "No published LoCoMo recall@10 as of 2026-05-10" },
+        "memgpt":  { "value": null, "source": "not_published", "notes": "No published LoCoMo recall@10 as of 2026-05-10" },
+        "magma":   { "value": null, "source": "not_published", "notes": "No published LoCoMo recall@10 as of 2026-05-10" }
+      }
+    },
+    "longmemeval_recall10": {
+      "label": "LongMemEval recall@10",
+      "paper": "Wu et al. ICLR 2025",
+      "paper_url": "https://arxiv.org/abs/2410.10813",
+      "systems": {
+        "pgmnemo": {
+          "value": 0.933,
+          "ci_95": [0.9135, 0.9517],
+          "source": "measured",
+          "run": "benchmarks/longmemeval/results/v0.2.1_pgmnemo_20260509/report.md",
+          "notes": "bge-m3 embedder (Stella V5 substituted — see ADDENDA)"
+        },
+        "bm25_baseline": {
+          "value": 0.982,
+          "ci_95": [0.970, 0.994],
+          "source": "measured",
+          "run": "benchmarks/longmemeval/results/v0.2.1_20260509/report.md",
+          "notes": "Pure-Python BM25 (k1=1.5, b=0.75), no embeddings"
+        },
+        "mem0":    { "value": null, "source": "not_published", "notes": "No published LongMemEval recall@10 as of 2026-05-10" },
+        "zep":     { "value": null, "source": "not_published", "notes": "No published LongMemEval recall@10 as of 2026-05-10" },
+        "memgpt":  { "value": null, "source": "not_published", "notes": "No published LongMemEval recall@10 as of 2026-05-10" },
+        "magma":   { "value": null, "source": "not_published", "notes": "No published LongMemEval recall@10 as of 2026-05-10" }
+      }
+    },
+    "longmemeval_mrr": {
+      "label": "LongMemEval MRR",
+      "paper": "Wu et al. ICLR 2025",
+      "paper_url": "https://arxiv.org/abs/2410.10813",
+      "systems": {
+        "pgmnemo": {
+          "value": 0.855,
+          "ci_95": [0.8292, 0.8816],
+          "source": "measured",
+          "run": "benchmarks/longmemeval/results/v0.2.1_pgmnemo_20260509/report.md"
+        }
+      }
+    },
+    "locomo_mrr": {
+      "label": "LoCoMo MRR",
+      "paper": "Maharana et al. ACL 2024",
+      "paper_url": "https://arxiv.org/abs/2402.17753",
+      "systems": {
+        "pgmnemo": {
+          "value": 0.548,
+          "source": "measured",
+          "run": "benchmarks/locomo/results/v0.2.1_session_20260509/report.md"
+        }
+      }
+    }
+  },
+  "update_instructions": "See benchmarks/viz/UPDATE.md"
+}
