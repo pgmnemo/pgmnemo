@@ -11,6 +11,7 @@
       "pgmnemo": {
          "abstract": "Multi-agent memory substrate for PostgreSQL — provenance-gated, vector-hybrid recall",
          "version": "0.2.1",
+         "file": "extension/pgmnemo--0.2.1.sql",
          "docfile": "README.md"
       }
    },
