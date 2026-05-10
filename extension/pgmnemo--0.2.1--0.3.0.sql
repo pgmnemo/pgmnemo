@@ -51,25 +51,21 @@ END;
 $$;
 
 -- ─────────────────────────────────────────────────────────────────────────────
--- S3: Backfill edge_kind from edge_type
+-- S3: Backfill edge_kind from relation_type
 --     Mapping (MAGMA §3 Table 1):
---       causal      → causal
---       derives_from→ causal
---       contradicts → causal
---       temporal    → temporal
---       semantic    → semantic
---       elaborates  → semantic
---       supersedes  → semantic
---       entity      → entity
---       (fallback)  → semantic  -- safe default for any future edge_type values
+--       causal / CAUSED_BY / derives_from / contradicts → causal
+--       temporal / CO_OCCURRED                          → temporal
+--       semantic / elaborates / supersedes / DERIVED_FROM / SUPERSEDES → semantic
+--       entity                                          → entity
+--       (fallback)  → semantic  -- safe default for any future relation_type values
 -- ─────────────────────────────────────────────────────────────────────────────
 UPDATE pgmnemo.mem_edge
 SET edge_kind = CASE
-    WHEN edge_type IN ('causal', 'derives_from', 'contradicts') THEN 'causal'::pgmnemo.edge_kind
-    WHEN edge_type = 'temporal'                                  THEN 'temporal'::pgmnemo.edge_kind
-    WHEN edge_type IN ('semantic', 'elaborates', 'supersedes')   THEN 'semantic'::pgmnemo.edge_kind
-    WHEN edge_type = 'entity'                                    THEN 'entity'::pgmnemo.edge_kind
-    ELSE                                                              'semantic'::pgmnemo.edge_kind
+    WHEN LOWER(relation_type) IN ('causal', 'derives_from', 'contradicts', 'caused_by') THEN 'causal'::pgmnemo.edge_kind
+    WHEN LOWER(relation_type) IN ('temporal', 'co_occurred')                             THEN 'temporal'::pgmnemo.edge_kind
+    WHEN LOWER(relation_type) IN ('semantic', 'elaborates', 'supersedes', 'derived_from') THEN 'semantic'::pgmnemo.edge_kind
+    WHEN LOWER(relation_type) = 'entity'                                                 THEN 'entity'::pgmnemo.edge_kind
+    ELSE                                                                                       'semantic'::pgmnemo.edge_kind
 END
 WHERE edge_kind IS NULL;
 
@@ -379,7 +375,7 @@ BEGIN
 
         UNION ALL
 
-        -- Forward: source → target (causal kind, edge_type in relation_types)
+        -- Forward: source → target (causal kind, relation_type in relation_types)
         SELECT
             me.target_id,
             cw.depth + 1,
@@ -389,13 +385,13 @@ BEGIN
         JOIN pgmnemo.mem_edge me ON me.source_id = cw.lesson_id
         WHERE direction IN ('forward', 'both')
           AND me.edge_kind = 'causal'
-          AND me.edge_type = ANY(relation_types)
+          AND me.relation_type = ANY(relation_types)
           AND cw.depth < max_depth
           AND NOT (me.target_id = ANY(cw.path))
 
         UNION ALL
 
-        -- Backward: target → source (causal kind, edge_type in relation_types)
+        -- Backward: target → source (causal kind, relation_type in relation_types)
         SELECT
             me.source_id,
             cw.depth + 1,
@@ -405,7 +401,7 @@ BEGIN
         JOIN pgmnemo.mem_edge me ON me.target_id = cw.lesson_id
         WHERE direction IN ('backward', 'both')
           AND me.edge_kind = 'causal'
-          AND me.edge_type = ANY(relation_types)
+          AND me.relation_type = ANY(relation_types)
           AND cw.depth < max_depth
           AND NOT (me.source_id = ANY(cw.path))
     )
@@ -431,7 +427,7 @@ $$;
 
 COMMENT ON FUNCTION pgmnemo.traverse_causal_chain(BIGINT, INT, TEXT[], BOOLEAN, TEXT) IS
     'BFS traversal of causal edges in pgmnemo.mem_edge (v0.3.0). '
-    'Filters on edge_kind = ''causal'' + edge_type IN relation_types. '
+    'Filters on edge_kind = ''causal'' + relation_type IN relation_types. '
     'Default relation_types: causal, derives_from, contradicts (MAGMA §3). '
     'direction: ''forward'' (source→target), ''backward'' (target→source), ''both''. '
     'Cycle guard via path array.';
