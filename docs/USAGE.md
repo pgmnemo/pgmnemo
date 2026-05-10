@@ -140,6 +140,80 @@ FROM pgmnemo.recall_lessons(
 
 ---
 
+## Hybrid retrieval — `pgmnemo.recall_hybrid()` ⚠ EXPERIMENTAL
+
+> **EXPERIMENTAL — opt-in only.** `recall_hybrid()` is NOT the default retrieval path.
+> Call it directly when you need it. `recall_lessons()` is unchanged.
+>
+> Bench status (2026-05-10, simulation): LoCoMo recall@10 +12.7pp vs vector-only (all
+> question types positive, statistically significant). LongMemEval MRR +5.8pp (p=0.005,
+> significant); recall@10 +1.5pp (p=0.308, not significant). Numbers are simulation
+> (TF-IDF proxy for dense retrieval); real-DB confirmation pending.
+
+Combines dense cosine retrieval with BM25-class sparse matching. Best suited for tasks
+where the correct memory is lower in the top-K ranking (MRR improvement) or where
+keyword-match queries appear alongside semantic queries (LoCoMo-style mixed corpus).
+
+### Signature
+
+```sql
+pgmnemo.recall_hybrid(
+    query_embedding  vector(1024),
+    query_text       TEXT,
+    k                INT     DEFAULT 10,
+    role_filter      TEXT    DEFAULT NULL,
+    project_id_filter INT    DEFAULT NULL,
+    vec_weight       FLOAT   DEFAULT 0.4,
+    bm25_weight      FLOAT   DEFAULT 0.4
+) RETURNS TABLE (
+    lesson_id     BIGINT,
+    hybrid_score  DOUBLE PRECISION,
+    rrf_score     DOUBLE PRECISION,   -- diagnostic: 1/(k+vec_rank) + 1/(k+bm25_rank)
+    role          TEXT,
+    project_id    INT,
+    topic         TEXT,
+    lesson_text   TEXT,
+    importance    SMALLINT,
+    metadata      JSONB,
+    commit_sha    TEXT,
+    artifact_hash TEXT,
+    verified_at   TIMESTAMPTZ,
+    created_at    TIMESTAMPTZ
+)
+```
+
+Formula: `hybrid_score = vec_weight×cosine + bm25_weight×ts_rank_cd(lesson_tsv, q, 32)`  
+Union retrieval: candidates matched by **either** embedding cosine **or** BM25.
+
+### Example
+
+```sql
+-- Opt-in: call recall_hybrid() directly
+SELECT topic, lesson_text, hybrid_score, rrf_score
+FROM pgmnemo.recall_hybrid(
+    <your_vector_1024>,
+    'JWT rotation key compromise',
+    10,
+    'security-agent',  -- role filter
+    42                 -- project_id filter
+);
+```
+
+### When to use
+
+- Task requires ranking the correct result higher in top-K (MRR-sensitive)
+- Your memory corpus has both keyword-matchable and semantic queries (LoCoMo profile)
+- You have confirmed the recall@10 signal on your own data before relying on it
+
+### Install
+
+```sql
+-- Run once after upgrading to v0.2.2:
+\i extension/pgmnemo--0.2.1--0.2.2-hybrid.sql
+```
+
+---
+
 ## Tuning
 
 ### HNSW ef_search
