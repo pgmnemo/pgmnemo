@@ -11,15 +11,21 @@
 
 ## Benchmarks (v0.2.1, retrieval-only)
 
-Real numbers vs published academic benchmarks. Full methodology + reproduction commands in [docs/BENCHMARKS.md](docs/BENCHMARKS.md). Methodology change log in [benchmarks/HISTORY.md](benchmarks/HISTORY.md).
+Real numbers vs published academic benchmarks. **Canonical protocol:** [benchmarks/PROTOCOL.md](benchmarks/PROTOCOL.md) (v1.0.0, frozen 2026-05-10) — release notes citing recall improvements must reference it. Full reproduction commands in [docs/BENCHMARKS.md](docs/BENCHMARKS.md). Methodology change log in [benchmarks/HISTORY.md](benchmarks/HISTORY.md).
+
+<picture>
+  <img src="benchmarks/viz/comparison.svg" alt="pgmnemo v0.2.1 retrieval benchmark comparison — LoCoMo recall@10 0.795, LongMemEval recall@10 0.933" width="720"/>
+</picture>
 
 | Benchmark | Embedder | Metric | pgmnemo | Comparison |
 |---|---|---|---|---|
-| **LoCoMo** ([Maharana ACL 2024](https://arxiv.org/abs/2402.17753)) | DRAGON (paper canonical) | recall@10 / MRR | **0.795** / **0.548** | session-level granularity, paper-class range |
+| **LoCoMo** ([Maharana ACL 2024](https://arxiv.org/abs/2402.17753)) | DRAGON (paper canonical) | recall@10 / MRR | **0.795** / **0.548** | paper DRAGON range 0.55–0.65 (session-level) |
 | **LongMemEval** ([Wu ICLR 2025](https://arxiv.org/abs/2410.10813)) | bge-m3 (subst. for Stella V5)¹ | recall@10 / MRR | **0.933** / **0.855** | BM25 baseline² 0.982 |
 
 ¹ Stella V5 paper canonical incompatible with transformers 5.8 — substituted bge-m3 (1024d, MTEB-strong). [Addendum](benchmarks/longmemeval/ADDENDA/LONGMEMEVAL_EMBEDDER_BGE_M3.md).
 ² Pure-Python BM25 baseline included for reference: [run_nollm.py](benchmarks/longmemeval/run_nollm.py).
+
+> **Competitor status:** Mem0, Zep, MemGPT, and MAGMA have not published recall@10 on LoCoMo or LongMemEval as of 2026-05-10. pgmnemo is among the first memory substrates to publish reproducible retrieval benchmarks on these academic datasets.
 
 **Reproduce in 3 commands:** see [docs/BENCHMARKS.md#reproducibility](docs/BENCHMARKS.md#reproducibility).
 
