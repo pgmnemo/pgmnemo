@@ -43,8 +43,79 @@ jobs:
           PGDATABASE: pgmnemo_test
         run: cd extension && make installcheck PG_CONFIG=/usr/lib/postgresql/17/bin/pg_config
 
+  bench-gate:
+    runs-on: ubuntu-latest
+    outputs:
+      bench_pass: ${{ steps.gate.outputs.bench_pass }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Extract version from tag
+        id: version
+        run: echo "VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+      - name: Find previous tag's gate file
+        id: prev_gate
+        run: |
+          VERSION=${{ steps.version.outputs.VERSION }}
+          PREV=$(ls benchmarks/gate/v*.json 2>/dev/null | grep -v "v${VERSION}.json$" | sort -V | tail -1)
+          echo "PREV_GATE=${PREV}" >> "$GITHUB_OUTPUT"
+          echo "Previous gate file: ${PREV:-<none, first release>}"
+      - name: Verify gate file exists for this release
+        run: |
+          VERSION=${{ steps.version.outputs.VERSION }}
+          GATE="benchmarks/gate/v${VERSION}.json"
+          if [ ! -f "$GATE" ]; then
+            if echo "${{ github.event.head_commit.message }}" | grep -q '\[bench-gate-override\]'; then
+              echo "::warning::bench-gate bypassed via [bench-gate-override] in commit message"
+              echo "BENCH_OVERRIDE=true" >> "$GITHUB_ENV"
+            else
+              echo "::error::release-blocking: $GATE missing. Per docs/WORKFLOW.md §2.2, every tag requires a gate snapshot. Run benchmarks then commit the file. To bypass (rare), use [bench-gate-override] in the commit message."
+              exit 1
+            fi
+          fi
+      - name: Run significance test vs previous version
+        id: gate
+        if: env.BENCH_OVERRIDE != 'true' && steps.prev_gate.outputs.PREV_GATE != ''
+        run: |
+          VERSION=${{ steps.version.outputs.VERSION }}
+          CUR="benchmarks/gate/v${VERSION}.json"
+          PREV="${{ steps.prev_gate.outputs.PREV_GATE }}"
+          OVERALL_EXIT=0
+          for TABLE in $(python3 -c "import json,sys; print('\n'.join(json.load(open('$CUR'))['tables'].keys()))"); do
+            python3 -c "import json; d=json.load(open('$PREV')); print(json.dumps(d['tables'].get('$TABLE', {})))" > /tmp/base.json
+            python3 -c "import json; d=json.load(open('$CUR')); print(json.dumps(d['tables'].get('$TABLE', {})))"  > /tmp/cand.json
+            if [ "$(jq 'keys|length' /tmp/base.json)" -eq 0 ]; then
+              echo "::notice::table '$TABLE' new in this release — no baseline to compare; skipping"
+              continue
+            fi
+            echo "=== $TABLE ==="
+            set +e
+            python3 scripts/significance_test_extended.py /tmp/base.json /tmp/cand.json
+            EX=$?
+            set -e
+            echo "exit=$EX"
+            if [ $EX -eq 2 ]; then
+              OVERALL_EXIT=2
+            elif [ $EX -eq 3 ] && [ $OVERALL_EXIT -lt 2 ]; then
+              OVERALL_EXIT=3
+            elif [ $EX -eq 1 ] && [ $OVERALL_EXIT -eq 0 ]; then
+              OVERALL_EXIT=1
+            fi
+          done
+          if [ $OVERALL_EXIT -eq 2 ]; then
+            echo "::error::significant regression detected. BLOCK release."
+            exit 1
+          fi
+          if [ $OVERALL_EXIT -eq 3 ]; then
+            echo "::warning::near-threshold drift detected (|Δ| ≥ 1pp, ns). Release allowed but release notes MUST include watchlist."
+          fi
+          echo "bench_pass=true" >> "$GITHUB_OUTPUT"
+
   pgxn-release:
-    needs: installcheck
+    needs: [installcheck, bench-gate]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

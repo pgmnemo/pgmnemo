@@ -5,6 +5,65 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [Unreleased] — v0.3.1 candidate (target: 2026-05-20)
+
+### Theme
+
+Hygiene foundation — no recall-algorithm change. The release that closes the
+documentation/process gaps surfaced by the v0.2.x → v0.3.0 audit (see
+`docs/WORKFLOW.md §1` for the post-mortem).
+
+### Added
+
+- **`docs/WORKFLOW.md`** — canonical development discipline document. Defines
+  customer-first hypothesis declaration, per-cell bench gate, deprecation by
+  absence of evidence, and 2–4 week release cycle.
+- **`docs/BENCHMARK_PROTOCOL.md`** — two-phase architecture (corpus snapshot
+  reuse + per-version retrieval test), frozen parameters table, gate decision
+  matrix, CI integration plan.
+- **`docs/SQL_REFERENCE.md`** — every public SQL function (version, ingest,
+  recall_lessons, recall_lessons_pooled, recall_hybrid, traverse_causal_chain,
+  traverse_temporal_window), all GUCs, RLS behaviour, deprecation log.
+- **`docs/MIGRATION.md` Part B** — in-place version-to-version upgrade paths
+  v0.1.x → v0.3.0, per-version backfill requirements, generic dump+restore
+  rollback policy.
+- **`benchmarks/METRICS_BY_VERSION.md`** — single source of truth for
+  "which version produced which number." Per-(dataset × embedder × mode)
+  tables, append-only at every release.
+- **`benchmarks/gate/`** — release pre-push snapshot files (`v<tag>.json`)
+  that consolidate every real-DB metrics.json for a release; CI uses these
+  for the mechanical gate decision.
+- **`scripts/significance_test_extended.py`** — per-category z-test with
+  Holm-Bonferroni correction; exit codes 0/1/2/3 drive the release gate.
+- **`scripts/render_progression.py`** — pure-SVG per-bench small-multiples
+  line charts with CI95 bands.
+- **`scripts/render_full_history.py`** — Tufte-style sparkline table with all
+  metrics × all versions.
+- **`scripts/render_executive_scorecard.py`** — single-page PASS/WATCH/FAIL
+  scorecard for non-technical readers.
+- **`ROADMAP.md` v2** — customer-driven per-version plan to v1.0. Old
+  spec-driven roadmap archived.
+- **CI bench-gate** — `.github/workflows/release.yml` blocks tag push when
+  `benchmarks/gate/v<tag>.json` is missing or significance test exits 2.
+  Soft check in `ci.yml` warns PRs that touch SQL but don't update the gate.
+
+### Fixed
+
+- GitHub Issues #12 (release coherence), #13 (docs/API coherence), #14
+  (install/upgrade contract), #15 (migration guide), #16 (benchmark protocol)
+  — all closed; see commits in the v0.3.1 cycle.
+
+### Upgrade
+
+```sql
+ALTER EXTENSION pgmnemo UPDATE TO '0.3.1';
+```
+
+Empty upgrade script (no SQL changes); the version bump tracks
+documentation/process improvements only.
+
+---
+
 ## [0.3.0] — 2026-05-10
 
 ### Fixed
