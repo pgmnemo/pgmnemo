@@ -64,7 +64,7 @@ over the question-specific haystack.
 |---|---|---|---|---|---|---|---|---|---|
 | v0.2.1 | 2026-05-09 | 0.2.1 | 0.4856 | 0.8692 | 0.9326 | 0.9773 | 0.8554 | — (baseline) | `longmemeval/results/v0.2.1_pgmnemo_20260509/` |
 | v0.2.1-full | 2026-05-09 | 0.2.1 | — | — | 0.9334 | — | 0.8472 | not significant vs above | `longmemeval/results/v0.2.1_pgmnemo_proper_20260509/` |
-| v0.3.0 | 2026-05-10 | 0.3.0 | ⏳ running | ⏳ | ⏳ | ⏳ | ⏳ | (pending) | `longmemeval/results/v0.3.0_<date>/` |
+| v0.3.0 | 2026-05-13 | 0.3.0 | 0.4762 | 0.8814 | 0.9334 | 0.9853 | 0.8472 | **neutral** (NEAR_THRESHOLD on r@5 +1.22pp, ns) | `longmemeval/results/v0.3.0_20260513/` |
 
 Frozen parameters: longmemeval_s_cleaned.json (500 queries), embedder `BAAI/bge-m3` (1024d, max_seq=512).
 

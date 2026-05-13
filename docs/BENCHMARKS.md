@@ -14,7 +14,7 @@ across all (dataset × embedder × mode) combinations live in
 | Benchmark | Headline metric (latest tag) | Δ vs v0.2.1 |
 |---|---|---|
 | **LoCoMo** session-level retrieval (DRAGON, n=1982) | recall@10 = **0.7994**, MRR = **0.5569** | neutral (+0.43pp, p_corr=1.0) |
-| **LongMemEval-S** retrieval (bge-m3, n=500) | _v0.3.0 measurement in progress_ — see [METRICS_BY_VERSION.md Table 3](../benchmarks/METRICS_BY_VERSION.md) | pending |
+| **LongMemEval-S** retrieval (bge-m3, n=500) | recall@10 = **0.9334**, MRR = **0.8472** | neutral (+0.08pp r@10, −0.82pp MRR, p_corr=1.0) |
 
 > **Reading the headline number:** the LoCoMo recall@10 = 0.7994 figure is the
 > **session-level** metric (paper-canonical, Maharana et al. Table 3). The

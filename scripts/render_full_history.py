@@ -39,8 +39,8 @@ BENCH_GROUPS = [
     },
     {
         "label": "LongMemEval-S  (bge-m3, production methodology)",
-        "pattern": "benchmarks/longmemeval/results/v*_pgmnemo*/metrics.json",
-        "exclude": ["sim"],
+        "pattern": "benchmarks/longmemeval/results/v0.[23]*_2026*/metrics.json",
+        "exclude": ["sim", "_proper_", "_hybrid_", "v0.2.1_20260509"],  # exclude BM25 baseline + sim + variant
         "metrics": ["recall@1", "recall@5", "recall@10", "recall@20", "mrr"],
     },
 ]
