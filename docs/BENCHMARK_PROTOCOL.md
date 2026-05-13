@@ -178,9 +178,13 @@ For every release the bench owner files:
 - `benchmarks/<bench>/results/v<version>_<date>/metrics.json` — full numbers, machine-readable
 - `benchmarks/<bench>/results/v<version>_<date>/report.md` — narrative summary
 - `spec/reports/BENCH_<bench>_v<version>_vs_v<prev>_<date>.md` — significance test output
+- **`benchmarks/METRICS_BY_VERSION.md`** — append a row to every applicable table.
+  **This is the single source of truth for version-to-version dynamics.** Public
+  release notes cite numbers via a link to the relevant row in this file.
 
-Public-facing claims (BENCHMARKS.md, README, release notes) cite only `p_corr < 0.05`
-improvements. Simulation / proxy results carry an explicit `(simulation, <proxy>)` label.
+Public-facing claims (`docs/BENCHMARKS.md`, README, release notes) cite only
+`p_corr < 0.05` improvements. Simulation / proxy results carry an explicit
+`(simulation, <proxy>)` label.
 
 ---
 
