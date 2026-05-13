@@ -16,25 +16,31 @@
 
 ## Benchmarks (v0.3.0, retrieval-only)
 
-Real numbers vs published academic benchmarks. **Canonical protocol:** [benchmarks/PROTOCOL.md](benchmarks/PROTOCOL.md) (v1.0.0, frozen 2026-05-10) — release notes citing recall improvements must reference it. Full reproduction commands in [docs/BENCHMARKS.md](docs/BENCHMARKS.md). Methodology change log in [benchmarks/HISTORY.md](benchmarks/HISTORY.md).
+> **Read this before the numbers below:** [docs/COMPETITIVE_REALITY.md](docs/COMPETITIVE_REALITY.md)
+> explains exactly what these recall@K figures mean, what they don't, and where
+> our methodology has asymmetries vs paper baselines and competitor positioning.
 
-<picture>
-  <img src="benchmarks/viz/comparison.svg" alt="pgmnemo v0.2.1 retrieval benchmark comparison — LoCoMo recall@10 0.795, LongMemEval recall@10 0.933" width="720"/>
-</picture>
+Real numbers vs published academic benchmarks. **Canonical protocol:** [docs/BENCHMARK_PROTOCOL.md](docs/BENCHMARK_PROTOCOL.md) (v1, frozen 2026-05-13). Full per-version history: [benchmarks/METRICS_BY_VERSION.md](benchmarks/METRICS_BY_VERSION.md). Reproduction commands in [docs/BENCHMARKS.md](docs/BENCHMARKS.md).
 
-| Benchmark | Embedder | Metric | pgmnemo | Comparison |
+| Benchmark | Methodology | Embedder | recall@10 / MRR | Honest comparison |
 |---|---|---|---|---|
-| **LoCoMo** ([Maharana ACL 2024](https://arxiv.org/abs/2402.17753)) | DRAGON (paper canonical) | recall@10 / MRR | **0.795** / **0.548** | paper DRAGON range 0.55–0.65 (session-level) |
-| **LongMemEval** ([Wu ICLR 2025](https://arxiv.org/abs/2410.10813)) | bge-m3 (subst. for Stella V5)¹ | recall@10 / MRR | **0.933** / **0.855** | BM25 baseline² 0.982 |
+| **LoCoMo** ([Maharana ACL 2024](https://arxiv.org/abs/2402.17753)) | **session-level** (paper-canonical headline) | DRAGON | **0.7994** / **0.5569** | Easier task than paper Table 3 (272 sessions vs 5882 turns search space) |
+| **LoCoMo** same paper, turn-level (apples-to-apples with paper baseline) | **turn-level** (retrieval primitive) | DRAGON | recall@5 = **0.302** / MRR = **0.237** | Paper DRAGON dense recall@5 ≈ 0.225 → pgmnemo +7.7pp |
+| **LongMemEval-S** ([Wu ICLR 2025](https://arxiv.org/abs/2410.10813)) | retrieval-only, full session | bge-m3 (subst. for Stella V5)¹ | **0.9334** / **0.8472** | **Loses to BM25 baseline² 0.982** by ~5pp |
 
-¹ Stella V5 paper canonical incompatible with transformers 5.8 — substituted bge-m3 (1024d, MTEB-strong). [Addendum](benchmarks/longmemeval/ADDENDA/LONGMEMEVAL_EMBEDDER_BGE_M3.md).
-² Pure-Python BM25 baseline included for reference: [run_nollm.py](benchmarks/longmemeval/run_nollm.py).
+¹ Stella V5 paper-canonical incompatible with transformers 5.8 — substituted bge-m3 (1024d, MTEB-strong).
+² Pure-Python BM25 baseline included for reference: [run_nollm.py](benchmarks/longmemeval/run_nollm.py). On the keyword-heavy LongMemEval workload it currently outperforms our dense vector path. **Fixing this is the explicit gate for v0.4.0** — see [ROADMAP.md](ROADMAP.md).
 
-> **Competitor status:** Mem0, Zep, MemGPT, and MAGMA have not published recall@10 on LoCoMo or LongMemEval as of 2026-05-10. pgmnemo is among the first memory substrates to publish reproducible retrieval benchmarks on these academic datasets.
+> **The "we beat everyone" framing is wrong.** Our headline session-level
+> LoCoMo number compares to a 22× smaller search space than the paper baseline.
+> Our LongMemEval number is below a 50-LOC BM25 script. Comparisons with Mem0 /
+> Zep / MAGMA on these datasets are apples-to-oranges — they optimise different
+> objectives. The honest competitive position is detailed in
+> [COMPETITIVE_REALITY.md §3-§5](docs/COMPETITIVE_REALITY.md).
 
 **Reproduce in 3 commands:** see [docs/BENCHMARKS.md#reproducibility](docs/BENCHMARKS.md#reproducibility).
 
-**Honest caveats:** BM25 outperforms pgmnemo vector retrieval on LongMemEval (keyword-friendly task). [Hybrid retrieval (vector + BM25 RRF)](benchmarks/scripts/run_longmemeval_pgmnemo.py) is on the v0.2.2 roadmap.
+**What pgmnemo's bench does NOT measure** ([§2 of COMPETITIVE_REALITY.md](docs/COMPETITIVE_REALITY.md#2-what-we-dont-measure-and-why-it-matters)): insertion throughput, concurrent read/write, retrieval latency p50/p95/p99, multi-tenant RLS correctness, scale beyond ~5k rows, end-to-end agent task completion, provenance gate correctness, state-machine transitions.
 
 ## Why this exists
 
