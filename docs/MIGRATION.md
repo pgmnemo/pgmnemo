@@ -178,3 +178,115 @@ FROM pgmnemo.recall_lessons(
 ```
 
 See `examples/migrate_external_memory.sql` for a complete end-to-end test.
+
+---
+
+# Part B — Version-to-version upgrade (existing pgmnemo installs)
+
+This section covers in-place upgrades **between pgmnemo versions**. For a fresh
+install, just run `CREATE EXTENSION pgmnemo CASCADE`.
+
+## B.1 General mechanism
+
+pgmnemo follows the standard PostgreSQL extension upgrade mechanism. Every
+release ships an `extension/pgmnemo--<from>--<to>.sql` script that PG applies
+when you run:
+
+```sql
+ALTER EXTENSION pgmnemo UPDATE TO '<to_version>';
+```
+
+Each upgrade script is **idempotent** (DDL uses `IF NOT EXISTS` / `CREATE OR
+REPLACE`) and **does not** require `DROP EXTENSION` + `CREATE EXTENSION`.
+
+## B.2 Per-version notes
+
+### v0.1.x → v0.2.0 (mem_edge, traversal SPs, GUCs)
+
+```sql
+ALTER EXTENSION pgmnemo UPDATE TO '0.2.0';
+```
+
+- New `pgmnemo.mem_edge` table, traversal SPs, GUCs (`recency_weight`,
+  `gate_strict`, `include_unverified`).
+- No backfill required; `mem_edge` starts empty.
+- Rollback: dump + reinstall pattern.
+
+### v0.2.0 → v0.2.0.1 (collision fix)
+
+```sql
+ALTER EXTENSION pgmnemo UPDATE TO '0.2.0.1';
+```
+
+- `recall_lessons()` IN-param `role`→`role_filter` (INS-029).
+- `traverse_temporal_window()` numeric→double precision cast (INS-030).
+- Pure function-body fix; no data touched.
+
+### v0.2.0.1 → v0.2.1 (RLS, ef_search, recency tuning)
+
+```sql
+ALTER EXTENSION pgmnemo UPDATE TO '0.2.1';
+```
+
+- RLS policies on `agent_lesson` / `mem_edge`, gated by `pgmnemo.tenant_id` GUC
+  (empty = service bypass).
+- `pgmnemo.ef_search` GUC (default 100, clamped 10–500).
+- `traverse_causal_chain(direction)` parameter added.
+- `pgmnemo.recency_weight` default lowered 0.20 → 0.08 (operator override OK).
+- **Operator action (optional):** enable RLS by `SET pgmnemo.tenant_id = '<project_id>'`.
+
+### v0.2.1 → v0.2.2 (recall_hybrid — EXPERIMENTAL)
+
+```sql
+\i extension/pgmnemo--0.2.1--0.2.2-hybrid.sql
+```
+
+- New `pgmnemo.recall_hybrid()` (vector + BM25 fusion). EXPERIMENTAL, opt-in.
+- `recall_lessons()` unchanged.
+- Adds `lesson_tsv` tsvector column with auto-populating trigger.
+- **Backfill:** trigger fires on next UPDATE; to backfill all existing rows:
+  `UPDATE pgmnemo.agent_lesson SET lesson_text = lesson_text;`
+
+### v0.2.1 → v0.3.0 (edge_kind ENUM)
+
+```sql
+ALTER EXTENSION pgmnemo UPDATE TO '0.3.0';
+```
+
+- New ENUM `pgmnemo.edge_kind` with `{semantic, temporal, causal, entity}`.
+- `mem_edge.edge_kind` column added (NOT NULL after auto-backfill).
+- Per-kind partial B-tree indexes auto-created.
+- `recall_lessons()` BFS now uses `edge_kind` (was `edge_type` — never existed).
+- `traverse_causal_chain()` BFS filters via `relation_type` (P0 bug fix).
+- **Backfill mapping (case-insensitive, automatic inside script):**
+  - `CAUSED_BY` / `causal` / `derives_from` / `contradicts` → `causal`
+  - `CO_OCCURRED` / `temporal` → `temporal`
+  - All others → `semantic` (default)
+- Idempotent; safe to re-run.
+
+## B.3 Generic rollback policy
+
+pgmnemo does not ship DOWN migrations. To revert:
+
+1. **Before upgrade:** `pg_dump -d <db> -n pgmnemo -F custom > pre_<version>.dump`
+2. **Revert:**
+   ```bash
+   psql -c "DROP EXTENSION pgmnemo CASCADE"   # drops pgmnemo objects, NOT user data
+   # Reinstall older extension files in PG sharedir
+   psql -c "CREATE EXTENSION pgmnemo VERSION '<previous>' CASCADE"
+   pg_restore -d <db> pre_<version>.dump
+   ```
+
+For production, the maintainer team keeps `rollback/v<previous>` git branches at
+each release; CI can redeploy from them.
+
+## B.4 Post-upgrade verification
+
+```sql
+SELECT pgmnemo.version();                                          -- expected new version
+SELECT lesson_id, score FROM pgmnemo.recall_lessons(NULL::vector(1024), 5);  -- text recall still works
+SELECT edge_kind, COUNT(*) FROM pgmnemo.mem_edge GROUP BY edge_kind;          -- v0.3.0+ only
+```
+
+File a GitHub issue with `version()` output + sample query if anything looks off.
+
