@@ -50,7 +50,7 @@ and the number that appears in `docs/BENCHMARKS.md` and the README.
 | version | date | pgmnemo_ver | recall@5 | recall@10 | recall@25 | MRR | Δ vs prev | run_dir |
 |---|---|---|---|---|---|---|---|---|
 | v0.2.1 | 2026-05-09 | 0.2.1 | 0.6623 | 0.7951 | 0.9623 | 0.5480 | — (baseline) | `locomo/results/v0.2.1_session_20260509/` |
-| v0.3.0 | 2026-05-10 | 0.3.0 | ⏳ running | ⏳ | ⏳ | ⏳ | (pending) | `locomo/results/v0.3.0_session_20260510/` |
+| v0.3.0 | 2026-05-13 | 0.3.0 | 0.6640 | 0.7994 | 0.9641 | 0.5569 | **neutral** (Δr@10=+0.43pp, p_corr=1.0) | `locomo/results/v0.3.0_session_20260513/` |
 
 ---
 

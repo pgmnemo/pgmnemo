@@ -1,23 +1,34 @@
 # pgmnemo Benchmarks
 
-**Status:** v0.2.1 first honest results, retrieval-only mode
+**Status:** v0.3.0 — neutral vs v0.2.1 (schema-additive + bug-fix release).  
+**Full per-release tracking:** [`benchmarks/METRICS_BY_VERSION.md`](../benchmarks/METRICS_BY_VERSION.md)
 
-This document summarizes our public benchmark results, methodology, and the
-honest comparison vs published baselines.
+This document summarizes the public headline results. Per-version dynamics
+across all (dataset × embedder × mode) combinations live in
+`benchmarks/METRICS_BY_VERSION.md` — that file is the single source of truth.
 
 ---
 
-## TL;DR
+## TL;DR — current release (v0.3.0)
 
-| Benchmark | pgmnemo v0.2.1 | Notable comparison |
+| Benchmark | Headline metric (latest tag) | Δ vs v0.2.1 |
 |---|---|---|
-| **LoCoMo** retrieval (DRAGON, n=1982) | recall@10 = **0.795**, MRR = **0.548** (session-level, paper-class) | paper-class range (DRAGON canonical, session granularity) |
-| **LongMemEval** retrieval (bge-m3, n=500, s_cleaned) | recall@10 = **0.933**, MRR = **0.855** | Below in-repo BM25 baseline (0.982) |
+| **LoCoMo** session-level retrieval (DRAGON, n=1982) | recall@10 = **0.7994**, MRR = **0.5569** | neutral (+0.43pp, p_corr=1.0) |
+| **LongMemEval-S** retrieval (bge-m3, n=500) | _v0.3.0 measurement in progress_ — see [METRICS_BY_VERSION.md Table 3](../benchmarks/METRICS_BY_VERSION.md) | pending |
+
+> **Reading the headline number:** the LoCoMo recall@10 = 0.7994 figure is the
+> **session-level** metric (paper-canonical, Maharana et al. Table 3). The
+> segment-level retrieval primitive — used as the gate metric for
+> `recall_lessons()` algorithmic changes — sits at recall@10 = 0.3660. The two
+> are not comparable; see [METRICS_BY_VERSION.md](../benchmarks/METRICS_BY_VERSION.md)
+> Table 1 vs Table 2 for the distinction.
 
 Reports + raw_retrievals + reproduction commands:
-- [`benchmarks/locomo/results/v0.2.1_20260509/`](../benchmarks/locomo/results/v0.2.1_20260509/)
-- [`benchmarks/longmemeval/results/v0.2.1_20260509/`](../benchmarks/longmemeval/results/v0.2.1_20260509/) — BM25 baseline (run_nollm.py)
-- [`benchmarks/longmemeval/results/v0.2.1_pgmnemo_20260509/`](../benchmarks/longmemeval/results/v0.2.1_pgmnemo_20260509/) — pgmnemo vector (run_longmemeval_pgmnemo.py)
+- LoCoMo session, v0.3.0: [`benchmarks/locomo/results/v0.3.0_session_20260513/`](../benchmarks/locomo/results/v0.3.0_session_20260513/)
+- LoCoMo session, v0.2.1 baseline: [`benchmarks/locomo/results/v0.2.1_session_20260509/`](../benchmarks/locomo/results/v0.2.1_session_20260509/)
+- LoCoMo segment (gate metric), v0.3.0: [`benchmarks/locomo/results/v0.3.0_20260510/`](../benchmarks/locomo/results/v0.3.0_20260510/)
+- LongMemEval-S, v0.2.1 baseline: [`benchmarks/longmemeval/results/v0.2.1_pgmnemo_20260509/`](../benchmarks/longmemeval/results/v0.2.1_pgmnemo_20260509/)
+- LongMemEval-S, BM25 reference: [`benchmarks/longmemeval/results/v0.2.1_20260509/`](../benchmarks/longmemeval/results/v0.2.1_20260509/)
 
 ---
 
