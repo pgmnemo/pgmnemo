@@ -1,197 +1,296 @@
 # pgmnemo Roadmap
 
-**Last updated:** 2026-05-10  
-**Maintainer:** Project Lead (PI)  
-**Next review:** at v0.3.0 tag
-
-> **Horizon rule:** this roadmap covers the next two releases in detail (H1 + H2). Items beyond two releases live in the hypothesis backlog (`spec/v2/pgmnemo/HYPOTHESIS_BACKLOG_*.md`) until they are prioritized.
-
----
-
-## Current Baselines (v0.2.1)
-
-| Benchmark | Metric | Value |
-|-----------|--------|-------|
-| LoCoMo (n=1982) | recall@5 | 0.662 |
-| LoCoMo (n=1982) | recall@10 | **0.795** |
-| LoCoMo (n=1982) | MRR | 0.548 |
-| LongMemEval-S (n=500) | recall@10 | **0.933** |
-| LongMemEval-S (n=500) | MRR | 0.847 |
+**Status:** v2 — customer-driven, bench-gated
+**Effective:** 2026-05-13
+**Supersedes:** the previous spec-driven ROADMAP (MAGMA §-numbered phases)
+**Workflow rules:** see `docs/WORKFLOW.md`
 
 ---
 
-## Release Timeline
+## Strategic frame
+
+pgmnemo is the **provenance-gated PostgreSQL memory layer** for AI agent developers
+who already run Postgres. Our wedge customer (`docs/POSITIONING.md §4`) installs us in
+under 5 minutes and replaces 200 lines of ad-hoc memory code with two SQL calls.
+
+We have **one fixable competitive weakness today** and **one durable moat:**
+
+- 🔴 **Weakness:** LongMemEval recall@10 = 0.933 (BM25 baseline = 0.982). A potential
+  adopter benchmarks against `tsvector + ts_rank_cd` and we lose by 5 pp.
+- 🟢 **Moat:** Provenance gate (`gate_strict` GUC + `verified_at` semantics). None of
+  Mem0 / Zep / pgvector / MAGMA enforce "no commit SHA → no write" at the DB layer.
+
+Everything in the next 18 months is shaped by these two facts.
+
+---
+
+## Releases at a glance
+
+| Tag | Theme | Headline gate | Target ship |
+|---|---|---|---|
+| **v0.3.1** | Hygiene + documentation + bench-gate in CI | All open issues closed; gate file mechanism live; no recall change | 2026-05-20 |
+| **v0.4.0** | **Beat BM25 on LongMemEval** — hybrid promotion | LongMemEval recall@10 ≥ 0.97 with `p_corr < 0.05`; no LoCoMo regression | 2026-06-10 |
+| **v0.4.1** | Deprecation of dead complexity | BFS-mixin out of default recall path; graph traversal SPs marked optional | 2026-06-24 |
+| **v0.5.0** | Per-category lift — temporal + embedder | LoCoMo `temporal/recall@10` ≥ 0.70 (was 0.645); Stella V5 path unblocked | 2026-07-15 |
+| **v0.6.0** | Adoption tooling | 5 framework adapters; "Compare to BM25" cookbook; first external case study | 2026-08-15 |
+| **v0.7.0** | Optional graph eval (only if adopter pulls) | Bench that exercises `mem_edge`; +X pp gate | 2026-09 (conditional) |
+| **v1.0** | API freeze + stability commitment | ≥ 3 external adopters with public case studies; 2 consecutive non-breaking releases | 2026-Q4 |
+
+---
+
+## v0.3.1 — Hygiene foundation (in-flight)
+
+**Theme:** close the gaps that block credibility, not the gaps that move recall.
+
+### What ships
+- All open issues (`#12`–`#16`) closed ✅ (done this session)
+- `docs/BENCHMARK_PROTOCOL.md` + `METRICS_BY_VERSION.md` + `scripts/significance_test_extended.py` + viz tools ✅ (done this session)
+- `docs/SQL_REFERENCE.md` ✅
+- `docs/WORKFLOW.md` (this discipline document) ✅
+- CI: `.github/workflows/release.yml` adds a blocking step that runs `significance_test_extended.py` against the `benchmarks/gate/v<version>.json` snapshot. Missing file = fail.
+- LongMemEval v0.3.0 row in METRICS_BY_VERSION.md Table 3 (run is currently in-flight)
+
+### Acceptance gate
+- Significance test vs v0.3.0 = exit 0 or 3 (neutral or watchlist, no regression)
+- CI gate-file mechanism passes on a smoke test
+- Zero open GitHub Issues with `release-hygiene` label
+
+### Customer value
+"You install v0.3.1 and the docs answer everything a careful evaluator asks before adoption."
+
+### Out of scope
+No recall-algorithm change. No new SQL functions. This is purely hygiene.
+
+---
+
+## v0.4.0 — **Beat BM25 on LongMemEval** (the customer-acquisition release)
+
+**Theme:** the only release in 2026 with a single goal: **adopters benchmark us and we win.**
+
+### Strategy
+
+Promote `recall_hybrid()` from EXPERIMENTAL to the default path, but **only if** real-DB
+confirmation matches the v0.2.2 simulation. The hybrid formula is:
 
 ```
-Apr 2026   May 2026              May–Jun 2026        Jun–Jul 2026
-────────── ──────────────────── ──────────────────── ─────────────
-v0.2.1 ──► v0.2.2 candidate ──► v0.3.0 ──────────► v0.3.1+
-(SHIPPED)  (in review)          (target 2026-05-17)  (next horizon)
+hybrid_score = 0.4 × cosine_similarity + 0.4 × ts_rank_cd(lesson_tsv, q, 32)
+             + 0.1 × importance_factor + 0.1 × recency_factor
 ```
 
----
+Simulation showed +12.7 pp LoCoMo recall@10 and +5.8 pp LongMemEval MRR. If real DB
+confirms even half of that, we win the BM25 comparison.
 
-## H1 — v0.2.2 (candidate, expected 2026-05-14)
+### Pre-implementation hypothesis declaration
 
-**Theme:** Hybrid retrieval — experimental opt-in for hard recall cases
+```
+Hypothesis ID:    H-01 (was on ROADMAP H2 backlog)
+Wedge problem:    Customer benchmarks pgmnemo vs `tsvector + ts_rank_cd`; pgmnemo loses by 5pp recall@10 on LongMemEval. Customer doesn't adopt.
+Expected lift:    LongMemEval recall@10 0.933 → 0.97 (+3.7pp minimum), MRR 0.847 → 0.90 (+5pp minimum)
+Acceptance gate:  significance_test_extended.py exit=1 with NO exit=2 cell on either LoCoMo or LongMemEval
+Estimated cost:   2 weeks (algorithm exists; need real-DB run, weight tuning, default-switch RFC)
+ICE:              I=10 C=8 E=6 (highest in backlog)
+Alternative:      Stay EXPERIMENTAL, lose the BM25 race
+```
 
-**Status:** WG decision made 2026-05-10 (see `spec/v2/pgmnemo/HYBRID_DECISION_2026-05-10.md`).
+### What ships if gate passes
+- `recall_hybrid()` becomes the default in `recall_lessons()` (single function, two formula paths)
+- `recall_lessons_vector_only()` kept for explicit dense-only callers
+- Migration `pgmnemo--0.3.1--0.4.0.sql` flips internal default
+- CHANGELOG one-liner: `recall@10 on LongMemEval-S improved 0.933 → 0.97x (+Xpp, p=Y). Now matches/beats BM25 baseline.`
 
-### What's in
+### What ships if gate FAILS
+- v0.4.0 becomes a different release (probably v0.5 content brought forward)
+- `recall_hybrid()` stays EXPERIMENTAL with documented "simulation +12pp, real-DB +Xpp" in `BENCHMARKS.md`
+- Open `HYBRID_REAL_DB_GAP` issue, defer promotion decision
 
-| Feature | Status | Notes |
-|---------|--------|-------|
-| `pgmnemo.recall_hybrid()` | ✅ implemented | EXPERIMENTAL, NOT default; `recall_lessons()` unchanged |
-| Migration `pgmnemo--0.2.1--0.2.2-hybrid.sql` | ✅ ready | Opt-in upgrade |
-| LongMemEval hybrid bench harness | ✅ ready | `benchmarks/scripts/run_longmemeval_hybrid.py` |
-| `docs/USAGE.md` hybrid section | ✅ written | EXPERIMENTAL label prominent |
+### Out of scope
+- New graph features
+- New embedders (deferred to v0.5)
+- Schema changes
 
-### Evidence (simulation — real-DB pending)
-
-| Benchmark | Metric | Vector-only | Hybrid | Δ | Significant? |
-|-----------|--------|-------------|--------|---|--------------|
-| LoCoMo | recall@10 | 0.795 | 0.922 | **+12.7pp** | ✅ YES (CIs disjoint) |
-| LoCoMo | MRR | 0.548 | 0.768 | **+22pp** | ✅ YES |
-| LongMemEval | recall@10 | 0.933 | 0.949 | +1.5pp | ❌ NO (p=0.308) |
-| LongMemEval | MRR | 0.847 | 0.905 | **+5.8pp** | ✅ YES (p=0.005) |
-
-> ⚠️ Numbers are simulation (TF-IDF proxy for dense retrieval). Real-DB bench required before promotion to default.
-
-### Release gates remaining
-
-- [ ] Real-DB benchmark confirmation (localhost:15432 must be reachable)
-- [ ] `extension/pgmnemo--0.2.1--0.2.2-hybrid.sql` `EXPERIMENTAL` comment in-code (see HYBRID_DECISION action item 3)
-- [ ] PGXN bundle for v0.2.2 (META.json + zip)
-- [ ] PGXN v0.2.1 publish unblocked (prerequisite)
-
-### Promotion criteria (EXPERIMENTAL → default)
-
-`recall_hybrid()` becomes the default retrieval function when **any one** of:
-- Real-DB bench confirms LoCoMo recall@10 ≥ +12pp
-- 2+ production adopters report positive outcome
-- Third dataset (not LoCoMo, not LongMemEval) shows uniform lift across all categories
-- LongMemEval recall@10 p-value < 0.05 with real embeddings
+### Customer value
+"Postgres extension with provenance gate that's also competitive with BM25 on memory recall."
 
 ---
 
-## H1 — v0.3.0 (target: 2026-05-17)
+## v0.4.1 — Deprecation cycle
 
-**Theme:** MAGMA §3 — edge taxonomy schema (foundation for graph-aware retrieval)
+**Theme:** remove the complexity that didn't earn its keep in v0.2.x – v0.3.0.
 
-**Status:** 🔴 BLOCKED — migration script has 2 critical bugs. Fix required before any bench.
+### What gets demoted (kept in SQL, removed from headline / default path)
 
-### What's in
+| Feature | Action | Rationale |
+|---|---|---|
+| BFS graph-proximity mixin in `recall_lessons()` | Move to opt-in `recall_lessons_with_graph()` | Currently runs every call but no-op when `mem_edge` empty (typical case). Wastes CPU, adds attack surface. |
+| `traverse_causal_chain()` | Mark "advanced/optional" in docs; keep SQL | Only useful when adopter has populated `mem_edge`; very rare |
+| `traverse_temporal_window()` | Same | Same |
+| `recall_lessons_pooled()` | Document as "for paper-canonical session-level bench only" | Wedge customer doesn't pool by session |
+| `edge_kind` ENUM + per-kind indexes | Stay; cost is near-zero | Not headline, but kept for future graph eval |
 
-| Feature | Status | Blocker |
-|---------|--------|---------|
-| `edge_kind` ENUM (`semantic`, `temporal`, `causal`, `entity`) | 🔴 blocked | Migration references `edge_type` (wrong column name) |
-| 4 partial B-tree indexes per edge kind | 🔴 blocked | Same — cannot test until schema applies |
-| `recall_lessons()` BFS fix using `edge_kind` | 🔴 blocked | Depends on schema |
-| `traverse_causal_chain()` updated for new ENUM | 🔴 blocked | References `me.edge_type` (must be `relation_type`) |
-| `pgmnemo--0.2.1--0.3.0.sql` migration | 🔴 2 bugs | See `spec/v2/pgmnemo/V0.3.0_AUDIT_2026-05-10.md` |
+### Acceptance gate
+- `significance_test_extended.py` exit=0 (neutral) — removing dead code must not affect any cell
+- No GitHub Issue created against any v0.4.0 release citing reliance on BFS-in-default
 
-### P0 Blockers (must fix before any other v0.3.0 work)
-
-**Bug 1 — S3 wrong column name:**  
-Migration `S3_BACKFILL` references `edge_type` column that doesn't exist.  
-Fix: replace `edge_type` with `relation_type` throughout backfill block.
-
-**Bug 2 — S8 traverse function wrong column:**  
-`traverse_causal_chain()` body references `me.edge_type`.  
-Fix: replace with `me.relation_type`.
-
-**Bug 3 — Case mismatch:**  
-v0.2.1 stores uppercase values (`CAUSED_BY`). Migration expects lowercase enum.  
-Fix: add `UPPER()` cast or enum values to match existing data.
-
-### What v0.3.0 explicitly defers
-
-- MAGMA §4 (Adaptive Traversal Policy) → v0.3.x+
-- MAGMA §5 (Dual-stream Consolidation) → v0.3.x+
-- DIM-FLEX (embedding dimension configurability) → v0.3.x — **marked as phantom-closed; needs real implementation** (4 hardcoded `vector(1024)` remain)
-- RESTORE-C1/C2/C3 → v1.0 scope
-
-### Release gates
-
-- [ ] P0 migration bugs fixed (all 3)
-- [ ] Migration applied to clean schema → zero errors
-- [ ] Migration idempotent (second application → zero errors)
-- [ ] `make check` + `pg_regress` pass
-- [ ] LoCoMo bench on v0.3.0 vs v0.2.1 (expected: no regression; graph schema is additive)
-- [ ] Rollback branch `rollback/v0.2.1` exists and is tested
-- [ ] ExpDesigner GO on bench report
-- [ ] ResSup sign-off on any public benchmark claims
+### Customer value
+"pgmnemo became simpler in v0.4.1: the default recall path no longer carries graph machinery that production users don't enable."
 
 ---
 
-## H2 — v0.3.1+ (planned scope, target: 2026-06-07)
+## v0.5.0 — Per-category lift
 
-**Theme:** Retrieval quality improvements — real-bench validated
+**Theme:** fix the weakest LoCoMo category (`temporal`) and unblock Stella V5.
 
-> Scope is provisional. Final selection after v0.3.0 bench results and hypothesis re-scoring.
+### Hypotheses
 
-### Candidate items (by ICE score)
+**H-06: Temporal weight tuning**
+```
+Wedge problem:    v0.3.0 showed -3.81pp drift on LoCoMo temporal/recall@5. Temporal is the weakest category at 0.645 recall@10.
+Expected lift:    temporal/recall@10 0.645 → 0.70 (+5.5pp). OVERALL r@10 unchanged ± 1pp.
+Acceptance gate:  significance_test_extended.py exit=1 on temporal/recall@10 cell, exit ≠ 2 anywhere
+Cost:             1 week — single GUC default change + bench
+ICE:              I=7 C=8 E=8
+```
 
-| Hypothesis | ICE | RICE | Expected lift | Status |
-|------------|-----|------|---------------|--------|
-| H-06: Temporal weight tuning | 15.4 | 4.40 | +3–6pp LoCoMo temporal category | Ready; low-effort |
-| H-02: Stella V5 compatibility | 14.4 | 4.80 | +1–3pp LongMemEval | Ready; 1-day effort |
-| H-04: Scoring weight grid search | 13.75 | 2.75 | +2–5pp | Overfitting risk — holdout set required |
-| H-05: DIM-FLEX / DRAGON 768d | 11.4 | 1.90 | 0pp metric, −25% storage | Blocked on DIM-FLEX real impl |
+**H-02: Stella V5 embedder path unblock**
+```
+Wedge problem:    Paper-canonical LongMemEval embedder is Stella V5; transformers 5.8 incompatibility forced us to bge-m3 substitution. Customers comparing to paper numbers see a deviation footnote.
+Expected lift:    LongMemEval recall@10 +1–3pp vs bge-m3 substitution baseline
+Acceptance gate:  Bench against new embedder shows no regression vs bge-m3; ideally significant improvement
+Cost:             1–2 days — fork modeling_qwen.py with rope_theta fix OR pin compatible transformers
+ICE:              I=6 C=7 E=9
+```
 
-### H-01 special status
+### What ships
+- `pgmnemo.recency_weight` default re-tuned based on bench grid-search
+- Stella V5 instructions documented in `benchmarks/ADDENDA/LONGMEMEVAL_EMBEDDER_STELLA.md`
+- Optional: a `pgmnemo.temporal_boost` GUC for adopters with timestamp-sensitive workloads
 
-H-01 (Hybrid BM25+vector RRF) — **ICE 24.0, highest in backlog** — is currently blocked on a feasibility question: does `pg_trgm` or `pgroonga` give sufficient BM25 signal without adding a hard dependency?
+### Out of scope
+- Graph features (no adopter has asked)
+- New schema columns
+- API breaking changes
 
-A dedicated feasibility task is required before H-01 can enter an iteration. If feasibility passes, H-01 should be prioritized over all H2 candidates.
-
----
-
-## v1.0 Horizon (no date — gated on evidence)
-
-v1.0 requires all of the following:
-
-| Gate | Current state |
-|------|---------------|
-| H-1 through H-5 hypotheses: all pass bench significance | H-1 (hybrid): ✅ EXPERIMENTAL; H-2 through H-5: open |
-| RESTORE stack (C1/C2/C3) live and bench-validated | Not started |
-| Real-DB bench confirms all simulation results | Pending |
-| External adopter count ≥ 2 with production validation | 0 confirmed |
-| API stability: no breaking changes in ≥ 2 consecutive releases | In progress |
-| Academic paper submitted (ICSE-SEIP or equivalent) | Drafting |
-
----
-
-## PGXN Publish Status
-
-| Version | PGXN status | Blocker |
-|---------|-------------|---------|
-| v0.2.1 | 🟡 bundle ready, not published | Project Lead must upload zip manually at manager.pgxn.org |
-| v0.2.2 | 🔴 pending | v0.2.1 must publish first |
-| v0.3.0 | 🔴 pending | v0.2.2 + migration fixes |
+### Customer value
+"v0.5 sharpens the weakest recall category and matches the paper-canonical embedder when it works."
 
 ---
 
-## What Is Not On This Roadmap
+## v0.6.0 — Adoption tooling
 
-Items that were discussed but are not scheduled (reasons noted):
+**Theme:** make pgmnemo trivial to wire into the agent frameworks the wedge customer uses.
 
-| Item | Decision | Reason |
-|------|----------|--------|
-| Promote `recall_hybrid()` to default | ❌ NOT scheduled | Simulation-only evidence; real-DB bench first |
-| DIM-FLEX as shipped feature | ❌ Reopened (was phantom-closed) | 4 hardcoded `vector(1024)` remain; needs real implementation |
-| BM25 as a hard extension dependency | 🟡 Feasibility study only | H-01 requires `pg_trgm` / `pgroonga` decision |
-| Multi-tenant RBAC (beyond RLS) | 🔵 Backlog | Low ICE; no external requester yet |
-| REST API wrapper | 🔵 Backlog | pgmnemo is an extension, not a service |
+### What ships
+1. **Framework adapters** (Python/TypeScript, ~50–100 LOC each):
+   - `pgmnemo-langchain` — `BaseChatMessageHistory` implementation
+   - `pgmnemo-llamaindex` — `BaseDocumentStore` implementation
+   - `pgmnemo-anthropic-sdk` — example with `claude-agent-sdk` memory tool
+   - `pgmnemo-openai-assistants` — example
+   - `pgmnemo-ts` — minimal TS client (Vercel AI SDK style)
+2. **"Compare to BM25" cookbook** (`docs/cookbook/vs_bm25.md`) — recipe that lets the
+   adopter run our bench on their data with one command and see the side-by-side number
+3. **Docker Compose quick-start** (`examples/docker-compose.yml`)
+4. **First public case study** in `docs/ADOPTION.md` — concrete external adopter, real
+   workload, real number
+
+### Acceptance gate
+- ≥ 3 of the 5 adapters tested end-to-end against `docker compose up`
+- Cookbook walkthrough completes in under 10 minutes from `git clone`
+- At least one external project (not by us) committed to using pgmnemo in production
+
+### Out of scope
+- Adapter framework breaking changes (we just wrap our SQL API; if they break, we patch)
+- Cloud hosting offering (not building a service)
+
+### Customer value
+"In 10 minutes I went from `git clone` to `pgmnemo beats BM25 on my own benchmark`."
 
 ---
 
-## Roadmap Change Policy
+## v0.7.0 — Conditional: Graph eval (only if adopter pulls)
 
-- **Minor scope trims** (remove item from a release): PI unilateral  
-- **Scope additions** (add item to a release already in progress): WG 3/5 vote  
-- **Release date changes** ≤ 1 week: PI unilateral with Monday status sync notice  
-- **Release date changes** > 1 week: WG notified; no vote required but reason must be documented  
-- **Horizon 2 reprioritization**: PI proposes after H1 closes; WG 3/5 vote  
+**Theme:** the graph machinery becomes valuable IFF a real adopter populates `mem_edge`
+and shows it helps. Until then, this release does not exist.
 
-*This document is updated at every release tag. Changes tracked in git log.*
+### Pre-condition (must all be true to start this release)
+1. At least one external adopter has populated `mem_edge` in a production workload
+2. That adopter has a reproducible bench showing graph traversal lifts their recall
+3. Their bench gets contributed back to our suite as `benchmarks/graph_*/`
+
+### What ships (only if pre-conditions met)
+- BFS graph-proximity mixin in default `recall_lessons()` (re-promoted from v0.4.1 deprecation)
+- Documented graph-eval bench with reproducible methodology
+- A second `edge_kind` extension if the adopter needed it (e.g. `entity-via-shared-attribute`)
+
+### If pre-conditions not met by 2026-09
+- v0.7 skipped; advance to v0.7 = embeddings configurability (DIM-FLEX) or whatever bench-validated H-N is next on ICE
+- Graph features stay at v0.4.1 "advanced/optional" status indefinitely
+
+### Customer value (conditional)
+"Multi-hop graph reasoning works because a real production user proved it works."
+
+---
+
+## v1.0 — Stability commitment
+
+**Theme:** API freeze; the project is officially production-ready.
+
+### v1.0 gating criteria (all must be true)
+| Gate | Threshold |
+|---|---|
+| LongMemEval recall@10 | ≥ 0.97 with p_corr < 0.05 (v0.4 hypothesis confirmed real-DB) |
+| LoCoMo session recall@10 | ≥ 0.80 (held or improved vs v0.3.0 baseline 0.7994) |
+| No `temporal` category regression | recall@10 ≥ 0.70 |
+| Stable API | 2 consecutive releases without breaking SQL function signature changes |
+| External adopters | ≥ 3 with public case study; ≥ 1 production deployment of > 6 months |
+| Documentation | Every public SQL function has both a reference entry and a worked example |
+| Operational story | Rollback procedure validated end-to-end on actual customer data once |
+| Bench protocol | Snapshot mechanism (Phase A reuse) live; per-release bench takes < 10 min |
+
+### What v1.0 explicitly does NOT promise
+- MAGMA-paper full conformance (academic, separate audience)
+- Real-time / streaming memory ingest (batch is fine for wedge customer)
+- Cloud-hosted SaaS (not our shape)
+- Compatibility with non-Postgres backends
+
+---
+
+## Workflow integration
+
+Every release runs `docs/WORKFLOW.md §3` cycle. Each release ships with:
+- A new row in `benchmarks/METRICS_BY_VERSION.md` (all applicable tables)
+- A new `docs/img/scorecard_v<version>.svg`
+- A regenerated `docs/img/all_metrics_history.svg`
+- A regenerated `docs/img/progression_*.svg`
+- A `spec/reports/SIG_<bench>_v<version>_vs_v<prev>.json`
+- A `CHANGELOG.md` entry that uses customer-readable language (not implementation jargon)
+
+If a release misses the bench-gate, **the tag is not pushed.** No "ship and document
+the regression in CHANGELOG" pattern — that was v0.2.0 / v0.3.0 process and it ended in
+the strategic pivot of 2026-05-13.
+
+---
+
+## What is NOT on this roadmap (and why)
+
+| Idea | Status | Reason |
+|---|---|---|
+| DIM-FLEX (configurable vector dim) | 🔵 Backlog | Speculative; no adopter has asked; current `vector(1024)` works |
+| REST API wrapper | 🔵 Backlog | We're an extension, not a service |
+| MAGMA §4 Adaptive Traversal Policy | 🔵 Frozen | Spec-driven, no customer pull, no bench measures it |
+| MAGMA §5 Dual-stream Consolidation | 🔵 Frozen | Same |
+| Multi-tenant RBAC beyond RLS | 🔵 Backlog | No adopter request; RLS handles 95% of multi-tenant cases |
+| Graph features expansion (more edge types, ML-learned edges) | ⏸ Conditional on v0.7 | See v0.7 pre-conditions |
+| Compete on absolute scale (1B+ rows) | 🔵 Out of scope | Wedge customer is 10k–10M rows; pgvector handles it |
+| Promote `recall_hybrid()` based on simulation only | ❌ Will not happen | Real-DB confirmation gate is mandatory |
+
+---
+
+## Roadmap-change policy
+
+- **Minor scope trim** (remove item from a release): Project Lead unilateral; logged in CHANGELOG
+- **Scope addition** (add item to release in progress): only if accompanied by hypothesis declaration (§2.1 of WORKFLOW.md) AND ICE re-score
+- **Release date slip** ≤ 1 week: PI unilateral, posted in Monday status
+- **Release date slip** > 1 week: requires written postmortem (in `spec/reports/`)
+- **Cross-release pivot** (e.g. dropping a planned feature): WG vote 3/5 + customer-signal citation
+
+This document is reviewed and updated at every release tag. Changes tracked in git log.

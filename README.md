@@ -7,10 +7,12 @@
 [![PGXN](https://badge.pgxn.org/stable/pgmnemo.svg)](https://pgxn.org/dist/pgmnemo/)
 [![CI](https://github.com/pgmnemo/pgmnemo/actions/workflows/ci.yml/badge.svg)](https://github.com/pgmnemo/pgmnemo/actions/workflows/ci.yml)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-17-4169E1.svg)](https://www.postgresql.org/)
-[![LoCoMo recall@10](https://img.shields.io/badge/LoCoMo_recall%4010-0.795-success.svg)](benchmarks/locomo/results/v0.2.1_session_20260509/report.md)
-[![LongMemEval recall@10](https://img.shields.io/badge/LongMemEval_recall%4010-0.933-success.svg)](benchmarks/longmemeval/results/v0.2.1_pgmnemo_20260509/report.md)
+[![LoCoMo recall@10](https://img.shields.io/badge/LoCoMo_recall%4010-0.7994-success.svg)](docs/img/all_metrics_history.md)
+[![LongMemEval recall@10](https://img.shields.io/badge/LongMemEval_recall%4010-0.933-yellow.svg)](docs/img/all_metrics_history.md)
 
-> **v0.3.0 (2026-05-10):** MAGMA edge taxonomy — edge_kind ENUM, per-kind indexes, recall_lessons() BFS fix.
+> **v0.3.0 (2026-05-10):** schema-additive release (`edge_kind` ENUM + 2 migration bug fixes). Recall unchanged vs v0.2.1 — see [release scorecard](docs/img/scorecard_v0.3.0.md).
+>
+> **What's next:** v0.4.0 (target 2026-06-10) — promote `recall_hybrid()` to default, target LongMemEval recall@10 ≥ 0.97 to beat the BM25 baseline. Full plan: [ROADMAP.md](ROADMAP.md). Workflow rules: [docs/WORKFLOW.md](docs/WORKFLOW.md).
 
 ## Benchmarks (v0.3.0, retrieval-only)
 
