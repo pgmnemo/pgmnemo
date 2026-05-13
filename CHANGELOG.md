@@ -5,13 +5,19 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
-## [Unreleased] — v0.3.1 candidate (target: 2026-05-20)
+## [0.3.1] — 2026-05-13
 
 ### Theme
 
 Hygiene foundation — no recall-algorithm change. The release that closes the
 documentation/process gaps surfaced by the v0.2.x → v0.3.0 audit (see
 `docs/WORKFLOW.md §1` for the post-mortem).
+
+### Bench verdict
+
+Per `scripts/significance_test_extended.py` against the v0.3.0 baseline
+(`benchmarks/gate/v0.3.0.json`): **neutral on all 3 benches** — no SQL change,
+no recall delta possible. The release is hygiene-only.
 
 ### Added
 
