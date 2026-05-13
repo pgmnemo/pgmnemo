@@ -40,10 +40,13 @@ def parse_version(s):
     return tuple(int(x) if x else 0 for x in m.groups())
 
 
-def load_runs(pattern):
+def load_runs(pattern, exclude=None):
     files = sorted(glob.glob(pattern))
+    excludes = (exclude or "").split(",") if exclude else []
     runs = []
     for f in files:
+        if any(ex.strip() and ex.strip() in f for ex in excludes):
+            continue
         try:
             d = json.load(open(f))
         except Exception as e:
@@ -233,12 +236,13 @@ def render_md_table(runs, out_path, title):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--pattern", required=True, help='glob pattern for metrics.json files (e.g. "benchmarks/locomo/results/v*_session_*/metrics.json")')
+    ap.add_argument("--exclude", default="", help="comma-separated substrings to exclude from matched paths")
     ap.add_argument("--out-svg", required=True)
     ap.add_argument("--out-md", required=True)
     ap.add_argument("--title", default="pgmnemo benchmark progression")
     args = ap.parse_args()
 
-    runs = load_runs(args.pattern)
+    runs = load_runs(args.pattern, exclude=args.exclude)
     if not runs:
         print("No runs found matching pattern", file=sys.stderr)
         sys.exit(2)

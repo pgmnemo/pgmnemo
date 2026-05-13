@@ -78,7 +78,10 @@ Tufte-style sparkline table. Each row is one (benchmark × scope × metric).
 
 ## LongMemEval-S  (bge-m3, production methodology)
 
-| scope | metric | v0.2.1 | Δ first→latest |
-|---|---|---|---|
-| **OVERALL** | `recall@10` | 0.933 | — |
-| **OVERALL** | `mrr` | 0.847 | — |
+| scope | metric | v0.2.1 | v0.3.0 | Δ first→latest |
+|---|---|---|---|---|
+| **OVERALL** | `recall@1` | 0.486 | 0.476 | ▼0.94pp |
+| **OVERALL** | `recall@5` | 0.869 | 0.881 | ▲1.22pp |
+| **OVERALL** | `recall@10` | 0.933 | 0.933 | ─0.08pp |
+| **OVERALL** | `recall@20` | 0.977 | 0.985 | ▲0.80pp |
+| **OVERALL** | `mrr` | 0.855 | 0.847 | ▼0.82pp |

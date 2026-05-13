@@ -1,0 +1,266 @@
+{
+  "version": "v0.3.0",
+  "date": "2026-05-13",
+  "dry_run": false,
+  "mode": "real",
+  "retrieval_method": "pgmnemo.recall_lessons() vector + 5-component scoring",
+  "dataset": "xiaowu0162/longmemeval-cleaned (longmemeval_s_cleaned.json \u2014 full haystacks, ~47.7 sessions/item)",
+  "dataset_sha256": "d6f21ea9d60a0d56f34a05b609c79c88a451d2ae03597821ea3d5a9678c3a442",
+  "embedder": "BAAI/bge-m3 (1024d) \u2014 DEVIATION from Stella V5 paper canonical",
+  "deviation_rationale": "Stella V5 modeling_qwen.py incompat with transformers 5.8; bge-m3 same dim, MTEB-strong, matches production embedding setup",
+  "truncation_chars": 8000,
+  "truncation_note": "Sessions truncated to 8000 chars before embedding (bge-m3 ~8192 token ctx); baseline v0.2.1_pgmnemo used 500-char truncation",
+  "device": "mps",
+  "device_note": "CPU forced to avoid MPS OOM that required 500-char truncation in baseline",
+  "pgmnemo_version": "0.3.0",
+  "n_items": 500,
+  "n_evaluated": 500,
+  "qtype_distribution": {
+    "single-session-user": 70,
+    "multi-session": 133,
+    "single-session-preference": 30,
+    "temporal-reasoning": 133,
+    "knowledge-update": 78,
+    "single-session-assistant": 56
+  },
+  "by_qtype": {
+    "knowledge-update": {
+      "n": 78,
+      "recall@1": {
+        "n": 78,
+        "mean": 0.4167,
+        "ci95_lo": 0.375,
+        "ci95_hi": 0.4583
+      },
+      "recall@5": {
+        "n": 78,
+        "mean": 0.8782,
+        "ci95_lo": 0.8184,
+        "ci95_hi": 0.938
+      },
+      "recall@10": {
+        "n": 78,
+        "mean": 0.9359,
+        "ci95_lo": 0.8908,
+        "ci95_hi": 0.981
+      },
+      "recall@20": {
+        "n": 78,
+        "mean": 0.9808,
+        "ci95_lo": 0.9593,
+        "ci95_hi": 1
+      },
+      "mrr": {
+        "n": 78,
+        "mean": 0.8908,
+        "ci95_lo": 0.8339,
+        "ci95_hi": 0.9477
+      }
+    },
+    "multi-session": {
+      "n": 133,
+      "recall@1": {
+        "n": 133,
+        "mean": 0.3768,
+        "ci95_lo": 0.3488,
+        "ci95_hi": 0.4049
+      },
+      "recall@5": {
+        "n": 133,
+        "mean": 0.9261,
+        "ci95_lo": 0.8919,
+        "ci95_hi": 0.9603
+      },
+      "recall@10": {
+        "n": 133,
+        "mean": 0.9603,
+        "ci95_lo": 0.9341,
+        "ci95_hi": 0.9864
+      },
+      "recall@20": {
+        "n": 133,
+        "mean": 0.9906,
+        "ci95_lo": 0.9796,
+        "ci95_hi": 1
+      },
+      "mrr": {
+        "n": 133,
+        "mean": 0.937,
+        "ci95_lo": 0.9043,
+        "ci95_hi": 0.9696
+      }
+    },
+    "single-session-assistant": {
+      "n": 56,
+      "recall@1": {
+        "n": 56,
+        "mean": 0.9821,
+        "ci95_lo": 0.9471,
+        "ci95_hi": 1
+      },
+      "recall@5": {
+        "n": 56,
+        "mean": 1.0,
+        "ci95_lo": 1.0,
+        "ci95_hi": 1
+      },
+      "recall@10": {
+        "n": 56,
+        "mean": 1.0,
+        "ci95_lo": 1.0,
+        "ci95_hi": 1
+      },
+      "recall@20": {
+        "n": 56,
+        "mean": 1.0,
+        "ci95_lo": 1.0,
+        "ci95_hi": 1
+      },
+      "mrr": {
+        "n": 56,
+        "mean": 0.9911,
+        "ci95_lo": 0.9736,
+        "ci95_hi": 1
+      }
+    },
+    "single-session-preference": {
+      "n": 30,
+      "recall@1": {
+        "n": 30,
+        "mean": 0.5333,
+        "ci95_lo": 0.3518,
+        "ci95_hi": 0.7149
+      },
+      "recall@5": {
+        "n": 30,
+        "mean": 0.8333,
+        "ci95_lo": 0.6977,
+        "ci95_hi": 0.969
+      },
+      "recall@10": {
+        "n": 30,
+        "mean": 0.9,
+        "ci95_lo": 0.7908,
+        "ci95_hi": 1
+      },
+      "recall@20": {
+        "n": 30,
+        "mean": 1.0,
+        "ci95_lo": 1.0,
+        "ci95_hi": 1
+      },
+      "mrr": {
+        "n": 30,
+        "mean": 0.6467,
+        "ci95_lo": 0.5056,
+        "ci95_hi": 0.7878
+      }
+    },
+    "single-session-user": {
+      "n": 70,
+      "recall@1": {
+        "n": 70,
+        "mean": 0.4714,
+        "ci95_lo": 0.3536,
+        "ci95_hi": 0.5892
+      },
+      "recall@5": {
+        "n": 70,
+        "mean": 0.7714,
+        "ci95_lo": 0.6723,
+        "ci95_hi": 0.8705
+      },
+      "recall@10": {
+        "n": 70,
+        "mean": 0.8571,
+        "ci95_lo": 0.7746,
+        "ci95_hi": 0.9397
+      },
+      "recall@20": {
+        "n": 70,
+        "mean": 0.9857,
+        "ci95_lo": 0.9577,
+        "ci95_hi": 1
+      },
+      "mrr": {
+        "n": 70,
+        "mean": 0.6092,
+        "ci95_lo": 0.5168,
+        "ci95_hi": 0.7016
+      }
+    },
+    "temporal-reasoning": {
+      "n": 133,
+      "recall@1": {
+        "n": 133,
+        "mean": 0.3872,
+        "ci95_lo": 0.3392,
+        "ci95_hi": 0.4353
+      },
+      "recall@5": {
+        "n": 133,
+        "mean": 0.8574,
+        "ci95_lo": 0.81,
+        "ci95_hi": 0.9047
+      },
+      "recall@10": {
+        "n": 133,
+        "mean": 0.9248,
+        "ci95_lo": 0.8884,
+        "ci95_hi": 0.9612
+      },
+      "recall@20": {
+        "n": 133,
+        "mean": 0.9731,
+        "ci95_lo": 0.9517,
+        "ci95_hi": 0.9944
+      },
+      "mrr": {
+        "n": 133,
+        "mean": 0.8417,
+        "ci95_lo": 0.7917,
+        "ci95_hi": 0.8917
+      }
+    }
+  },
+  "overall": {
+    "recall@1": {
+      "n": 500,
+      "mean": 0.4762,
+      "ci95_lo": 0.4459,
+      "ci95_hi": 0.5066
+    },
+    "recall@5": {
+      "n": 500,
+      "mean": 0.8814,
+      "ci95_lo": 0.8567,
+      "ci95_hi": 0.9061
+    },
+    "recall@10": {
+      "n": 500,
+      "mean": 0.9334,
+      "ci95_lo": 0.914,
+      "ci95_hi": 0.9528
+    },
+    "recall@20": {
+      "n": 500,
+      "mean": 0.9853,
+      "ci95_lo": 0.9771,
+      "ci95_hi": 0.9935
+    },
+    "mrr": {
+      "n": 500,
+      "mean": 0.8472,
+      "ci95_lo": 0.821,
+      "ci95_hi": 0.8733
+    }
+  },
+  "wall_clock_sec": 3406.7,
+  "baseline_comparison": {
+    "baseline_run": "v0.2.1_pgmnemo_20260509",
+    "baseline_truncation_chars": 500,
+    "baseline_device": "mps",
+    "baseline_recall10": 0.9326,
+    "baseline_mrr": 0.8554
+  }
+}
