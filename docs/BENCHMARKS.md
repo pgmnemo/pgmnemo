@@ -30,6 +30,37 @@ Reports + raw_retrievals + reproduction commands:
 - LongMemEval-S, v0.2.1 baseline: [`benchmarks/longmemeval/results/v0.2.1_pgmnemo_20260509/`](../benchmarks/longmemeval/results/v0.2.1_pgmnemo_20260509/)
 - LongMemEval-S, BM25 reference: [`benchmarks/longmemeval/results/v0.2.1_20260509/`](../benchmarks/longmemeval/results/v0.2.1_20260509/)
 
+### Version progression (auto-generated)
+
+Cross-version line charts + markdown tables for every (dataset × mode):
+
+- LoCoMo session: [SVG](img/progression_locomo_session.svg) · [Markdown table](img/progression_locomo_session.md)
+- LoCoMo segment: [SVG](img/progression_locomo_segment.svg) · [Markdown table](img/progression_locomo_segment.md)
+- LongMemEval-S: regenerate after v0.3.0 LME run completes (see METRICS_BY_VERSION.md Table 3)
+
+Each panel shows the metric line with CI95 band and Δpp annotation between
+consecutive versions. Re-render via `python scripts/render_progression.py`
+(see `docs/BENCHMARK_PROTOCOL.md §7a`).
+
+### v0.3.0 monitor watchlist (per-category near-threshold cells)
+
+The `scripts/significance_test_extended.py` per-category z-test surfaced
+9 cells with |Δ|≥1pp vs v0.2.1 (not statistically significant; sample sizes
+range from n=92 for `temporal` to n=841 for `open_domain`). These cells are
+NOT regressions but are flagged for monitoring; if v0.3.1 shows the same
+direction the next release CYCLE should treat them as significance candidates:
+
+| Category | Direction | Cells affected |
+|---|---|---|
+| `temporal` | 📉 | recall@5 (-3.81pp), recall@10 (-1.49pp), MRR (-1.71pp) |
+| `open_domain` | 📈 | recall@5 (+1.66pp), recall@10 (+1.96pp), MRR (+1.99pp) |
+| `single_hop` | 📉 | recall@5 (-1.53pp) |
+| `multi_hop` | mixed | recall@5 (-1.19pp), MRR (+1.57pp) |
+
+The temporal drift correlates with the v0.3.0 `edge_kind` ENUM migration, which
+touched the BFS path in `recall_lessons()`. Hypothesis H-06 (temporal weight
+tuning, ROADMAP §H2) directly targets this category and may flip the sign.
+
 ---
 
 ## Methodology Conformance
