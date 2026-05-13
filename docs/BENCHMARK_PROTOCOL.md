@@ -138,14 +138,83 @@ works but Phase B re-embeds on top, wasting ~20 min/release.
 
 ## 7. Gate decision matrix
 
+**Tool:** `scripts/significance_test_extended.py` — runs z-test per category × metric
++ OVERALL with Holm-Bonferroni correction across all cells. Exit code drives the gate.
+
 ```
-significance_test verdict           gate    Action
-------------------------            ----    ------
-Improvement (p_corr < 0.05)         PASS    Tag, ship; CHANGELOG includes claim
-Neutral (no significant change)     PASS    Tag, ship; CHANGELOG omits performance claim
-Regression < 2pp recall@10          WARN    Tag, ship; document in CHANGELOG
-Regression ≥ 2pp recall@10, p<0.05  FAIL    Block release; root-cause before re-tag
+exit code   significance_test_extended verdict             gate    Action
+---------   ----------------------------------------       ----    ------
+0           neutral (all cells within noise)               PASS    Tag, ship; CHANGELOG omits perf claim
+1           significant improvement, no regression         PASS    Tag, ship; CHANGELOG includes claim
+2           significant regression in any cell             FAIL    Block release; root-cause before re-tag
+3           NEAR_THRESHOLD: |Δ| ≥ 1pp in any cell, ns      WARN    Tag allowed, but the cells MUST be listed
+                                                                   in the release notes as monitor-watchlist
 ```
+
+The per-category coverage is the crucial part: `OVERALL` can be neutral while
+`temporal` regresses by −3pp and `open_domain` improves by +2pp; these offset
+each other in the average but expose real algorithmic drift. The extended test
+catches this where the old overall-only test missed it.
+
+**Sample run (v0.2.1 → v0.3.0, LoCoMo session-level):**
+
+```
+SIGNIFICANT REGRESSIONS  : 0
+SIGNIFICANT IMPROVEMENTS : 0
+NEAR-THRESHOLD (|Δ| ≥ 1.0pp, ns): 9
+  📉 temporal/recall@5: -3.81pp     ← weakest category, watch
+  📉 temporal/recall@10: -1.49pp
+  📉 temporal/mrr: -1.71pp
+  📈 open_domain/recall@5: +1.66pp  ← offsets in OVERALL
+  📈 open_domain/recall@10: +1.96pp
+  📈 open_domain/mrr: +1.99pp
+  📉 single_hop/recall@5: -1.53pp
+  📉 multi_hop/recall@5: -1.19pp
+  📈 multi_hop/mrr: +1.57pp
+```
+
+This is exit 3 (WARN) — the v0.3.0 release notes must list these 9 cells in a
+"Monitor watchlist" section so reviewers know what to track next release.
+
+---
+
+## 7a. Visualisation of cross-version progression
+
+After every release, regenerate the SVG + markdown progression artefacts:
+
+```bash
+# LoCoMo session-level (paper-canonical headline)
+python scripts/render_progression.py \
+  --pattern "benchmarks/locomo/results/v*_session_*/metrics.json" \
+  --out-svg docs/img/progression_locomo_session.svg \
+  --out-md docs/img/progression_locomo_session.md \
+  --title "LoCoMo session-level — version progression"
+
+# LoCoMo segment-level (algorithmic gate)
+python scripts/render_progression.py \
+  --pattern "benchmarks/locomo/results/v*[0-9]_[0-9]*/metrics.json" \
+  --out-svg docs/img/progression_locomo_segment.svg \
+  --out-md docs/img/progression_locomo_segment.md \
+  --title "LoCoMo segment-level — version progression"
+
+# LongMemEval
+python scripts/render_progression.py \
+  --pattern "benchmarks/longmemeval/results/v*_pgmnemo*/metrics.json" \
+  --out-svg docs/img/progression_longmemeval.svg \
+  --out-md docs/img/progression_longmemeval.md \
+  --title "LongMemEval-S — version progression"
+```
+
+**What gets rendered (per `(dataset × mode)`):**
+- One SVG: 6 rows × 4 cols small-multiples — overall + 5 LoCoMo categories,
+  each with recall@5/10/25/MRR line chart, CI95 band, version labels on X axis,
+  Δpp annotation between consecutive versions when |Δ|≥1pp (green up / red down)
+- One markdown table: per-version × per-metric, with `▲/▼ Xpp` superscript
+  showing delta vs prev row; 📈/📉 emoji when |Δ|≥1pp
+
+These artefacts are committed under `docs/img/` and referenced from
+`docs/BENCHMARKS.md`. Pure-SVG, no chart-library dependency — GitHub renders
+them natively in the markdown reader.
 
 ---
 
