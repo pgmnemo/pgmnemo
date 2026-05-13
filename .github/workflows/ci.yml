@@ -68,3 +68,30 @@ jobs:
         run: |
           cat extension/regression.diffs || true
           exit 1
+
+  bench-gate-presence:
+    # PR-time check: if the PR modifies recall_lessons() or migration scripts but
+    # does not include a benchmarks/gate/v*.json update, warn the author.
+    # This is a soft check on CI (push to main); the hard gate runs on tag push
+    # (release.yml).
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+      - name: Detect recall-affecting changes
+        id: detect
+        run: |
+          CHANGED=$(git diff --name-only HEAD~1 HEAD 2>/dev/null || git diff --name-only origin/main HEAD)
+          echo "Changed files:"
+          echo "$CHANGED"
+          if echo "$CHANGED" | grep -qE 'extension/pgmnemo--.*\.sql$|extension/pgmnemo\.control$'; then
+            if echo "$CHANGED" | grep -qE '^benchmarks/gate/v.*\.json$'; then
+              echo "::notice::recall-affecting change + bench gate file updated → OK"
+            else
+              echo "::warning::This PR modifies extension SQL but does not update benchmarks/gate/. Per docs/WORKFLOW.md §2.2, every release-affecting change should include a bench gate snapshot. Hygiene-only PRs (docs/CHANGELOG) may ignore this."
+            fi
+          else
+            echo "::notice::No extension SQL changes — bench gate not required for this PR"
+          fi
