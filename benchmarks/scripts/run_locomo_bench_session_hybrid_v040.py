@@ -279,7 +279,7 @@ def main():
             f"""
             SELECT lesson_id, metadata->>'dia_id' AS dia_id, lesson_text
             FROM pgmnemo.recall_hybrid(%s::vector, %s, %s, 'bench_locomo_session', 1, 0.4, 0.4)
-            ORDER BY hybrid_score DESC
+            ORDER BY score DESC
             LIMIT %s
             """,
             (vec_to_pgvector(padded_q), q["question"], K_MAX, K_MAX),
