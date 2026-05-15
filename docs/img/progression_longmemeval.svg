@@ -5,22 +5,29 @@
 <line x1="60" y1="220" x2="700" y2="220" stroke="#eee" stroke-width="1"/>
 <text x="54" y="223" font-family="sans-serif" font-size="9" text-anchor="end" fill="#666">0.79</text>
 <line x1="60" y1="182.5" x2="700" y2="182.5" stroke="#eee" stroke-width="1"/>
-<text x="54" y="185.5" font-family="sans-serif" font-size="9" text-anchor="end" fill="#666">0.83</text>
+<text x="54" y="185.5" font-family="sans-serif" font-size="9" text-anchor="end" fill="#666">0.84</text>
 <line x1="60" y1="145.0" x2="700" y2="145.0" stroke="#eee" stroke-width="1"/>
-<text x="54" y="148.0" font-family="sans-serif" font-size="9" text-anchor="end" fill="#666">0.87</text>
+<text x="54" y="148.0" font-family="sans-serif" font-size="9" text-anchor="end" fill="#666">0.89</text>
 <line x1="60" y1="107.5" x2="700" y2="107.5" stroke="#eee" stroke-width="1"/>
-<text x="54" y="110.5" font-family="sans-serif" font-size="9" text-anchor="end" fill="#666">0.92</text>
+<text x="54" y="110.5" font-family="sans-serif" font-size="9" text-anchor="end" fill="#666">0.93</text>
 <line x1="60" y1="70.0" x2="700" y2="70.0" stroke="#eee" stroke-width="1"/>
-<text x="54" y="73.0" font-family="sans-serif" font-size="9" text-anchor="end" fill="#666">0.96</text>
-<polygon points="60.0,126.2 700.0,116.1 700.0,161.6 60.0,173.9" fill="#000000" fill-opacity="0.12" stroke="none"/>
-<polyline points="60.0,150.1 700.0,138.8" fill="none" stroke="#000000" stroke-width="2"/>
-<circle cx="60.0" cy="150.1" r="3" fill="#000000"/>
-<text x="60.0" y="142.1" font-family="sans-serif" font-size="9" text-anchor="middle" fill="#000000">0.869</text>
+<text x="54" y="73.0" font-family="sans-serif" font-size="9" text-anchor="end" fill="#666">0.98</text>
+<polygon points="60.0,138.1 273.3,110.2 486.7,129.2 700.0,127.5 700.0,166.9 486.7,169.0 273.3,141.9 60.0,179.8" fill="#000000" fill-opacity="0.12" stroke="none"/>
+<polyline points="60.0,158.9 273.3,126.1 486.7,149.1 700.0,147.3" fill="none" stroke="#000000" stroke-width="2"/>
+<circle cx="60.0" cy="158.9" r="3" fill="#000000"/>
+<text x="60.0" y="150.9" font-family="sans-serif" font-size="9" text-anchor="middle" fill="#000000">0.869</text>
 <text x="60.0" y="235.0" font-family="sans-serif" font-size="10" text-anchor="middle" fill="#444">0.2.1</text>
-<circle cx="700.0" cy="138.8" r="3" fill="#000000"/>
-<text x="700.0" y="130.8" font-family="sans-serif" font-size="9" text-anchor="middle" fill="#000000">0.881</text>
-<text x="700.0" y="235.0" font-family="sans-serif" font-size="10" text-anchor="middle" fill="#444">0.3.0</text>
-<text x="380.0" y="82" font-family="sans-serif" font-size="10" fill="#2ca02c" text-anchor="middle">+1.2pp</text>
+<circle cx="273.3" cy="126.1" r="3" fill="#000000"/>
+<text x="273.3" y="118.1" font-family="sans-serif" font-size="9" text-anchor="middle" fill="#000000">0.910</text>
+<text x="273.3" y="235.0" font-family="sans-serif" font-size="10" text-anchor="middle" fill="#444">v0.2.2-hybrid</text>
+<circle cx="486.7" cy="149.1" r="3" fill="#000000"/>
+<text x="486.7" y="141.1" font-family="sans-serif" font-size="9" text-anchor="middle" fill="#000000">0.881</text>
+<text x="486.7" y="235.0" font-family="sans-serif" font-size="10" text-anchor="middle" fill="#444">0.3.0</text>
+<circle cx="700.0" cy="147.3" r="3" fill="#000000"/>
+<text x="700.0" y="139.3" font-family="sans-serif" font-size="9" text-anchor="middle" fill="#000000">0.884</text>
+<text x="700.0" y="235.0" font-family="sans-serif" font-size="10" text-anchor="middle" fill="#444">0.3.1</text>
+<text x="166.7" y="82" font-family="sans-serif" font-size="10" fill="#2ca02c" text-anchor="middle">+4.1pp</text>
+<text x="380.0" y="82" font-family="sans-serif" font-size="10" fill="#d62728" text-anchor="middle">-2.9pp</text>
 <text x="780" y="60" font-family="sans-serif" font-size="12" font-weight="bold">OVERALL / recall@10</text>
 <line x1="780" y1="220" x2="1420" y2="220" stroke="#eee" stroke-width="1"/>
 <text x="774" y="223" font-family="sans-serif" font-size="9" text-anchor="end" fill="#666">0.86</text>
@@ -32,32 +39,48 @@
 <text x="774" y="110.5" font-family="sans-serif" font-size="9" text-anchor="end" fill="#666">0.97</text>
 <line x1="780" y1="70.0" x2="1420" y2="70.0" stroke="#eee" stroke-width="1"/>
 <text x="774" y="73.0" font-family="sans-serif" font-size="9" text-anchor="end" fill="#666">1.00</text>
-<polygon points="780.0,123.1 1420.0,121.9 1420.0,164.5 780.0,165.1" fill="#000000" fill-opacity="0.12" stroke="none"/>
-<polyline points="780.0,144.1 1420.0,143.2" fill="none" stroke="#000000" stroke-width="2"/>
+<polygon points="780.0,123.1 993.3,109.6 1206.7,121.9 1420.0,121.9 1420.0,164.5 1206.7,164.5 993.3,143.4 780.0,165.1" fill="#000000" fill-opacity="0.12" stroke="none"/>
+<polyline points="780.0,144.1 993.3,126.5 1206.7,143.2 1420.0,143.2" fill="none" stroke="#000000" stroke-width="2"/>
 <circle cx="780.0" cy="144.1" r="3" fill="#000000"/>
 <text x="780.0" y="136.1" font-family="sans-serif" font-size="9" text-anchor="middle" fill="#000000">0.933</text>
 <text x="780.0" y="235.0" font-family="sans-serif" font-size="10" text-anchor="middle" fill="#444">0.2.1</text>
+<circle cx="993.3" cy="126.5" r="3" fill="#000000"/>
+<text x="993.3" y="118.5" font-family="sans-serif" font-size="9" text-anchor="middle" fill="#000000">0.949</text>
+<text x="993.3" y="235.0" font-family="sans-serif" font-size="10" text-anchor="middle" fill="#444">v0.2.2-hybrid</text>
+<circle cx="1206.7" cy="143.2" r="3" fill="#000000"/>
+<text x="1206.7" y="135.2" font-family="sans-serif" font-size="9" text-anchor="middle" fill="#000000">0.933</text>
+<text x="1206.7" y="235.0" font-family="sans-serif" font-size="10" text-anchor="middle" fill="#444">0.3.0</text>
 <circle cx="1420.0" cy="143.2" r="3" fill="#000000"/>
 <text x="1420.0" y="135.2" font-family="sans-serif" font-size="9" text-anchor="middle" fill="#000000">0.933</text>
-<text x="1420.0" y="235.0" font-family="sans-serif" font-size="10" text-anchor="middle" fill="#444">0.3.0</text>
+<text x="1420.0" y="235.0" font-family="sans-serif" font-size="10" text-anchor="middle" fill="#444">0.3.1</text>
+<text x="886.7" y="82" font-family="sans-serif" font-size="10" fill="#2ca02c" text-anchor="middle">+1.6pp</text>
+<text x="1100.0" y="82" font-family="sans-serif" font-size="10" fill="#d62728" text-anchor="middle">-1.5pp</text>
 <text x="1500" y="145.0" font-family="sans-serif" font-size="11" fill="#999">no data: OVERALL/recall@25</text>
 <text x="2220" y="60" font-family="sans-serif" font-size="12" font-weight="bold">OVERALL / mrr</text>
 <line x1="2220" y1="220" x2="2860" y2="220" stroke="#eee" stroke-width="1"/>
 <text x="2214" y="223" font-family="sans-serif" font-size="9" text-anchor="end" fill="#666">0.77</text>
 <line x1="2220" y1="182.5" x2="2860" y2="182.5" stroke="#eee" stroke-width="1"/>
-<text x="2214" y="185.5" font-family="sans-serif" font-size="9" text-anchor="end" fill="#666">0.81</text>
+<text x="2214" y="185.5" font-family="sans-serif" font-size="9" text-anchor="end" fill="#666">0.82</text>
 <line x1="2220" y1="145.0" x2="2860" y2="145.0" stroke="#eee" stroke-width="1"/>
-<text x="2214" y="148.0" font-family="sans-serif" font-size="9" text-anchor="end" fill="#666">0.85</text>
+<text x="2214" y="148.0" font-family="sans-serif" font-size="9" text-anchor="end" fill="#666">0.87</text>
 <line x1="2220" y1="107.5" x2="2860" y2="107.5" stroke="#eee" stroke-width="1"/>
-<text x="2214" y="110.5" font-family="sans-serif" font-size="9" text-anchor="end" fill="#666">0.89</text>
+<text x="2214" y="110.5" font-family="sans-serif" font-size="9" text-anchor="end" fill="#666">0.93</text>
 <line x1="2220" y1="70.0" x2="2860" y2="70.0" stroke="#eee" stroke-width="1"/>
-<text x="2214" y="73.0" font-family="sans-serif" font-size="9" text-anchor="end" fill="#666">0.93</text>
-<polygon points="2220.0,116.7 2860.0,124.5 2860.0,173.3 2220.0,165.6" fill="#000000" fill-opacity="0.12" stroke="none"/>
-<polyline points="2220.0,141.2 2860.0,148.8" fill="none" stroke="#000000" stroke-width="2"/>
-<circle cx="2220.0" cy="141.2" r="3" fill="#000000"/>
-<text x="2220.0" y="133.2" font-family="sans-serif" font-size="9" text-anchor="middle" fill="#000000">0.855</text>
+<text x="2214" y="73.0" font-family="sans-serif" font-size="9" text-anchor="end" fill="#666">0.98</text>
+<polygon points="2220.0,139.3 2433.3,106.5 2646.7,145.4 2860.0,142.0 2860.0,179.7 2646.7,183.5 2433.3,137.7 2220.0,177.6" fill="#000000" fill-opacity="0.12" stroke="none"/>
+<polyline points="2220.0,158.5 2433.3,122.1 2646.7,164.4 2860.0,160.9" fill="none" stroke="#000000" stroke-width="2"/>
+<circle cx="2220.0" cy="158.5" r="3" fill="#000000"/>
+<text x="2220.0" y="150.5" font-family="sans-serif" font-size="9" text-anchor="middle" fill="#000000">0.855</text>
 <text x="2220.0" y="235.0" font-family="sans-serif" font-size="10" text-anchor="middle" fill="#444">0.2.1</text>
-<circle cx="2860.0" cy="148.8" r="3" fill="#000000"/>
-<text x="2860.0" y="140.8" font-family="sans-serif" font-size="9" text-anchor="middle" fill="#000000">0.847</text>
-<text x="2860.0" y="235.0" font-family="sans-serif" font-size="10" text-anchor="middle" fill="#444">0.3.0</text>
+<circle cx="2433.3" cy="122.1" r="3" fill="#000000"/>
+<text x="2433.3" y="114.1" font-family="sans-serif" font-size="9" text-anchor="middle" fill="#000000">0.905</text>
+<text x="2433.3" y="235.0" font-family="sans-serif" font-size="10" text-anchor="middle" fill="#444">v0.2.2-hybrid</text>
+<circle cx="2646.7" cy="164.4" r="3" fill="#000000"/>
+<text x="2646.7" y="156.4" font-family="sans-serif" font-size="9" text-anchor="middle" fill="#000000">0.847</text>
+<text x="2646.7" y="235.0" font-family="sans-serif" font-size="10" text-anchor="middle" fill="#444">0.3.0</text>
+<circle cx="2860.0" cy="160.9" r="3" fill="#000000"/>
+<text x="2860.0" y="152.9" font-family="sans-serif" font-size="9" text-anchor="middle" fill="#000000">0.852</text>
+<text x="2860.0" y="235.0" font-family="sans-serif" font-size="10" text-anchor="middle" fill="#444">0.3.1</text>
+<text x="2326.7" y="82" font-family="sans-serif" font-size="10" fill="#2ca02c" text-anchor="middle">+5.0pp</text>
+<text x="2540.0" y="82" font-family="sans-serif" font-size="10" fill="#d62728" text-anchor="middle">-5.8pp</text>
 </svg>

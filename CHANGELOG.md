@@ -5,6 +5,104 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [0.4.0] — 2026-05-15
+
+### Theme
+
+Hybrid retrieval promoted to default — significant lift on conversational
+memory workloads (LoCoMo), neutral on dense multi-doc retrieval (LongMemEval).
+
+### Bench verdict
+
+Real-DB benchmarks via the new router (`benchmarks/gate/v0.4.0.json`) vs
+v0.3.0 baseline:
+
+| Bench / scope | Metric | v0.3.0 | v0.4.0 | Δpp | p_corr | Verdict |
+|---|---|---|---|---|---|---|
+| LoCoMo session OVERALL | recall@5 | 0.6623 | 0.7230 | **+6.07** | 0.0010 | 🟢 IMPROVED |
+| LoCoMo session OVERALL | recall@10 | 0.7951 | 0.8409 | **+4.15** | 0.0156 | 🟢 IMPROVED |
+| LoCoMo session OVERALL | MRR | 0.5569 | 0.6365 | **+7.96** | <0.0001 | 🟢 IMPROVED |
+| LoCoMo session open_domain | recall@5 | 0.7176 | 0.7907 | **+7.31** | 0.0148 | 🟢 IMPROVED |
+| LoCoMo session open_domain | MRR | 0.5688 | 0.6667 | **+9.79** | 0.0009 | 🟢 IMPROVED |
+| LongMemEval OVERALL | recall@10 | 0.9334 | 0.9334 | +0.00 | 1.0000 | neutral |
+| LongMemEval OVERALL | MRR | 0.8472 | 0.8521 | +0.49 | 1.0000 | neutral |
+| LoCoMo segment | (all) | (unchanged) | (unchanged) | 0.00 | 1.0000 | neutral |
+
+5 significant improvements, 0 regressions across 24 LoCoMo session cells.
+LongMemEval and LoCoMo segment hold steady — hybrid doesn't trigger when
+query_text is NULL or when dense retrieval is already saturated (bge-m3 on LME).
+
+Honest scope ([COMPETITIVE_REALITY.md](docs/COMPETITIVE_REALITY.md) updated):
+
+- ✅ Significant lift on conversational dialog retrieval (LoCoMo paper-canonical)
+- ✅ No regression on any benchmark
+- ❌ Does NOT close the BM25 gap on LongMemEval (BM25=0.982, pgmnemo=0.9334)
+- ⚠️ v0.2.2 simulation predicted +12.7pp lift; real-DB measured +4.15pp on
+   LoCoMo and +0.00pp on LongMemEval — sim overstated by 3-100x. New
+   `docs/WORKFLOW.md §2.2` "PROVE BEFORE ADD" rule caught this before promotion.
+
+### Added
+
+- **Hybrid retrieval as default for `recall_lessons()`** — when `query_text`
+  is non-empty AND `query_embedding` is non-NULL AND `pgmnemo.disable_hybrid`
+  GUC is FALSE/unset, internally routes to `recall_hybrid()` with default
+  weights (vec_weight=0.4, bm25_weight=0.4, rrf_k=60). Signature unchanged;
+  output shape unchanged (12 columns); diagnostic `vec_score`/`bm25_score`/
+  `rrf_score` columns exposed only via direct `recall_hybrid()` call.
+- **`pgmnemo.disable_hybrid` GUC** — `SET pgmnemo.disable_hybrid = 'true'`
+  restores strict v0.3.0 vector-only behaviour. Default FALSE.
+- **`lesson_tsv` column + GIN index + auto-populating trigger** — moved from
+  v0.2.2 EXPERIMENTAL opt-in to default extension install.
+- **`recall_hybrid()` function** — moved from v0.2.2 opt-in to default install.
+  Signature unchanged from v0.2.2.
+- **`scripts/smoke_recall_hybrid.py`** — CI signature-stability smoke test
+  (catches output-column rename bugs in ~10s vs ~5min bench script failure).
+- **`benchmarks/scripts/bench_embed_cache.py`** — embedding cache (deterministic
+  for `(text, model, max_seq)`). Reduces LongMemEval bench from ~52 min cold
+  to ~3 min cached, LoCoMo from ~10 min to 14 seconds. Unlocks practical
+  weight-tuning grid searches.
+
+### Changed
+
+- `docs/SQL_REFERENCE.md §2.5` — fixed incorrect documentation of
+  `recall_hybrid()` output schema (was `hybrid_score`, actually `score`).
+  Added `vec_score`, `bm25_score`, `rrf_k` parameter, and explicit "sort by
+  score" guidance.
+- `docs/COMPETITIVE_REALITY.md §1.2` updated — BM25 gap on LongMemEval
+  remains (0.982 vs 0.9334); v0.4.0 does NOT close it. Future work via
+  Stella V5 embedder (H-02) or workload-aware routing (H-future).
+- `docs/COMPETITIVE_REALITY.md §5` updated — graph-feature deprecation
+  deferred to v0.4.1 (separate cycle).
+
+### Upgrade
+
+```sql
+ALTER EXTENSION pgmnemo UPDATE TO '0.4.0';
+```
+
+Idempotent. Adopters who need strict v0.3.0 retrieval behaviour can opt out:
+
+```sql
+SET pgmnemo.disable_hybrid = 'true';
+-- or persist:
+ALTER SYSTEM SET pgmnemo.disable_hybrid = 'true';
+SELECT pg_reload_conf();
+```
+
+### CI / release-gate verdict
+
+`scripts/significance_test_extended.py` exit 3 (NEAR_THRESHOLD) due to
+14 near-threshold cells on LoCoMo session (all positive direction). Release
+notes include monitor watchlist for v0.4.1 follow-up:
+
+- `multi_hop/MRR`: +9.55pp (p_corr=0.2949, n=321, may reach significance with v0.4.1 data)
+- `multi_hop/recall@5`: +7.79pp (p_corr=0.6874)
+- `adversarial/MRR`: +7.14pp (p_corr=0.7715)
+- `single_hop/recall@10`: +3.62pp (positive but small n)
+- `temporal/*`: small positive trends across 3 metrics (historically weakest category, watch)
+
+---
+
 ## [0.3.1] — 2026-05-13
 
 ### Theme

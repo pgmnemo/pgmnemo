@@ -1,9 +1,9 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="560" height="1540" viewBox="0 0 560 1540" font-family="-apple-system, system-ui, sans-serif">
+<svg xmlns="http://www.w3.org/2000/svg" width="625" height="1540" viewBox="0 0 625 1540" font-family="-apple-system, system-ui, sans-serif">
 <rect width="100%" height="100%" fill="white"/>
 <text x="20" y="30" fill="#1f2937" font-size="20" font-weight="700">pgmnemo — all metrics × all versions</text>
 <text x="20" y="52" fill="#6b7280" font-size="12">Each row is one (benchmark × scope × metric). Columns: every version that has a real-DB run, plus a sparkline showing the full trajectory and the latest-vs-first delta in pp.</text>
 <text x="20" y="70" fill="#6b7280" font-size="11">Sparkline encoding: red dot = lowest historical value (if not latest), green dot = highest historical value (if not latest), filled dot at end = latest. Tufte word-sized graphic.</text>
-<rect x="20" y="120" width="520" height="28" fill="#f9fafb"/>
+<rect x="20" y="120" width="585" height="28" fill="#f9fafb"/>
 <text x="30" y="138" fill="#1f2937" font-size="13" font-weight="600">LoCoMo session-level  (DRAGON, paper-canonical headline)</text>
 <text x="25" y="163" fill="#6b7280" font-size="10" font-weight="600">SCOPE</text>
 <text x="155" y="163" fill="#6b7280" font-size="10" font-weight="600">METRIC</text>
@@ -11,245 +11,280 @@
 <text x="262.5" y="173" fill="#6b7280" font-size="9" text-anchor="middle">05-09</text>
 <text x="327.5" y="163" fill="#6b7280" font-size="10" font-weight="600" text-anchor="middle">v0.3.0</text>
 <text x="327.5" y="173" fill="#6b7280" font-size="9" text-anchor="middle">05-13</text>
-<text x="395.0" y="163" fill="#6b7280" font-size="10" font-weight="600" text-anchor="middle">trajectory</text>
-<text x="435" y="163" fill="#6b7280" font-size="10" font-weight="600">Δpp first→latest</text>
-<rect x="20" y="170" width="520" height="18" fill="#fafafa"/>
+<text x="392.5" y="163" fill="#6b7280" font-size="10" font-weight="600" text-anchor="middle">v0.4.0</text>
+<text x="392.5" y="173" fill="#6b7280" font-size="9" text-anchor="middle">05-15</text>
+<text x="460.0" y="163" fill="#6b7280" font-size="10" font-weight="600" text-anchor="middle">trajectory</text>
+<text x="500" y="163" fill="#6b7280" font-size="10" font-weight="600">Δpp first→latest</text>
+<rect x="20" y="170" width="585" height="18" fill="#fafafa"/>
 <text x="25" y="183" fill="#1f2937" font-size="11" font-weight="700">OVERALL</text>
 <text x="155" y="183" fill="#1f2937" font-size="11" font-family="monospace">recall@5</text>
 <text x="262.5" y="183" fill="#1f2937" font-size="10" text-anchor="middle" font-family="monospace">0.662</text>
 <text x="327.5" y="183" fill="#1f2937" font-size="10" text-anchor="middle" font-family="monospace">0.664</text>
-<polyline points="365.0,186.0 425.0,172.0" fill="none" stroke="#1f2937" stroke-width="1.2"/>
-<circle cx="425.0" cy="172.0" r="1.8" fill="#1f2937"/>
-<circle cx="365.0" cy="186.0" r="1.5" fill="#dc2626"/>
-<text x="440" y="183" fill="#9ca3af" font-size="11" font-family="monospace">▲ 0.17pp</text>
+<text x="392.5" y="183" fill="#1f2937" font-size="10" text-anchor="middle" font-family="monospace">0.725</text>
+<polyline points="430.0,186.0 460.0,185.6 490.0,172.0" fill="none" stroke="#1f2937" stroke-width="1.2"/>
+<circle cx="490.0" cy="172.0" r="1.8" fill="#1f2937"/>
+<circle cx="430.0" cy="186.0" r="1.5" fill="#dc2626"/>
+<text x="505" y="183" fill="#16a34a" font-size="11" font-family="monospace">▲ 6.24pp</text>
 <text x="155" y="201" fill="#1f2937" font-size="11" font-family="monospace">recall@10</text>
 <text x="262.5" y="201" fill="#1f2937" font-size="10" text-anchor="middle" font-family="monospace">0.795</text>
 <text x="327.5" y="201" fill="#1f2937" font-size="10" text-anchor="middle" font-family="monospace">0.799</text>
-<polyline points="365.0,204.0 425.0,190.0" fill="none" stroke="#1f2937" stroke-width="1.2"/>
-<circle cx="425.0" cy="190.0" r="1.8" fill="#1f2937"/>
-<circle cx="365.0" cy="204.0" r="1.5" fill="#dc2626"/>
-<text x="440" y="201" fill="#9ca3af" font-size="11" font-family="monospace">▲ 0.43pp</text>
-<rect x="20" y="206" width="520" height="18" fill="#fafafa"/>
+<text x="392.5" y="201" fill="#1f2937" font-size="10" text-anchor="middle" font-family="monospace">0.841</text>
+<polyline points="430.0,204.0 460.0,202.7 490.0,190.0" fill="none" stroke="#1f2937" stroke-width="1.2"/>
+<circle cx="490.0" cy="190.0" r="1.8" fill="#1f2937"/>
+<circle cx="430.0" cy="204.0" r="1.5" fill="#dc2626"/>
+<text x="505" y="201" fill="#16a34a" font-size="11" font-family="monospace">▲ 4.58pp</text>
+<rect x="20" y="206" width="585" height="18" fill="#fafafa"/>
 <text x="155" y="219" fill="#1f2937" font-size="11" font-family="monospace">recall@25</text>
 <text x="262.5" y="219" fill="#1f2937" font-size="10" text-anchor="middle" font-family="monospace">0.962</text>
 <text x="327.5" y="219" fill="#1f2937" font-size="10" text-anchor="middle" font-family="monospace">0.964</text>
-<polyline points="365.0,222.0 425.0,208.0" fill="none" stroke="#1f2937" stroke-width="1.2"/>
-<circle cx="425.0" cy="208.0" r="1.8" fill="#1f2937"/>
-<circle cx="365.0" cy="222.0" r="1.5" fill="#dc2626"/>
-<text x="440" y="219" fill="#9ca3af" font-size="11" font-family="monospace">▲ 0.18pp</text>
+<text x="392.5" y="219" fill="#1f2937" font-size="10" text-anchor="middle" font-family="monospace">0.972</text>
+<polyline points="430.0,222.0 460.0,219.5 490.0,208.0" fill="none" stroke="#1f2937" stroke-width="1.2"/>
+<circle cx="490.0" cy="208.0" r="1.8" fill="#1f2937"/>
+<circle cx="430.0" cy="222.0" r="1.5" fill="#dc2626"/>
+<text x="505" y="219" fill="#16a34a" font-size="11" font-family="monospace">▲ 1.01pp</text>
 <text x="155" y="237" fill="#1f2937" font-size="11" font-family="monospace">recall@50</text>
 <text x="262.5" y="237" fill="#1f2937" font-size="10" text-anchor="middle" font-family="monospace">0.999</text>
 <text x="327.5" y="237" fill="#1f2937" font-size="10" text-anchor="middle" font-family="monospace">1.000</text>
-<polyline points="365.0,240.0 425.0,226.0" fill="none" stroke="#1f2937" stroke-width="1.2"/>
-<circle cx="425.0" cy="226.0" r="1.8" fill="#1f2937"/>
-<circle cx="365.0" cy="240.0" r="1.5" fill="#dc2626"/>
-<text x="440" y="237" fill="#9ca3af" font-size="11" font-family="monospace">─ 0.03pp</text>
-<rect x="20" y="242" width="520" height="18" fill="#fafafa"/>
+<text x="392.5" y="237" fill="#1f2937" font-size="10" text-anchor="middle" font-family="monospace">1.000</text>
+<polyline points="430.0,240.0 460.0,229.5 490.0,226.0" fill="none" stroke="#1f2937" stroke-width="1.2"/>
+<circle cx="490.0" cy="226.0" r="1.8" fill="#1f2937"/>
+<circle cx="430.0" cy="240.0" r="1.5" fill="#dc2626"/>
+<text x="505" y="237" fill="#9ca3af" font-size="11" font-family="monospace">─ 0.04pp</text>
+<rect x="20" y="242" width="585" height="18" fill="#fafafa"/>
 <text x="155" y="255" fill="#1f2937" font-size="11" font-family="monospace">mrr</text>
 <text x="262.5" y="255" fill="#1f2937" font-size="10" text-anchor="middle" font-family="monospace">0.548</text>
 <text x="327.5" y="255" fill="#1f2937" font-size="10" text-anchor="middle" font-family="monospace">0.557</text>
-<polyline points="365.0,258.0 425.0,244.0" fill="none" stroke="#1f2937" stroke-width="1.2"/>
-<circle cx="425.0" cy="244.0" r="1.8" fill="#1f2937"/>
-<circle cx="365.0" cy="258.0" r="1.5" fill="#dc2626"/>
-<text x="440" y="255" fill="#16a34a" font-size="11" font-family="monospace">▲ 0.89pp</text>
+<text x="392.5" y="255" fill="#1f2937" font-size="10" text-anchor="middle" font-family="monospace">0.636</text>
+<polyline points="430.0,258.0 460.0,256.6 490.0,244.0" fill="none" stroke="#1f2937" stroke-width="1.2"/>
+<circle cx="490.0" cy="244.0" r="1.8" fill="#1f2937"/>
+<circle cx="430.0" cy="258.0" r="1.5" fill="#dc2626"/>
+<text x="505" y="255" fill="#16a34a" font-size="11" font-family="monospace">▲ 8.85pp</text>
 <text x="25" y="273" fill="#374151" font-size="11" font-weight="500">single_hop</text>
 <text x="155" y="273" fill="#1f2937" font-size="11" font-family="monospace">recall@5</text>
 <text x="262.5" y="273" fill="#1f2937" font-size="10" text-anchor="middle" font-family="monospace">0.503</text>
 <text x="327.5" y="273" fill="#1f2937" font-size="10" text-anchor="middle" font-family="monospace">0.488</text>
-<polyline points="365.0,262.0 425.0,276.0" fill="none" stroke="#1f2937" stroke-width="1.2"/>
-<circle cx="425.0" cy="276.0" r="1.8" fill="#1f2937"/>
-<circle cx="365.0" cy="262.0" r="1.5" fill="#16a34a"/>
-<text x="440" y="273" fill="#dc2626" font-size="11" font-family="monospace">▼ 1.53pp</text>
-<rect x="20" y="278" width="520" height="18" fill="#fafafa"/>
+<text x="392.5" y="273" fill="#1f2937" font-size="10" text-anchor="middle" font-family="monospace">0.516</text>
+<polyline points="430.0,268.2 460.0,276.0 490.0,262.0" fill="none" stroke="#1f2937" stroke-width="1.2"/>
+<circle cx="490.0" cy="262.0" r="1.8" fill="#1f2937"/>
+<circle cx="460.0" cy="276.0" r="1.5" fill="#dc2626"/>
+<text x="505" y="273" fill="#16a34a" font-size="11" font-family="monospace">▲ 1.23pp</text>
+<rect x="20" y="278" width="585" height="18" fill="#fafafa"/>
 <text x="155" y="291" fill="#1f2937" font-size="11" font-family="monospace">recall@10</text>
 <text x="262.5" y="291" fill="#1f2937" font-size="10" text-anchor="middle" font-family="monospace">0.681</text>
 <text x="327.5" y="291" fill="#1f2937" font-size="10" text-anchor="middle" font-family="monospace">0.673</text>
-<polyline points="365.0,280.0 425.0,294.0" fill="none" stroke="#1f2937" stroke-width="1.2"/>
-<circle cx="425.0" cy="294.0" r="1.8" fill="#1f2937"/>
-<circle cx="365.0" cy="280.0" r="1.5" fill="#16a34a"/>
-<text x="440" y="291" fill="#dc2626" font-size="11" font-family="monospace">▼ 0.79pp</text>
+<text x="392.5" y="291" fill="#1f2937" font-size="10" text-anchor="middle" font-family="monospace">0.709</text>
+<polyline points="430.0,290.9 460.0,294.0 490.0,280.0" fill="none" stroke="#1f2937" stroke-width="1.2"/>
+<circle cx="490.0" cy="280.0" r="1.8" fill="#1f2937"/>
+<circle cx="460.0" cy="294.0" r="1.5" fill="#dc2626"/>
+<text x="505" y="291" fill="#16a34a" font-size="11" font-family="monospace">▲ 2.83pp</text>
 <text x="155" y="309" fill="#1f2937" font-size="11" font-family="monospace">recall@25</text>
 <text x="262.5" y="309" fill="#1f2937" font-size="10" text-anchor="middle" font-family="monospace">0.934</text>
 <text x="327.5" y="309" fill="#1f2937" font-size="10" text-anchor="middle" font-family="monospace">0.934</text>
-<polyline points="365.0,298.0 425.0,312.0" fill="none" stroke="#1f2937" stroke-width="1.2"/>
-<circle cx="425.0" cy="312.0" r="1.8" fill="#1f2937"/>
-<circle cx="365.0" cy="298.0" r="1.5" fill="#16a34a"/>
-<text x="440" y="309" fill="#9ca3af" font-size="11" font-family="monospace">▼ 0.09pp</text>
-<rect x="20" y="314" width="520" height="18" fill="#fafafa"/>
+<text x="392.5" y="309" fill="#1f2937" font-size="10" text-anchor="middle" font-family="monospace">0.950</text>
+<polyline points="430.0,311.2 460.0,312.0 490.0,298.0" fill="none" stroke="#1f2937" stroke-width="1.2"/>
+<circle cx="490.0" cy="298.0" r="1.8" fill="#1f2937"/>
+<circle cx="460.0" cy="312.0" r="1.5" fill="#dc2626"/>
+<text x="505" y="309" fill="#16a34a" font-size="11" font-family="monospace">▲ 1.56pp</text>
+<rect x="20" y="314" width="585" height="18" fill="#fafafa"/>
 <text x="155" y="327" fill="#1f2937" font-size="11" font-family="monospace">recall@50</text>
 <text x="262.5" y="327" fill="#1f2937" font-size="10" text-anchor="middle" font-family="monospace">0.997</text>
 <text x="327.5" y="327" fill="#1f2937" font-size="10" text-anchor="middle" font-family="monospace">0.999</text>
-<polyline points="365.0,330.0 425.0,316.0" fill="none" stroke="#1f2937" stroke-width="1.2"/>
-<circle cx="425.0" cy="316.0" r="1.8" fill="#1f2937"/>
-<circle cx="365.0" cy="330.0" r="1.5" fill="#dc2626"/>
-<text x="440" y="327" fill="#9ca3af" font-size="11" font-family="monospace">▲ 0.18pp</text>
+<text x="392.5" y="327" fill="#1f2937" font-size="10" text-anchor="middle" font-family="monospace">1.000</text>
+<polyline points="430.0,330.0 460.0,319.9 490.0,316.0" fill="none" stroke="#1f2937" stroke-width="1.2"/>
+<circle cx="490.0" cy="316.0" r="1.8" fill="#1f2937"/>
+<circle cx="430.0" cy="330.0" r="1.5" fill="#dc2626"/>
+<text x="505" y="327" fill="#9ca3af" font-size="11" font-family="monospace">▲ 0.25pp</text>
 <text x="155" y="345" fill="#1f2937" font-size="11" font-family="monospace">mrr</text>
 <text x="262.5" y="345" fill="#1f2937" font-size="10" text-anchor="middle" font-family="monospace">0.595</text>
 <text x="327.5" y="345" fill="#1f2937" font-size="10" text-anchor="middle" font-family="monospace">0.586</text>
-<polyline points="365.0,334.0 425.0,348.0" fill="none" stroke="#1f2937" stroke-width="1.2"/>
-<circle cx="425.0" cy="348.0" r="1.8" fill="#1f2937"/>
-<circle cx="365.0" cy="334.0" r="1.5" fill="#16a34a"/>
-<text x="440" y="345" fill="#dc2626" font-size="11" font-family="monospace">▼ 0.94pp</text>
-<rect x="20" y="350" width="520" height="18" fill="#fafafa"/>
+<text x="392.5" y="345" fill="#1f2937" font-size="10" text-anchor="middle" font-family="monospace">0.623</text>
+<polyline points="430.0,344.4 460.0,348.0 490.0,334.0" fill="none" stroke="#1f2937" stroke-width="1.2"/>
+<circle cx="490.0" cy="334.0" r="1.8" fill="#1f2937"/>
+<circle cx="460.0" cy="348.0" r="1.5" fill="#dc2626"/>
+<text x="505" y="345" fill="#16a34a" font-size="11" font-family="monospace">▲ 2.76pp</text>
+<rect x="20" y="350" width="585" height="18" fill="#fafafa"/>
 <text x="25" y="363" fill="#374151" font-size="11" font-weight="500">multi_hop</text>
 <text x="155" y="363" fill="#1f2937" font-size="11" font-family="monospace">recall@5</text>
 <text x="262.5" y="363" fill="#1f2937" font-size="10" text-anchor="middle" font-family="monospace">0.682</text>
 <text x="327.5" y="363" fill="#1f2937" font-size="10" text-anchor="middle" font-family="monospace">0.670</text>
-<polyline points="365.0,352.0 425.0,366.0" fill="none" stroke="#1f2937" stroke-width="1.2"/>
-<circle cx="425.0" cy="366.0" r="1.8" fill="#1f2937"/>
-<circle cx="365.0" cy="352.0" r="1.5" fill="#16a34a"/>
-<text x="440" y="363" fill="#dc2626" font-size="11" font-family="monospace">▼ 1.19pp</text>
+<text x="392.5" y="363" fill="#1f2937" font-size="10" text-anchor="middle" font-family="monospace">0.748</text>
+<polyline points="430.0,363.9 460.0,366.0 490.0,352.0" fill="none" stroke="#1f2937" stroke-width="1.2"/>
+<circle cx="490.0" cy="352.0" r="1.8" fill="#1f2937"/>
+<circle cx="460.0" cy="366.0" r="1.5" fill="#dc2626"/>
+<text x="505" y="363" fill="#16a34a" font-size="11" font-family="monospace">▲ 6.60pp</text>
 <text x="155" y="381" fill="#1f2937" font-size="11" font-family="monospace">recall@10</text>
 <text x="262.5" y="381" fill="#1f2937" font-size="10" text-anchor="middle" font-family="monospace">0.834</text>
 <text x="327.5" y="381" fill="#1f2937" font-size="10" text-anchor="middle" font-family="monospace">0.827</text>
-<polyline points="365.0,370.0 425.0,384.0" fill="none" stroke="#1f2937" stroke-width="1.2"/>
-<circle cx="425.0" cy="384.0" r="1.8" fill="#1f2937"/>
-<circle cx="365.0" cy="370.0" r="1.5" fill="#16a34a"/>
-<text x="440" y="381" fill="#dc2626" font-size="11" font-family="monospace">▼ 0.78pp</text>
-<rect x="20" y="386" width="520" height="18" fill="#fafafa"/>
+<text x="392.5" y="381" fill="#1f2937" font-size="10" text-anchor="middle" font-family="monospace">0.864</text>
+<polyline points="430.0,381.1 460.0,384.0 490.0,370.0" fill="none" stroke="#1f2937" stroke-width="1.2"/>
+<circle cx="490.0" cy="370.0" r="1.8" fill="#1f2937"/>
+<circle cx="460.0" cy="384.0" r="1.5" fill="#dc2626"/>
+<text x="505" y="381" fill="#16a34a" font-size="11" font-family="monospace">▲ 2.96pp</text>
+<rect x="20" y="386" width="585" height="18" fill="#fafafa"/>
 <text x="155" y="399" fill="#1f2937" font-size="11" font-family="monospace">recall@25</text>
 <text x="262.5" y="399" fill="#1f2937" font-size="10" text-anchor="middle" font-family="monospace">0.984</text>
 <text x="327.5" y="399" fill="#1f2937" font-size="10" text-anchor="middle" font-family="monospace">0.989</text>
-<polyline points="365.0,402.0 425.0,388.0" fill="none" stroke="#1f2937" stroke-width="1.2"/>
-<circle cx="425.0" cy="388.0" r="1.8" fill="#1f2937"/>
-<circle cx="365.0" cy="402.0" r="1.5" fill="#dc2626"/>
-<text x="440" y="399" fill="#9ca3af" font-size="11" font-family="monospace">▲ 0.47pp</text>
+<text x="392.5" y="399" fill="#1f2937" font-size="10" text-anchor="middle" font-family="monospace">0.989</text>
+<polyline points="430.0,402.0 460.0,388.0 490.0,388.0" fill="none" stroke="#1f2937" stroke-width="1.2"/>
+<circle cx="490.0" cy="388.0" r="1.8" fill="#1f2937"/>
+<circle cx="430.0" cy="402.0" r="1.5" fill="#dc2626"/>
+<circle cx="460.0" cy="388.0" r="1.5" fill="#16a34a"/>
+<text x="505" y="399" fill="#9ca3af" font-size="11" font-family="monospace">▲ 0.47pp</text>
 <text x="155" y="417" fill="#1f2937" font-size="11" font-family="monospace">recall@50</text>
 <text x="262.5" y="417" fill="#1f2937" font-size="10" text-anchor="middle" font-family="monospace">1.000</text>
 <text x="327.5" y="417" fill="#1f2937" font-size="10" text-anchor="middle" font-family="monospace">1.000</text>
-<polyline points="365.0,420.0 425.0,420.0" fill="none" stroke="#1f2937" stroke-width="1.2"/>
-<circle cx="425.0" cy="420.0" r="1.8" fill="#1f2937"/>
-<circle cx="365.0" cy="420.0" r="1.5" fill="#dc2626"/>
-<circle cx="365.0" cy="420.0" r="1.5" fill="#16a34a"/>
-<text x="440" y="417" fill="#9ca3af" font-size="11" font-family="monospace">─ 0.00pp</text>
-<rect x="20" y="422" width="520" height="18" fill="#fafafa"/>
+<text x="392.5" y="417" fill="#1f2937" font-size="10" text-anchor="middle" font-family="monospace">1.000</text>
+<polyline points="430.0,420.0 460.0,420.0 490.0,420.0" fill="none" stroke="#1f2937" stroke-width="1.2"/>
+<circle cx="490.0" cy="420.0" r="1.8" fill="#1f2937"/>
+<circle cx="430.0" cy="420.0" r="1.5" fill="#dc2626"/>
+<circle cx="430.0" cy="420.0" r="1.5" fill="#16a34a"/>
+<text x="505" y="417" fill="#9ca3af" font-size="11" font-family="monospace">─ 0.00pp</text>
+<rect x="20" y="422" width="585" height="18" fill="#fafafa"/>
 <text x="155" y="435" fill="#1f2937" font-size="11" font-family="monospace">mrr</text>
 <text x="262.5" y="435" fill="#1f2937" font-size="10" text-anchor="middle" font-family="monospace">0.543</text>
 <text x="327.5" y="435" fill="#1f2937" font-size="10" text-anchor="middle" font-family="monospace">0.559</text>
-<polyline points="365.0,438.0 425.0,424.0" fill="none" stroke="#1f2937" stroke-width="1.2"/>
-<circle cx="425.0" cy="424.0" r="1.8" fill="#1f2937"/>
-<circle cx="365.0" cy="438.0" r="1.5" fill="#dc2626"/>
-<text x="440" y="435" fill="#16a34a" font-size="11" font-family="monospace">▲ 1.57pp</text>
+<text x="392.5" y="435" fill="#1f2937" font-size="10" text-anchor="middle" font-family="monospace">0.655</text>
+<polyline points="430.0,438.0 460.0,436.0 490.0,424.0" fill="none" stroke="#1f2937" stroke-width="1.2"/>
+<circle cx="490.0" cy="424.0" r="1.8" fill="#1f2937"/>
+<circle cx="430.0" cy="438.0" r="1.5" fill="#dc2626"/>
+<text x="505" y="435" fill="#16a34a" font-size="11" font-family="monospace">▲11.12pp</text>
 <text x="25" y="453" fill="#374151" font-size="11" font-weight="500">temporal</text>
 <text x="155" y="453" fill="#1f2937" font-size="11" font-family="monospace">recall@5</text>
 <text x="262.5" y="453" fill="#1f2937" font-size="10" text-anchor="middle" font-family="monospace">0.482</text>
 <text x="327.5" y="453" fill="#1f2937" font-size="10" text-anchor="middle" font-family="monospace">0.444</text>
-<polyline points="365.0,442.0 425.0,456.0" fill="none" stroke="#1f2937" stroke-width="1.2"/>
-<circle cx="425.0" cy="456.0" r="1.8" fill="#1f2937"/>
-<circle cx="365.0" cy="442.0" r="1.5" fill="#16a34a"/>
-<text x="440" y="453" fill="#dc2626" font-size="11" font-family="monospace">▼ 3.81pp</text>
-<rect x="20" y="458" width="520" height="18" fill="#fafafa"/>
+<text x="392.5" y="453" fill="#1f2937" font-size="10" text-anchor="middle" font-family="monospace">0.455</text>
+<polyline points="430.0,442.0 460.0,456.0 490.0,452.0" fill="none" stroke="#1f2937" stroke-width="1.2"/>
+<circle cx="490.0" cy="452.0" r="1.8" fill="#1f2937"/>
+<circle cx="460.0" cy="456.0" r="1.5" fill="#dc2626"/>
+<circle cx="430.0" cy="442.0" r="1.5" fill="#16a34a"/>
+<text x="505" y="453" fill="#dc2626" font-size="11" font-family="monospace">▼ 2.72pp</text>
+<rect x="20" y="458" width="585" height="18" fill="#fafafa"/>
 <text x="155" y="471" fill="#1f2937" font-size="11" font-family="monospace">recall@10</text>
 <text x="262.5" y="471" fill="#1f2937" font-size="10" text-anchor="middle" font-family="monospace">0.660</text>
 <text x="327.5" y="471" fill="#1f2937" font-size="10" text-anchor="middle" font-family="monospace">0.645</text>
-<polyline points="365.0,460.0 425.0,474.0" fill="none" stroke="#1f2937" stroke-width="1.2"/>
-<circle cx="425.0" cy="474.0" r="1.8" fill="#1f2937"/>
-<circle cx="365.0" cy="460.0" r="1.5" fill="#16a34a"/>
-<text x="440" y="471" fill="#dc2626" font-size="11" font-family="monospace">▼ 1.49pp</text>
+<text x="392.5" y="471" fill="#1f2937" font-size="10" text-anchor="middle" font-family="monospace">0.656</text>
+<polyline points="430.0,460.0 460.0,474.0 490.0,463.9" fill="none" stroke="#1f2937" stroke-width="1.2"/>
+<circle cx="490.0" cy="463.9" r="1.8" fill="#1f2937"/>
+<circle cx="460.0" cy="474.0" r="1.5" fill="#dc2626"/>
+<circle cx="430.0" cy="460.0" r="1.5" fill="#16a34a"/>
+<text x="505" y="471" fill="#9ca3af" font-size="11" font-family="monospace">▼ 0.41pp</text>
 <text x="155" y="489" fill="#1f2937" font-size="11" font-family="monospace">recall@25</text>
 <text x="262.5" y="489" fill="#1f2937" font-size="10" text-anchor="middle" font-family="monospace">0.927</text>
 <text x="327.5" y="489" fill="#1f2937" font-size="10" text-anchor="middle" font-family="monospace">0.929</text>
-<polyline points="365.0,492.0 425.0,478.0" fill="none" stroke="#1f2937" stroke-width="1.2"/>
-<circle cx="425.0" cy="478.0" r="1.8" fill="#1f2937"/>
-<circle cx="365.0" cy="492.0" r="1.5" fill="#dc2626"/>
-<text x="440" y="489" fill="#9ca3af" font-size="11" font-family="monospace">▲ 0.27pp</text>
-<rect x="20" y="494" width="520" height="18" fill="#fafafa"/>
+<text x="392.5" y="489" fill="#1f2937" font-size="10" text-anchor="middle" font-family="monospace">0.927</text>
+<polyline points="430.0,492.0 460.0,478.0 490.0,487.3" fill="none" stroke="#1f2937" stroke-width="1.2"/>
+<circle cx="490.0" cy="487.3" r="1.8" fill="#1f2937"/>
+<circle cx="430.0" cy="492.0" r="1.5" fill="#dc2626"/>
+<circle cx="460.0" cy="478.0" r="1.5" fill="#16a34a"/>
+<text x="505" y="489" fill="#9ca3af" font-size="11" font-family="monospace">▲ 0.09pp</text>
+<rect x="20" y="494" width="585" height="18" fill="#fafafa"/>
 <text x="155" y="507" fill="#1f2937" font-size="11" font-family="monospace">recall@50</text>
 <text x="262.5" y="507" fill="#1f2937" font-size="10" text-anchor="middle" font-family="monospace">1.000</text>
 <text x="327.5" y="507" fill="#1f2937" font-size="10" text-anchor="middle" font-family="monospace">1.000</text>
-<polyline points="365.0,510.0 425.0,510.0" fill="none" stroke="#1f2937" stroke-width="1.2"/>
-<circle cx="425.0" cy="510.0" r="1.8" fill="#1f2937"/>
-<circle cx="365.0" cy="510.0" r="1.5" fill="#dc2626"/>
-<circle cx="365.0" cy="510.0" r="1.5" fill="#16a34a"/>
-<text x="440" y="507" fill="#9ca3af" font-size="11" font-family="monospace">─ 0.00pp</text>
+<text x="392.5" y="507" fill="#1f2937" font-size="10" text-anchor="middle" font-family="monospace">1.000</text>
+<polyline points="430.0,510.0 460.0,510.0 490.0,510.0" fill="none" stroke="#1f2937" stroke-width="1.2"/>
+<circle cx="490.0" cy="510.0" r="1.8" fill="#1f2937"/>
+<circle cx="430.0" cy="510.0" r="1.5" fill="#dc2626"/>
+<circle cx="430.0" cy="510.0" r="1.5" fill="#16a34a"/>
+<text x="505" y="507" fill="#9ca3af" font-size="11" font-family="monospace">─ 0.00pp</text>
 <text x="155" y="525" fill="#1f2937" font-size="11" font-family="monospace">mrr</text>
 <text x="262.5" y="525" fill="#1f2937" font-size="10" text-anchor="middle" font-family="monospace">0.401</text>
 <text x="327.5" y="525" fill="#1f2937" font-size="10" text-anchor="middle" font-family="monospace">0.384</text>
-<polyline points="365.0,514.0 425.0,528.0" fill="none" stroke="#1f2937" stroke-width="1.2"/>
-<circle cx="425.0" cy="528.0" r="1.8" fill="#1f2937"/>
-<circle cx="365.0" cy="514.0" r="1.5" fill="#16a34a"/>
-<text x="440" y="525" fill="#dc2626" font-size="11" font-family="monospace">▼ 1.71pp</text>
-<rect x="20" y="530" width="520" height="18" fill="#fafafa"/>
+<text x="392.5" y="525" fill="#1f2937" font-size="10" text-anchor="middle" font-family="monospace">0.410</text>
+<polyline points="430.0,518.9 460.0,528.0 490.0,514.0" fill="none" stroke="#1f2937" stroke-width="1.2"/>
+<circle cx="490.0" cy="514.0" r="1.8" fill="#1f2937"/>
+<circle cx="460.0" cy="528.0" r="1.5" fill="#dc2626"/>
+<text x="505" y="525" fill="#16a34a" font-size="11" font-family="monospace">▲ 0.91pp</text>
+<rect x="20" y="530" width="585" height="18" fill="#fafafa"/>
 <text x="25" y="543" fill="#374151" font-size="11" font-weight="500">open_domain</text>
 <text x="155" y="543" fill="#1f2937" font-size="11" font-family="monospace">recall@5</text>
 <text x="262.5" y="543" fill="#1f2937" font-size="10" text-anchor="middle" font-family="monospace">0.701</text>
 <text x="327.5" y="543" fill="#1f2937" font-size="10" text-anchor="middle" font-family="monospace">0.718</text>
-<polyline points="365.0,546.0 425.0,532.0" fill="none" stroke="#1f2937" stroke-width="1.2"/>
-<circle cx="425.0" cy="532.0" r="1.8" fill="#1f2937"/>
-<circle cx="365.0" cy="546.0" r="1.5" fill="#dc2626"/>
-<text x="440" y="543" fill="#16a34a" font-size="11" font-family="monospace">▲ 1.66pp</text>
+<text x="392.5" y="543" fill="#1f2937" font-size="10" text-anchor="middle" font-family="monospace">0.791</text>
+<polyline points="430.0,546.0 460.0,543.4 490.0,532.0" fill="none" stroke="#1f2937" stroke-width="1.2"/>
+<circle cx="490.0" cy="532.0" r="1.8" fill="#1f2937"/>
+<circle cx="430.0" cy="546.0" r="1.5" fill="#dc2626"/>
+<text x="505" y="543" fill="#16a34a" font-size="11" font-family="monospace">▲ 8.97pp</text>
 <text x="155" y="561" fill="#1f2937" font-size="11" font-family="monospace">recall@10</text>
 <text x="262.5" y="561" fill="#1f2937" font-size="10" text-anchor="middle" font-family="monospace">0.819</text>
 <text x="327.5" y="561" fill="#1f2937" font-size="10" text-anchor="middle" font-family="monospace">0.838</text>
-<polyline points="365.0,564.0 425.0,550.0" fill="none" stroke="#1f2937" stroke-width="1.2"/>
-<circle cx="425.0" cy="550.0" r="1.8" fill="#1f2937"/>
-<circle cx="365.0" cy="564.0" r="1.5" fill="#dc2626"/>
-<text x="440" y="561" fill="#16a34a" font-size="11" font-family="monospace">▲ 1.96pp</text>
-<rect x="20" y="566" width="520" height="18" fill="#fafafa"/>
+<text x="392.5" y="561" fill="#1f2937" font-size="10" text-anchor="middle" font-family="monospace">0.889</text>
+<polyline points="430.0,564.0 460.0,560.1 490.0,550.0" fill="none" stroke="#1f2937" stroke-width="1.2"/>
+<circle cx="490.0" cy="550.0" r="1.8" fill="#1f2937"/>
+<circle cx="430.0" cy="564.0" r="1.5" fill="#dc2626"/>
+<text x="505" y="561" fill="#16a34a" font-size="11" font-family="monospace">▲ 7.07pp</text>
+<rect x="20" y="566" width="585" height="18" fill="#fafafa"/>
 <text x="155" y="579" fill="#1f2937" font-size="11" font-family="monospace">recall@25</text>
 <text x="262.5" y="579" fill="#1f2937" font-size="10" text-anchor="middle" font-family="monospace">0.966</text>
 <text x="327.5" y="579" fill="#1f2937" font-size="10" text-anchor="middle" font-family="monospace">0.969</text>
-<polyline points="365.0,582.0 425.0,568.0" fill="none" stroke="#1f2937" stroke-width="1.2"/>
-<circle cx="425.0" cy="568.0" r="1.8" fill="#1f2937"/>
-<circle cx="365.0" cy="582.0" r="1.5" fill="#dc2626"/>
-<text x="440" y="579" fill="#9ca3af" font-size="11" font-family="monospace">▲ 0.24pp</text>
+<text x="392.5" y="579" fill="#1f2937" font-size="10" text-anchor="middle" font-family="monospace">0.978</text>
+<polyline points="430.0,582.0 460.0,579.2 490.0,568.0" fill="none" stroke="#1f2937" stroke-width="1.2"/>
+<circle cx="490.0" cy="568.0" r="1.8" fill="#1f2937"/>
+<circle cx="430.0" cy="582.0" r="1.5" fill="#dc2626"/>
+<text x="505" y="579" fill="#16a34a" font-size="11" font-family="monospace">▲ 1.19pp</text>
 <text x="155" y="597" fill="#1f2937" font-size="11" font-family="monospace">recall@50</text>
 <text x="262.5" y="597" fill="#1f2937" font-size="10" text-anchor="middle" font-family="monospace">0.999</text>
 <text x="327.5" y="597" fill="#1f2937" font-size="10" text-anchor="middle" font-family="monospace">0.999</text>
-<polyline points="365.0,600.0 425.0,600.0" fill="none" stroke="#1f2937" stroke-width="1.2"/>
-<circle cx="425.0" cy="600.0" r="1.8" fill="#1f2937"/>
-<circle cx="365.0" cy="600.0" r="1.5" fill="#dc2626"/>
-<circle cx="365.0" cy="600.0" r="1.5" fill="#16a34a"/>
-<text x="440" y="597" fill="#9ca3af" font-size="11" font-family="monospace">─ 0.00pp</text>
-<rect x="20" y="602" width="520" height="18" fill="#fafafa"/>
+<text x="392.5" y="597" fill="#1f2937" font-size="10" text-anchor="middle" font-family="monospace">0.999</text>
+<polyline points="430.0,600.0 460.0,600.0 490.0,600.0" fill="none" stroke="#1f2937" stroke-width="1.2"/>
+<circle cx="490.0" cy="600.0" r="1.8" fill="#1f2937"/>
+<circle cx="430.0" cy="600.0" r="1.5" fill="#dc2626"/>
+<circle cx="430.0" cy="600.0" r="1.5" fill="#16a34a"/>
+<text x="505" y="597" fill="#9ca3af" font-size="11" font-family="monospace">─ 0.00pp</text>
+<rect x="20" y="602" width="585" height="18" fill="#fafafa"/>
 <text x="155" y="615" fill="#1f2937" font-size="11" font-family="monospace">mrr</text>
 <text x="262.5" y="615" fill="#1f2937" font-size="10" text-anchor="middle" font-family="monospace">0.549</text>
 <text x="327.5" y="615" fill="#1f2937" font-size="10" text-anchor="middle" font-family="monospace">0.569</text>
-<polyline points="365.0,618.0 425.0,604.0" fill="none" stroke="#1f2937" stroke-width="1.2"/>
-<circle cx="425.0" cy="604.0" r="1.8" fill="#1f2937"/>
-<circle cx="365.0" cy="618.0" r="1.5" fill="#dc2626"/>
-<text x="440" y="615" fill="#16a34a" font-size="11" font-family="monospace">▲ 1.99pp</text>
+<text x="392.5" y="615" fill="#1f2937" font-size="10" text-anchor="middle" font-family="monospace">0.667</text>
+<polyline points="430.0,618.0 460.0,615.6 490.0,604.0" fill="none" stroke="#1f2937" stroke-width="1.2"/>
+<circle cx="490.0" cy="604.0" r="1.8" fill="#1f2937"/>
+<circle cx="430.0" cy="618.0" r="1.5" fill="#dc2626"/>
+<text x="505" y="615" fill="#16a34a" font-size="11" font-family="monospace">▲11.78pp</text>
 <text x="25" y="633" fill="#374151" font-size="11" font-weight="500">adversarial</text>
 <text x="155" y="633" fill="#1f2937" font-size="11" font-family="monospace">recall@5</text>
 <text x="262.5" y="633" fill="#1f2937" font-size="10" text-anchor="middle" font-family="monospace">0.713</text>
 <text x="327.5" y="633" fill="#1f2937" font-size="10" text-anchor="middle" font-family="monospace">0.715</text>
-<polyline points="365.0,636.0 425.0,622.0" fill="none" stroke="#1f2937" stroke-width="1.2"/>
-<circle cx="425.0" cy="622.0" r="1.8" fill="#1f2937"/>
-<circle cx="365.0" cy="636.0" r="1.5" fill="#dc2626"/>
-<text x="440" y="633" fill="#9ca3af" font-size="11" font-family="monospace">▲ 0.22pp</text>
-<rect x="20" y="638" width="520" height="18" fill="#fafafa"/>
+<text x="392.5" y="633" fill="#1f2937" font-size="10" text-anchor="middle" font-family="monospace">0.771</text>
+<polyline points="430.0,636.0 460.0,635.5 490.0,622.0" fill="none" stroke="#1f2937" stroke-width="1.2"/>
+<circle cx="490.0" cy="622.0" r="1.8" fill="#1f2937"/>
+<circle cx="430.0" cy="636.0" r="1.5" fill="#dc2626"/>
+<text x="505" y="633" fill="#16a34a" font-size="11" font-family="monospace">▲ 5.83pp</text>
+<rect x="20" y="638" width="585" height="18" fill="#fafafa"/>
 <text x="155" y="651" fill="#1f2937" font-size="11" font-family="monospace">recall@10</text>
 <text x="262.5" y="651" fill="#1f2937" font-size="10" text-anchor="middle" font-family="monospace">0.823</text>
 <text x="327.5" y="651" fill="#1f2937" font-size="10" text-anchor="middle" font-family="monospace">0.818</text>
-<polyline points="365.0,640.0 425.0,654.0" fill="none" stroke="#1f2937" stroke-width="1.2"/>
-<circle cx="425.0" cy="654.0" r="1.8" fill="#1f2937"/>
-<circle cx="365.0" cy="640.0" r="1.5" fill="#16a34a"/>
-<text x="440" y="651" fill="#9ca3af" font-size="11" font-family="monospace">▼ 0.45pp</text>
+<text x="392.5" y="651" fill="#1f2937" font-size="10" text-anchor="middle" font-family="monospace">0.854</text>
+<polyline points="430.0,652.2 460.0,654.0 490.0,640.0" fill="none" stroke="#1f2937" stroke-width="1.2"/>
+<circle cx="490.0" cy="640.0" r="1.8" fill="#1f2937"/>
+<circle cx="460.0" cy="654.0" r="1.5" fill="#dc2626"/>
+<text x="505" y="651" fill="#16a34a" font-size="11" font-family="monospace">▲ 3.14pp</text>
 <text x="155" y="669" fill="#1f2937" font-size="11" font-family="monospace">recall@25</text>
 <text x="262.5" y="669" fill="#1f2937" font-size="10" text-anchor="middle" font-family="monospace">0.964</text>
 <text x="327.5" y="669" fill="#1f2937" font-size="10" text-anchor="middle" font-family="monospace">0.964</text>
-<polyline points="365.0,672.0 425.0,672.0" fill="none" stroke="#1f2937" stroke-width="1.2"/>
-<circle cx="425.0" cy="672.0" r="1.8" fill="#1f2937"/>
-<circle cx="365.0" cy="672.0" r="1.5" fill="#dc2626"/>
-<circle cx="365.0" cy="672.0" r="1.5" fill="#16a34a"/>
-<text x="440" y="669" fill="#9ca3af" font-size="11" font-family="monospace">─ 0.00pp</text>
-<rect x="20" y="674" width="520" height="18" fill="#fafafa"/>
+<text x="392.5" y="669" fill="#1f2937" font-size="10" text-anchor="middle" font-family="monospace">0.973</text>
+<polyline points="430.0,672.0 460.0,672.0 490.0,658.0" fill="none" stroke="#1f2937" stroke-width="1.2"/>
+<circle cx="490.0" cy="658.0" r="1.8" fill="#1f2937"/>
+<circle cx="430.0" cy="672.0" r="1.5" fill="#dc2626"/>
+<text x="505" y="669" fill="#16a34a" font-size="11" font-family="monospace">▲ 0.90pp</text>
+<rect x="20" y="674" width="585" height="18" fill="#fafafa"/>
 <text x="155" y="687" fill="#1f2937" font-size="11" font-family="monospace">recall@50</text>
 <text x="262.5" y="687" fill="#1f2937" font-size="10" text-anchor="middle" font-family="monospace">1.000</text>
 <text x="327.5" y="687" fill="#1f2937" font-size="10" text-anchor="middle" font-family="monospace">1.000</text>
-<polyline points="365.0,690.0 425.0,690.0" fill="none" stroke="#1f2937" stroke-width="1.2"/>
-<circle cx="425.0" cy="690.0" r="1.8" fill="#1f2937"/>
-<circle cx="365.0" cy="690.0" r="1.5" fill="#dc2626"/>
-<circle cx="365.0" cy="690.0" r="1.5" fill="#16a34a"/>
-<text x="440" y="687" fill="#9ca3af" font-size="11" font-family="monospace">─ 0.00pp</text>
+<text x="392.5" y="687" fill="#1f2937" font-size="10" text-anchor="middle" font-family="monospace">1.000</text>
+<polyline points="430.0,690.0 460.0,690.0 490.0,690.0" fill="none" stroke="#1f2937" stroke-width="1.2"/>
+<circle cx="490.0" cy="690.0" r="1.8" fill="#1f2937"/>
+<circle cx="430.0" cy="690.0" r="1.5" fill="#dc2626"/>
+<circle cx="430.0" cy="690.0" r="1.5" fill="#16a34a"/>
+<text x="505" y="687" fill="#9ca3af" font-size="11" font-family="monospace">─ 0.00pp</text>
 <text x="155" y="705" fill="#1f2937" font-size="11" font-family="monospace">mrr</text>
 <text x="262.5" y="705" fill="#1f2937" font-size="10" text-anchor="middle" font-family="monospace">0.550</text>
 <text x="327.5" y="705" fill="#1f2937" font-size="10" text-anchor="middle" font-family="monospace">0.551</text>
-<polyline points="365.0,708.0 425.0,694.0" fill="none" stroke="#1f2937" stroke-width="1.2"/>
-<circle cx="425.0" cy="694.0" r="1.8" fill="#1f2937"/>
-<circle cx="365.0" cy="708.0" r="1.5" fill="#dc2626"/>
-<text x="440" y="705" fill="#9ca3af" font-size="11" font-family="monospace">─ 0.02pp</text>
-<rect x="20" y="740" width="520" height="28" fill="#f9fafb"/>
+<text x="392.5" y="705" fill="#1f2937" font-size="10" text-anchor="middle" font-family="monospace">0.622</text>
+<polyline points="430.0,708.0 460.0,708.0 490.0,694.0" fill="none" stroke="#1f2937" stroke-width="1.2"/>
+<circle cx="490.0" cy="694.0" r="1.8" fill="#1f2937"/>
+<circle cx="430.0" cy="708.0" r="1.5" fill="#dc2626"/>
+<text x="505" y="705" fill="#16a34a" font-size="11" font-family="monospace">▲ 7.16pp</text>
+<rect x="20" y="740" width="585" height="28" fill="#f9fafb"/>
 <text x="30" y="758" fill="#1f2937" font-size="13" font-weight="600">LoCoMo segment-level  (DRAGON, retrieval-primitive gate)</text>
 <text x="25" y="783" fill="#6b7280" font-size="10" font-weight="600">SCOPE</text>
 <text x="155" y="783" fill="#6b7280" font-size="10" font-weight="600">METRIC</text>
@@ -259,7 +294,7 @@
 <text x="327.5" y="793" fill="#6b7280" font-size="9" text-anchor="middle">05-10</text>
 <text x="395.0" y="783" fill="#6b7280" font-size="10" font-weight="600" text-anchor="middle">trajectory</text>
 <text x="435" y="783" fill="#6b7280" font-size="10" font-weight="600">Δpp first→latest</text>
-<rect x="20" y="790" width="520" height="18" fill="#fafafa"/>
+<rect x="20" y="790" width="585" height="18" fill="#fafafa"/>
 <text x="25" y="803" fill="#1f2937" font-size="11" font-weight="700">OVERALL</text>
 <text x="155" y="803" fill="#1f2937" font-size="11" font-family="monospace">recall@5</text>
 <text x="262.5" y="803" fill="#1f2937" font-size="10" text-anchor="middle" font-family="monospace">0.302</text>
@@ -277,7 +312,7 @@
 <circle cx="365.0" cy="824.0" r="1.5" fill="#dc2626"/>
 <circle cx="365.0" cy="824.0" r="1.5" fill="#16a34a"/>
 <text x="440" y="821" fill="#9ca3af" font-size="11" font-family="monospace">─ 0.00pp</text>
-<rect x="20" y="826" width="520" height="18" fill="#fafafa"/>
+<rect x="20" y="826" width="585" height="18" fill="#fafafa"/>
 <text x="155" y="839" fill="#1f2937" font-size="11" font-family="monospace">recall@25</text>
 <text x="262.5" y="839" fill="#1f2937" font-size="10" text-anchor="middle" font-family="monospace">0.477</text>
 <text x="327.5" y="839" fill="#1f2937" font-size="10" text-anchor="middle" font-family="monospace">0.477</text>
@@ -294,7 +329,7 @@
 <circle cx="365.0" cy="860.0" r="1.5" fill="#dc2626"/>
 <circle cx="365.0" cy="860.0" r="1.5" fill="#16a34a"/>
 <text x="440" y="857" fill="#9ca3af" font-size="11" font-family="monospace">─ 0.00pp</text>
-<rect x="20" y="862" width="520" height="18" fill="#fafafa"/>
+<rect x="20" y="862" width="585" height="18" fill="#fafafa"/>
 <text x="155" y="875" fill="#1f2937" font-size="11" font-family="monospace">mrr</text>
 <text x="262.5" y="875" fill="#1f2937" font-size="10" text-anchor="middle" font-family="monospace">0.237</text>
 <text x="327.5" y="875" fill="#1f2937" font-size="10" text-anchor="middle" font-family="monospace">0.237</text>
@@ -312,7 +347,7 @@
 <circle cx="365.0" cy="896.0" r="1.5" fill="#dc2626"/>
 <circle cx="365.0" cy="896.0" r="1.5" fill="#16a34a"/>
 <text x="440" y="893" fill="#9ca3af" font-size="11" font-family="monospace">─ 0.00pp</text>
-<rect x="20" y="898" width="520" height="18" fill="#fafafa"/>
+<rect x="20" y="898" width="585" height="18" fill="#fafafa"/>
 <text x="155" y="911" fill="#1f2937" font-size="11" font-family="monospace">recall@10</text>
 <text x="262.5" y="911" fill="#1f2937" font-size="10" text-anchor="middle" font-family="monospace">0.115</text>
 <text x="327.5" y="911" fill="#1f2937" font-size="10" text-anchor="middle" font-family="monospace">0.115</text>
@@ -329,7 +364,7 @@
 <circle cx="365.0" cy="932.0" r="1.5" fill="#dc2626"/>
 <circle cx="365.0" cy="932.0" r="1.5" fill="#16a34a"/>
 <text x="440" y="929" fill="#9ca3af" font-size="11" font-family="monospace">─ 0.00pp</text>
-<rect x="20" y="934" width="520" height="18" fill="#fafafa"/>
+<rect x="20" y="934" width="585" height="18" fill="#fafafa"/>
 <text x="155" y="947" fill="#1f2937" font-size="11" font-family="monospace">recall@50</text>
 <text x="262.5" y="947" fill="#1f2937" font-size="10" text-anchor="middle" font-family="monospace">0.288</text>
 <text x="327.5" y="947" fill="#1f2937" font-size="10" text-anchor="middle" font-family="monospace">0.288</text>
@@ -346,7 +381,7 @@
 <circle cx="365.0" cy="968.0" r="1.5" fill="#dc2626"/>
 <circle cx="365.0" cy="968.0" r="1.5" fill="#16a34a"/>
 <text x="440" y="965" fill="#9ca3af" font-size="11" font-family="monospace">─ 0.00pp</text>
-<rect x="20" y="970" width="520" height="18" fill="#fafafa"/>
+<rect x="20" y="970" width="585" height="18" fill="#fafafa"/>
 <text x="25" y="983" fill="#374151" font-size="11" font-weight="500">multi_hop</text>
 <text x="155" y="983" fill="#1f2937" font-size="11" font-family="monospace">recall@5</text>
 <text x="262.5" y="983" fill="#1f2937" font-size="10" text-anchor="middle" font-family="monospace">0.322</text>
@@ -364,7 +399,7 @@
 <circle cx="365.0" cy="1004.0" r="1.5" fill="#dc2626"/>
 <circle cx="365.0" cy="1004.0" r="1.5" fill="#16a34a"/>
 <text x="440" y="1001" fill="#9ca3af" font-size="11" font-family="monospace">─ 0.00pp</text>
-<rect x="20" y="1006" width="520" height="18" fill="#fafafa"/>
+<rect x="20" y="1006" width="585" height="18" fill="#fafafa"/>
 <text x="155" y="1019" fill="#1f2937" font-size="11" font-family="monospace">recall@25</text>
 <text x="262.5" y="1019" fill="#1f2937" font-size="10" text-anchor="middle" font-family="monospace">0.501</text>
 <text x="327.5" y="1019" fill="#1f2937" font-size="10" text-anchor="middle" font-family="monospace">0.501</text>
@@ -381,7 +416,7 @@
 <circle cx="365.0" cy="1040.0" r="1.5" fill="#dc2626"/>
 <circle cx="365.0" cy="1040.0" r="1.5" fill="#16a34a"/>
 <text x="440" y="1037" fill="#9ca3af" font-size="11" font-family="monospace">─ 0.00pp</text>
-<rect x="20" y="1042" width="520" height="18" fill="#fafafa"/>
+<rect x="20" y="1042" width="585" height="18" fill="#fafafa"/>
 <text x="155" y="1055" fill="#1f2937" font-size="11" font-family="monospace">mrr</text>
 <text x="262.5" y="1055" fill="#1f2937" font-size="10" text-anchor="middle" font-family="monospace">0.242</text>
 <text x="327.5" y="1055" fill="#1f2937" font-size="10" text-anchor="middle" font-family="monospace">0.242</text>
@@ -399,7 +434,7 @@
 <circle cx="365.0" cy="1076.0" r="1.5" fill="#dc2626"/>
 <circle cx="365.0" cy="1076.0" r="1.5" fill="#16a34a"/>
 <text x="440" y="1073" fill="#9ca3af" font-size="11" font-family="monospace">─ 0.00pp</text>
-<rect x="20" y="1078" width="520" height="18" fill="#fafafa"/>
+<rect x="20" y="1078" width="585" height="18" fill="#fafafa"/>
 <text x="155" y="1091" fill="#1f2937" font-size="11" font-family="monospace">recall@10</text>
 <text x="262.5" y="1091" fill="#1f2937" font-size="10" text-anchor="middle" font-family="monospace">0.173</text>
 <text x="327.5" y="1091" fill="#1f2937" font-size="10" text-anchor="middle" font-family="monospace">0.173</text>
@@ -416,7 +451,7 @@
 <circle cx="365.0" cy="1112.0" r="1.5" fill="#dc2626"/>
 <circle cx="365.0" cy="1112.0" r="1.5" fill="#16a34a"/>
 <text x="440" y="1109" fill="#9ca3af" font-size="11" font-family="monospace">─ 0.00pp</text>
-<rect x="20" y="1114" width="520" height="18" fill="#fafafa"/>
+<rect x="20" y="1114" width="585" height="18" fill="#fafafa"/>
 <text x="155" y="1127" fill="#1f2937" font-size="11" font-family="monospace">recall@50</text>
 <text x="262.5" y="1127" fill="#1f2937" font-size="10" text-anchor="middle" font-family="monospace">0.288</text>
 <text x="327.5" y="1127" fill="#1f2937" font-size="10" text-anchor="middle" font-family="monospace">0.288</text>
@@ -433,7 +468,7 @@
 <circle cx="365.0" cy="1148.0" r="1.5" fill="#dc2626"/>
 <circle cx="365.0" cy="1148.0" r="1.5" fill="#16a34a"/>
 <text x="440" y="1145" fill="#9ca3af" font-size="11" font-family="monospace">─ 0.00pp</text>
-<rect x="20" y="1150" width="520" height="18" fill="#fafafa"/>
+<rect x="20" y="1150" width="585" height="18" fill="#fafafa"/>
 <text x="25" y="1163" fill="#374151" font-size="11" font-weight="500">open_domain</text>
 <text x="155" y="1163" fill="#1f2937" font-size="11" font-family="monospace">recall@5</text>
 <text x="262.5" y="1163" fill="#1f2937" font-size="10" text-anchor="middle" font-family="monospace">0.336</text>
@@ -451,7 +486,7 @@
 <circle cx="365.0" cy="1184.0" r="1.5" fill="#dc2626"/>
 <circle cx="365.0" cy="1184.0" r="1.5" fill="#16a34a"/>
 <text x="440" y="1181" fill="#9ca3af" font-size="11" font-family="monospace">─ 0.00pp</text>
-<rect x="20" y="1186" width="520" height="18" fill="#fafafa"/>
+<rect x="20" y="1186" width="585" height="18" fill="#fafafa"/>
 <text x="155" y="1199" fill="#1f2937" font-size="11" font-family="monospace">recall@25</text>
 <text x="262.5" y="1199" fill="#1f2937" font-size="10" text-anchor="middle" font-family="monospace">0.518</text>
 <text x="327.5" y="1199" fill="#1f2937" font-size="10" text-anchor="middle" font-family="monospace">0.518</text>
@@ -468,7 +503,7 @@
 <circle cx="365.0" cy="1220.0" r="1.5" fill="#dc2626"/>
 <circle cx="365.0" cy="1220.0" r="1.5" fill="#16a34a"/>
 <text x="440" y="1217" fill="#9ca3af" font-size="11" font-family="monospace">─ 0.00pp</text>
-<rect x="20" y="1222" width="520" height="18" fill="#fafafa"/>
+<rect x="20" y="1222" width="585" height="18" fill="#fafafa"/>
 <text x="155" y="1235" fill="#1f2937" font-size="11" font-family="monospace">mrr</text>
 <text x="262.5" y="1235" fill="#1f2937" font-size="10" text-anchor="middle" font-family="monospace">0.249</text>
 <text x="327.5" y="1235" fill="#1f2937" font-size="10" text-anchor="middle" font-family="monospace">0.249</text>
@@ -486,7 +521,7 @@
 <circle cx="365.0" cy="1256.0" r="1.5" fill="#dc2626"/>
 <circle cx="365.0" cy="1256.0" r="1.5" fill="#16a34a"/>
 <text x="440" y="1253" fill="#9ca3af" font-size="11" font-family="monospace">─ 0.00pp</text>
-<rect x="20" y="1258" width="520" height="18" fill="#fafafa"/>
+<rect x="20" y="1258" width="585" height="18" fill="#fafafa"/>
 <text x="155" y="1271" fill="#1f2937" font-size="11" font-family="monospace">recall@10</text>
 <text x="262.5" y="1271" fill="#1f2937" font-size="10" text-anchor="middle" font-family="monospace">0.488</text>
 <text x="327.5" y="1271" fill="#1f2937" font-size="10" text-anchor="middle" font-family="monospace">0.488</text>
@@ -503,7 +538,7 @@
 <circle cx="365.0" cy="1292.0" r="1.5" fill="#dc2626"/>
 <circle cx="365.0" cy="1292.0" r="1.5" fill="#16a34a"/>
 <text x="440" y="1289" fill="#9ca3af" font-size="11" font-family="monospace">─ 0.00pp</text>
-<rect x="20" y="1294" width="520" height="18" fill="#fafafa"/>
+<rect x="20" y="1294" width="585" height="18" fill="#fafafa"/>
 <text x="155" y="1307" fill="#1f2937" font-size="11" font-family="monospace">recall@50</text>
 <text x="262.5" y="1307" fill="#1f2937" font-size="10" text-anchor="middle" font-family="monospace">0.704</text>
 <text x="327.5" y="1307" fill="#1f2937" font-size="10" text-anchor="middle" font-family="monospace">0.704</text>
@@ -520,7 +555,7 @@
 <circle cx="365.0" cy="1328.0" r="1.5" fill="#dc2626"/>
 <circle cx="365.0" cy="1328.0" r="1.5" fill="#16a34a"/>
 <text x="440" y="1325" fill="#9ca3af" font-size="11" font-family="monospace">─ 0.00pp</text>
-<rect x="20" y="1360" width="520" height="28" fill="#f9fafb"/>
+<rect x="20" y="1360" width="585" height="28" fill="#f9fafb"/>
 <text x="30" y="1378" fill="#1f2937" font-size="13" font-weight="600">LongMemEval-S  (bge-m3, production methodology)</text>
 <text x="25" y="1403" fill="#6b7280" font-size="10" font-weight="600">SCOPE</text>
 <text x="155" y="1403" fill="#6b7280" font-size="10" font-weight="600">METRIC</text>
@@ -530,7 +565,7 @@
 <text x="327.5" y="1413" fill="#6b7280" font-size="9" text-anchor="middle">05-13</text>
 <text x="395.0" y="1403" fill="#6b7280" font-size="10" font-weight="600" text-anchor="middle">trajectory</text>
 <text x="435" y="1403" fill="#6b7280" font-size="10" font-weight="600">Δpp first→latest</text>
-<rect x="20" y="1410" width="520" height="18" fill="#fafafa"/>
+<rect x="20" y="1410" width="585" height="18" fill="#fafafa"/>
 <text x="25" y="1423" fill="#1f2937" font-size="11" font-weight="700">OVERALL</text>
 <text x="155" y="1423" fill="#1f2937" font-size="11" font-family="monospace">recall@1</text>
 <text x="262.5" y="1423" fill="#1f2937" font-size="10" text-anchor="middle" font-family="monospace">0.486</text>
@@ -546,7 +581,7 @@
 <circle cx="425.0" cy="1430.0" r="1.8" fill="#1f2937"/>
 <circle cx="365.0" cy="1444.0" r="1.5" fill="#dc2626"/>
 <text x="440" y="1441" fill="#16a34a" font-size="11" font-family="monospace">▲ 1.22pp</text>
-<rect x="20" y="1446" width="520" height="18" fill="#fafafa"/>
+<rect x="20" y="1446" width="585" height="18" fill="#fafafa"/>
 <text x="155" y="1459" fill="#1f2937" font-size="11" font-family="monospace">recall@10</text>
 <text x="262.5" y="1459" fill="#1f2937" font-size="10" text-anchor="middle" font-family="monospace">0.933</text>
 <text x="327.5" y="1459" fill="#1f2937" font-size="10" text-anchor="middle" font-family="monospace">0.933</text>
@@ -561,7 +596,7 @@
 <circle cx="425.0" cy="1466.0" r="1.8" fill="#1f2937"/>
 <circle cx="365.0" cy="1480.0" r="1.5" fill="#dc2626"/>
 <text x="440" y="1477" fill="#16a34a" font-size="11" font-family="monospace">▲ 0.80pp</text>
-<rect x="20" y="1482" width="520" height="18" fill="#fafafa"/>
+<rect x="20" y="1482" width="585" height="18" fill="#fafafa"/>
 <text x="155" y="1495" fill="#1f2937" font-size="11" font-family="monospace">mrr</text>
 <text x="262.5" y="1495" fill="#1f2937" font-size="10" text-anchor="middle" font-family="monospace">0.855</text>
 <text x="327.5" y="1495" fill="#1f2937" font-size="10" text-anchor="middle" font-family="monospace">0.847</text>
@@ -569,6 +604,6 @@
 <circle cx="425.0" cy="1498.0" r="1.8" fill="#1f2937"/>
 <circle cx="365.0" cy="1484.0" r="1.5" fill="#16a34a"/>
 <text x="440" y="1495" fill="#dc2626" font-size="11" font-family="monospace">▼ 0.82pp</text>
-<line x1="20" y1="1520" x2="540" y2="1520" stroke="#e5e7eb"/>
+<line x1="20" y1="1520" x2="605" y2="1520" stroke="#e5e7eb"/>
 <text x="20" y="1538" fill="#6b7280" font-size="10">Generated by scripts/render_full_history.py. Statistical significance per-cell: scripts/significance_test_extended.py. Raw artefacts: benchmarks/&lt;bench&gt;/results/v&lt;ver&gt;_&lt;date&gt;/.</text>
 </svg>
