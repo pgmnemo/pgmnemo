@@ -69,10 +69,12 @@ TURN_LEVEL_BASELINE = {
 }
 
 
-def pad_to_1024(vec: list[float]) -> list[float]:
-    if len(vec) >= 1024:
-        return vec[:1024]
-    return vec + [0.0] * (1024 - len(vec))
+def pad_to_1024(vec) -> list[float]:
+    # Accept list[float] OR numpy.ndarray (embed_with_cache returns ndarray)
+    v = list(vec) if not isinstance(vec, list) else vec
+    if len(v) >= 1024:
+        return v[:1024]
+    return v + [0.0] * (1024 - len(v))
 
 
 def vec_to_pgvector(vec: list[float]) -> str:
@@ -206,17 +208,24 @@ def main():
 
     embedder = DragonEmbedder()
 
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from bench_embed_cache import embed_with_cache
+
     print(f"[corpus] embedding {len(corpus)} session segments via DRAGON-context...", flush=True)
     corpus_texts = [s["text"] for s in corpus]
-    t = time.time()
-    corpus_embs = embedder.encode_context(corpus_texts)
-    print(f"[corpus] embeds done in {time.time() - t:.1f}s", flush=True)
+    corpus_embs = embed_with_cache(
+        corpus_texts,
+        encode_fn=embedder.encode_context,
+        cache_id="locomo_session_corpus_dragon",
+    )
 
     print(f"[queries] embedding {len(questions)} via DRAGON-query...", flush=True)
     qry_texts = [q["question"] for q in questions]
-    t = time.time()
-    qry_embs = embedder.encode_query(qry_texts)
-    print(f"[queries] embeds done in {time.time() - t:.1f}s", flush=True)
+    qry_embs = embed_with_cache(
+        qry_texts,
+        encode_fn=embedder.encode_query,
+        cache_id="locomo_session_qry_dragon",
+    )
 
     print(f"[db] connect {args.db_user}@{args.db_host}:{args.db_port}/{args.db_name}", flush=True)
     conn = psycopg2.connect(
@@ -278,11 +287,11 @@ def main():
         cur.execute(
             f"""
             SELECT lesson_id, metadata->>'dia_id' AS dia_id, lesson_text
-            FROM pgmnemo.recall_hybrid(%s::vector, %s, %s, 'bench_locomo_session', 1, 0.4, 0.4)
+            FROM pgmnemo.recall_lessons(%s::vector, %s, 'bench_locomo_session', 1, %s)
             ORDER BY score DESC
             LIMIT %s
             """,
-            (vec_to_pgvector(padded_q), q["question"], K_MAX, K_MAX),
+            (vec_to_pgvector(padded_q), K_MAX, q["question"], K_MAX),
         )
         retrieved = cur.fetchall()
         retrieved_dia_ids = [r[1] for r in retrieved]
@@ -346,7 +355,7 @@ def main():
     ).hexdigest()
 
     metrics = {
-        "version": "v0.4.0_session_hybrid",
+        "version": "v0.4.0_session_via_router",
         "date": time.strftime("%Y-%m-%d"),
         "granularity": "session",
         "hypothesis": "Hypothesis A (2026-05-09): session-level granularity aligns with paper retrieval unit",
@@ -382,7 +391,7 @@ def main():
     }
 
     date_str = time.strftime("%Y%m%d")
-    out_dir = Path(args.out_dir) / f"v0.4.0_session_hybrid_{date_str}"
+    out_dir = Path(args.out_dir) / f"v0.4.0_session_via_router_{date_str}"
     out_dir.mkdir(parents=True, exist_ok=True)
     with open(out_dir / "metrics.json", "w") as f:
         json.dump(metrics, f, indent=2)

@@ -117,15 +117,24 @@ def main():
             all_segs.append((ii, si, seg["sid"], seg["text"][:TRUNCATE_CHARS]))
     print(f"[lme-pgm-full] flat: {len(all_segs)} segments, {len(queries)} queries", flush=True)
 
+    # Embeddings are deterministic for (text, model, max_seq); cache to disk
+    # so repeated runs skip the ~50min embed step. See bench_embed_cache.py.
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from bench_embed_cache import embed_with_cache
+
     print(f"[bge-m3] embedding {len(all_segs)} segs in batch_size=16 max_seq=512 on {DEVICE}...", flush=True)
-    t = time.time()
-    seg_embs = model.encode([s[3] for s in all_segs], batch_size=16, show_progress_bar=True)
-    print(f"[bge-m3] segs done in {time.time()-t:.1f}s", flush=True)
+    seg_embs = embed_with_cache(
+        [s[3] for s in all_segs],
+        encode_fn=lambda texts: model.encode(texts, batch_size=16, show_progress_bar=True),
+        cache_id=f"lme_segs_bge-m3_max{model.max_seq_length}_trunc{TRUNCATE_CHARS}",
+    )
 
     print(f"[bge-m3] embedding {len(queries)} queries...", flush=True)
-    t = time.time()
-    qry_embs = model.encode([q[1] for q in queries], batch_size=16, show_progress_bar=True)
-    print(f"[bge-m3] queries done in {time.time()-t:.1f}s", flush=True)
+    qry_embs = embed_with_cache(
+        [q[1] for q in queries],
+        encode_fn=lambda texts: model.encode(texts, batch_size=16, show_progress_bar=True),
+        cache_id=f"lme_qry_bge-m3_max{model.max_seq_length}",
+    )
 
     item_corpus = defaultdict(list)
     for (ii, si, sid, _txt), emb in zip(all_segs, seg_embs):

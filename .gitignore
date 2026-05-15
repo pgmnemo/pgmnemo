@@ -52,3 +52,4 @@ spec/
 research/
 design/
 *.zip
+.embed_cache/
