@@ -28,11 +28,11 @@ Everything in the next 18 months is shaped by these two facts.
 
 | Tag | Theme | Headline gate | Target ship |
 |---|---|---|---|
-| **v0.3.1** | Hygiene + documentation + bench-gate in CI | All open issues closed; gate file mechanism live; no recall change | 2026-05-20 |
-| **v0.4.0** | **Beat BM25 on LongMemEval** — hybrid promotion | LongMemEval recall@10 ≥ 0.97 with `p_corr < 0.05`; no LoCoMo regression | 2026-06-10 |
-| **v0.4.1** | Deprecation of dead complexity | BFS-mixin out of default recall path; graph traversal SPs marked optional | 2026-06-24 |
-| **v0.5.0** | Per-category lift — temporal + embedder | LoCoMo `temporal/recall@10` ≥ 0.70 (was 0.645); Stella V5 path unblocked | 2026-07-15 |
-| **v0.6.0** | Adoption tooling | 5 framework adapters; "Compare to BM25" cookbook; first external case study | 2026-08-15 |
+| **v0.3.1** | Hygiene + documentation + bench-gate in CI | All issues closed; gate file mechanism live; no recall change | 2026-05-13 (✅ SHIPPED) |
+| **v0.4.0** | Hybrid retrieval promoted to default | LoCoMo session recall@10 +4.15pp (p<0.05); LongMemEval neutral | 2026-05-15 (✅ SHIPPED) |
+| **v0.4.1** | **Production hardening** (per Agency RFC 2026-05-16) | R1, R2 docs, R3, R4, R7 from `AGENCY_REQUIREMENTS_FOR_PGMNEMO.md`; Agency bench recall@10 ≥ 0.55 maintained | 2026-05-30 |
+| **v0.5.0** | Per-category lift + graph helpers | R5, R6, R10 + H-06 temporal weight tune; previously-planned graph-deprecation cycle folded in here | 2026-06-20 |
+| **v0.6.0** | Adoption tooling + multi-tenant | R8, R9 + framework adapters + first external case study | 2026-08-15 |
 | **v0.7.0** | Optional graph eval (only if adopter pulls) | Bench that exercises `mem_edge`; +X pp gate | 2026-09 (conditional) |
 | **v1.0** | API freeze + stability commitment | ≥ 3 external adopters with public case studies; 2 consecutive non-breaking releases | 2026-Q4 |
 
@@ -113,32 +113,81 @@ Alternative:      Stay EXPERIMENTAL, lose the BM25 race
 
 ---
 
-## v0.4.1 — Deprecation cycle
+## v0.4.1 — Production hardening (target 2026-05-30) **— REPRIORITISED**
 
-**Theme:** remove the complexity that didn't earn its keep in v0.2.x – v0.3.0.
+**Theme:** ship the items that the first external production adopter (Agency v2)
+asked for in `AGENCY_REQUIREMENTS_FOR_PGMNEMO.md` (2026-05-16). Previously this
+release was scoped as "graph deprecation cycle"; that scope is deferred to v0.5.x
+in favour of production-hardening items with concrete adopter pull.
 
-### What gets demoted (kept in SQL, removed from headline / default path)
+**Pivot driver:** First external production user RFC (Architecture C gate passed
+on Agency corpus, recall@10 = 0.5745 N=1060, p_adj < 0.001) requested specific
+production-readiness improvements. Per `docs/WORKFLOW.md §4.4` "Do we have an
+adopter who asked for this?" — answer: yes, 6 of 10 R-items, with specific
+production evidence.
 
-| Feature | Action | Rationale |
+### What ships (Agency RFC items)
+
+| R-item | Scope | Priority |
 |---|---|---|
-| BFS graph-proximity mixin in `recall_lessons()` | Move to opt-in `recall_lessons_with_graph()` | Currently runs every call but no-op when `mem_edge` empty (typical case). Wastes CPU, adds attack surface. |
-| `traverse_causal_chain()` | Mark "advanced/optional" in docs; keep SQL | Only useful when adopter has populated `mem_edge`; very rare |
-| `traverse_temporal_window()` | Same | Same |
-| `recall_lessons_pooled()` | Document as "for paper-canonical session-level bench only" | Wedge customer doesn't pool by session |
-| `edge_kind` ENUM + per-kind indexes | Stay; cost is near-zero | Not headline, but kept for future graph eval |
+| **R1** — GUC registration | Register `recency_weight`, `ef_search`, `importance_weight`, `disable_hybrid` in `pg_settings`. New defaults per Agency ablation: `recency_weight=0.05` (was 0.20 in v0.2.x; v0.4.0 kept that), `ef_search=100`, `importance_weight=0.15`. | P0 (blocking) |
+| **R2** — Distribution docs | Add `docs/INSTALL.md` covering PGXN + Dockerfile snippets. PGXN/GitHub release artifacts already shipped in v0.4.0. | P0 |
+| **R3** — `pgmnemo.stats()` SP | Single diagnostic SP returning version + lesson_count + embedding_coverage_pct + mem_edge_count + GUC values + hybrid_enabled + orphan_count. | P1 |
+| **R4** — `recall_lessons()` diagnostics | Append `vec_score`, `bm25_score`, `rrf_score` columns. Backward-compatible (named-column callers unaffected; positional callers re-audit). | P1 |
+| **R7** — Upgrade orphan recovery | Document `docs/MIGRATION.md §B.5` recovery from extension-orphan functions. Include `orphan_count` in `pgmnemo.stats()` for proactive detection. | P0 |
+| **R10** — Overload deprecation NOTICE | 4-arg `traverse_causal_chain()` emits NOTICE. Remove in v0.5.0. | P3 |
+
+### What's deferred to v0.5.x
+
+The previously-planned graph-deprecation cycle (BFS-mixin demotion, `traverse_*`
+"advanced/optional" labelling, `recall_lessons_pooled()` documentation note,
+`edge_kind` ENUM stays) **moves to v0.5.x**, decoupled from the production-hardening
+release. Agency's R6 (mem_edge contract + helper) makes graph features actually
+useful, which contradicts the v0.4.1-as-deprecation framing. Rationale: deprecate
+features that nobody uses; document + improve features that someone *just started*
+using.
 
 ### Acceptance gate
-- `significance_test_extended.py` exit=0 (neutral) — removing dead code must not affect any cell
-- No GitHub Issue created against any v0.4.0 release citing reliance on BFS-in-default
+
+- `scripts/significance_test_extended.py` exit ≤ 1 (neutral or improvement) on all 3 tables
+  vs v0.4.0 baseline. R1 changes GUC defaults — must re-bench LoCoMo session under new
+  defaults and confirm no regression.
+- Agency's `RECALL_LOCOMO_PGMNEMO` bench rerun on v0.4.1 candidate shows recall@10
+  ≥ 0.55 (Architecture C gate held).
+- `pgmnemo.stats()` smoke test passes in CI (similar to `smoke_recall_hybrid.py`).
+- `pg_settings` lists all 4 GUCs with documented defaults.
+- `docs/INSTALL.md` walks a fresh user from `docker pull pgvector/pgvector:pg17` to
+  `SELECT pgmnemo.stats()` in under 10 minutes.
 
 ### Customer value
-"pgmnemo became simpler in v0.4.1: the default recall path no longer carries graph machinery that production users don't enable."
+
+"v0.4.1 is the first release driven by external production user requirements.
+GUCs visible in pg_settings, `pgmnemo.stats()` for one-query health checks, and
+`vec_score` exposed in `recall_lessons()` for diagnostic re-rankers."
+
+### Bench cost reduction
+
+`benchmarks/scripts/bench_embed_cache.py` (shipped v0.4.0) means weight-tuning
+ablation studies for R1's GUC defaults are now feasible: 54-cell grid runs
+in ~2.7 hours (was 45 hours). Phase B of v0.5.0 will use this.
 
 ---
 
-## v0.5.0 — Per-category lift
+## v0.5.0 — Per-category lift + graph helpers (target 2026-06-20)
 
-**Theme:** fix the weakest LoCoMo category (`temporal`) and unblock Stella V5.
+**Theme:** fix the weakest LoCoMo category (`temporal`), unblock Stella V5, AND
+ship the graph-feature documentation + helper SP requested by Agency (R6).
+Previously-planned graph-deprecation cycle is folded in here (BFS-mixin
+demotion + `recall_lessons_pooled()` documentation note + `recall_lessons_with_graph()`
+opt-in function), now alongside `pgmnemo.add_edge()` (R6).
+
+### Agency RFC items shipped in v0.5.0
+
+| R-item | Scope |
+|---|---|
+| **R5** — query_text preprocessing | `pgmnemo.max_query_text_chars` GUC (default 2000), internal truncation with NOTICE, NULL/empty graceful fallback |
+| **R6** — `mem_edge` contract + helper | `pgmnemo.add_edge(source_id, target_id, relation_type, weight, metadata)` SP with `ON CONFLICT DO UPDATE`. `docs/SQL_REFERENCE.md §1.2` documents the canonical contract. |
+| **R10** — Overload removal | 4-arg `traverse_causal_chain()` removed (only 5-arg form remains). NOTICE deprecation in v0.4.1 gave Agency one release to migrate. |
 
 ### Hypotheses
 
