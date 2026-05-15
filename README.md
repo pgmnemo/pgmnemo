@@ -3,16 +3,18 @@
 **Multi-agent memory substrate for PostgreSQL — provenance-gated, vector-hybrid recall.**
 
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.3.1-green.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.4.0-green.svg)](CHANGELOG.md)
 [![PGXN](https://badge.pgxn.org/stable/pgmnemo.svg)](https://pgxn.org/dist/pgmnemo/)
 [![CI](https://github.com/pgmnemo/pgmnemo/actions/workflows/ci.yml/badge.svg)](https://github.com/pgmnemo/pgmnemo/actions/workflows/ci.yml)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-17-4169E1.svg)](https://www.postgresql.org/)
-[![LoCoMo recall@10](https://img.shields.io/badge/LoCoMo_recall%4010-0.7994-success.svg)](docs/img/all_metrics_history.md)
-[![LongMemEval recall@10](https://img.shields.io/badge/LongMemEval_recall%4010-0.933-yellow.svg)](docs/img/all_metrics_history.md)
+[![LoCoMo recall@10](https://img.shields.io/badge/LoCoMo_recall%4010-0.8409-success.svg)](docs/img/all_metrics_history.md)
+[![LongMemEval recall@10](https://img.shields.io/badge/LongMemEval_recall%4010-0.9334-yellow.svg)](docs/img/all_metrics_history.md)
 
-> **v0.3.1 (2026-05-13):** hygiene foundation — ships `docs/WORKFLOW.md` (customer-driven discipline), `docs/SQL_REFERENCE.md`, `MIGRATION.md` Part B (version-to-version upgrades), `benchmarks/METRICS_BY_VERSION.md` (release ledger), per-version Tufte viz, CI bench-gate. **NO SQL changes** — recall behaviour identical to v0.3.0. See [CHANGELOG](CHANGELOG.md#031--2026-05-13).
+> **v0.4.0 (2026-05-15):** hybrid retrieval promoted to default. LoCoMo session recall@10 **+4.15pp** (0.7951 → 0.8409, p_corr=0.0156), MRR **+7.96pp** (p_corr<0.0001). 5 significant improvements, 0 regressions across 24 LoCoMo cells. **LongMemEval remains neutral** — hybrid does NOT close the BM25 gap (BM25 = 0.982; pgmnemo dense = 0.933). See [release scorecard](docs/img/scorecard_v0.4.0.md) and [honest competitive reality](docs/COMPETITIVE_REALITY.md).
 >
-> **What's next:** v0.4.0 (target 2026-06-10) — promote `recall_hybrid()` to default, target LongMemEval recall@10 ≥ 0.97 to beat the BM25 baseline. Full plan: [ROADMAP.md](ROADMAP.md). Workflow rules: [docs/WORKFLOW.md](docs/WORKFLOW.md).
+> **Opt-out:** `SET pgmnemo.disable_hybrid = 'true'` restores strict v0.3.0 vector-only behaviour.
+>
+> **What's next:** v0.4.1 (target 2026-06-01) — deprecate dead graph machinery from default `recall_lessons()` path. Full plan: [ROADMAP.md](ROADMAP.md).
 
 ## Benchmarks (v0.3.0, retrieval-only)
 

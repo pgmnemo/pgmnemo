@@ -1,0 +1,734 @@
+{
+  "version": "v0.4.0",
+  "date": "2026-05-15",
+  "schema_version": "v1",
+  "note": "Hybrid retrieval promoted to default via recall_lessons() routing. LoCoMo session uses router-validated run (DB at 0.4.0; bit-for-bit identical to direct hybrid call). LongMemEval reuses Phase A run (hybrid neutral; routing has no effect on neutral result).",
+  "tables": {
+    "locomo_session": {
+      "version": "v0.4.0_session",
+      "date": "2026-05-15",
+      "granularity": "session",
+      "hypothesis": "Hypothesis A (2026-05-09): session-level granularity aligns with paper retrieval unit",
+      "dry_run": false,
+      "mode": "real",
+      "dataset": "snap-research/locomo (locomo10.json from github main)",
+      "dataset_sha256": "79fa87e90f04081343b8c8debecb80a9a6842b76a7aa537dc9fdf651ea698ff4",
+      "embedder": "facebook/dragon-plus (context+query) \u2014 paper canonical",
+      "embedder_dim_native": 768,
+      "embedder_dim_stored": 1024,
+      "padding": "zero-pad 768->1024 for pgmnemo schema; cosine math-identical",
+      "pgmnemo_version": "0.4.0",
+      "n_corpus_segments": 272,
+      "n_questions_with_evidence": 1982,
+      "n_questions_total": 1986,
+      "category_distribution": {
+        "2": 321,
+        "3": 96,
+        "1": 282,
+        "4": 841,
+        "5": 446
+      },
+      "evidence_normalization": "turn-level 'D1:3' \u2192 session-level 'D1' by stripping ':turn' suffix",
+      "turn_level_baseline": {
+        "run": "v0.2.1_20260509",
+        "n_segments": 5882,
+        "recall@5": 0.3023,
+        "recall@10": 0.366,
+        "recall@25": 0.477,
+        "recall@50": 0.574,
+        "mrr": 0.2369
+      },
+      "by_category": {
+        "single_hop": {
+          "n": 282,
+          "recall@5": {
+            "n": 282,
+            "mean": 0.5157,
+            "ci95_lo": 0.4761,
+            "ci95_hi": 0.5554
+          },
+          "recall@10": {
+            "n": 282,
+            "mean": 0.7089,
+            "ci95_lo": 0.6745,
+            "ci95_hi": 0.7434
+          },
+          "recall@25": {
+            "n": 282,
+            "mean": 0.9501,
+            "ci95_lo": 0.9333,
+            "ci95_hi": 0.9669
+          },
+          "recall@50": {
+            "n": 282,
+            "mean": 0.9995,
+            "ci95_lo": 0.9985,
+            "ci95_hi": 1
+          },
+          "mrr": {
+            "n": 282,
+            "mean": 0.6226,
+            "ci95_lo": 0.5788,
+            "ci95_hi": 0.6665
+          }
+        },
+        "multi_hop": {
+          "n": 321,
+          "recall@5": {
+            "n": 321,
+            "mean": 0.7477,
+            "ci95_lo": 0.7014,
+            "ci95_hi": 0.7939
+          },
+          "recall@10": {
+            "n": 321,
+            "mean": 0.864,
+            "ci95_lo": 0.8276,
+            "ci95_hi": 0.9003
+          },
+          "recall@25": {
+            "n": 321,
+            "mean": 0.9891,
+            "ci95_lo": 0.9781,
+            "ci95_hi": 1
+          },
+          "recall@50": {
+            "n": 321,
+            "mean": 1.0,
+            "ci95_lo": 1.0,
+            "ci95_hi": 1
+          },
+          "mrr": {
+            "n": 321,
+            "mean": 0.6546,
+            "ci95_lo": 0.6111,
+            "ci95_hi": 0.698
+          }
+        },
+        "temporal": {
+          "n": 92,
+          "recall@5": {
+            "n": 92,
+            "mean": 0.4549,
+            "ci95_lo": 0.3643,
+            "ci95_hi": 0.5455
+          },
+          "recall@10": {
+            "n": 92,
+            "mean": 0.6559,
+            "ci95_lo": 0.5708,
+            "ci95_hi": 0.7411
+          },
+          "recall@25": {
+            "n": 92,
+            "mean": 0.9275,
+            "ci95_lo": 0.8765,
+            "ci95_hi": 0.9785
+          },
+          "recall@50": {
+            "n": 92,
+            "mean": 1.0,
+            "ci95_lo": 1.0,
+            "ci95_hi": 1
+          },
+          "mrr": {
+            "n": 92,
+            "mean": 0.4099,
+            "ci95_lo": 0.3346,
+            "ci95_hi": 0.4852
+          }
+        },
+        "open_domain": {
+          "n": 841,
+          "recall@5": {
+            "n": 841,
+            "mean": 0.7907,
+            "ci95_lo": 0.7633,
+            "ci95_hi": 0.8182
+          },
+          "recall@10": {
+            "n": 841,
+            "mean": 0.8894,
+            "ci95_lo": 0.8683,
+            "ci95_hi": 0.9106
+          },
+          "recall@25": {
+            "n": 841,
+            "mean": 0.978,
+            "ci95_lo": 0.9682,
+            "ci95_hi": 0.9879
+          },
+          "recall@50": {
+            "n": 841,
+            "mean": 0.9994,
+            "ci95_lo": 0.9982,
+            "ci95_hi": 1
+          },
+          "mrr": {
+            "n": 841,
+            "mean": 0.6667,
+            "ci95_lo": 0.6405,
+            "ci95_hi": 0.693
+          }
+        },
+        "adversarial": {
+          "n": 446,
+          "recall@5": {
+            "n": 446,
+            "mean": 0.7713,
+            "ci95_lo": 0.7323,
+            "ci95_hi": 0.8103
+          },
+          "recall@10": {
+            "n": 446,
+            "mean": 0.8543,
+            "ci95_lo": 0.8215,
+            "ci95_hi": 0.887
+          },
+          "recall@25": {
+            "n": 446,
+            "mean": 0.9731,
+            "ci95_lo": 0.9581,
+            "ci95_hi": 0.9881
+          },
+          "recall@50": {
+            "n": 446,
+            "mean": 1.0,
+            "ci95_lo": 1.0,
+            "ci95_hi": 1
+          },
+          "mrr": {
+            "n": 446,
+            "mean": 0.622,
+            "ci95_lo": 0.5849,
+            "ci95_hi": 0.6592
+          }
+        }
+      },
+      "overall": {
+        "recall@5": {
+          "n": 1982,
+          "mean": 0.7247,
+          "ci95_lo": 0.7062,
+          "ci95_hi": 0.7431
+        },
+        "recall@10": {
+          "n": 1982,
+          "mean": 0.8409,
+          "ci95_lo": 0.8261,
+          "ci95_hi": 0.8557
+        },
+        "recall@25": {
+          "n": 1982,
+          "mean": 0.9724,
+          "ci95_lo": 0.9658,
+          "ci95_hi": 0.979
+        },
+        "recall@50": {
+          "n": 1982,
+          "mean": 0.9997,
+          "ci95_lo": 0.9992,
+          "ci95_hi": 1
+        },
+        "mrr": {
+          "n": 1982,
+          "mean": 0.6365,
+          "ci95_lo": 0.6192,
+          "ci95_hi": 0.6538
+        }
+      },
+      "wall_clock_sec": 29.6,
+      "device": "mps"
+    },
+    "locomo_segment": {
+      "version": "v0.3.0",
+      "date": "2026-05-10",
+      "dry_run": false,
+      "mode": "real",
+      "dataset": "snap-research/locomo (locomo10.json from github main)",
+      "dataset_sha256": "79fa87e90f04081343b8c8debecb80a9a6842b76a7aa537dc9fdf651ea698ff4",
+      "embedder": "facebook/dragon-plus (context+query) \u2014 paper canonical",
+      "embedder_dim_native": 768,
+      "embedder_dim_stored": 1024,
+      "padding": "zero-pad 768->1024 for pgmnemo schema; cosine math-identical",
+      "pgmnemo_version": "0.3.0",
+      "n_corpus_segments": 5882,
+      "n_questions_with_evidence": 1982,
+      "n_questions_total": 1986,
+      "category_distribution": {
+        "2": 321,
+        "3": 96,
+        "1": 282,
+        "4": 841,
+        "5": 446
+      },
+      "by_category": {
+        "single_hop": {
+          "n": 282,
+          "recall@5": {
+            "n": 282,
+            "mean": 0.0691,
+            "ci95_lo": 0.0472,
+            "ci95_hi": 0.091
+          },
+          "recall@10": {
+            "n": 282,
+            "mean": 0.1153,
+            "ci95_lo": 0.0879,
+            "ci95_hi": 0.1426
+          },
+          "recall@25": {
+            "n": 282,
+            "mean": 0.199,
+            "ci95_lo": 0.165,
+            "ci95_hi": 0.2331
+          },
+          "recall@50": {
+            "n": 282,
+            "mean": 0.2885,
+            "ci95_lo": 0.2496,
+            "ci95_hi": 0.3275
+          },
+          "mrr": {
+            "n": 282,
+            "mean": 0.1066,
+            "ci95_lo": 0.0794,
+            "ci95_hi": 0.1338
+          }
+        },
+        "multi_hop": {
+          "n": 321,
+          "recall@5": {
+            "n": 321,
+            "mean": 0.3222,
+            "ci95_lo": 0.2726,
+            "ci95_hi": 0.3718
+          },
+          "recall@10": {
+            "n": 321,
+            "mean": 0.3938,
+            "ci95_lo": 0.342,
+            "ci95_hi": 0.4457
+          },
+          "recall@25": {
+            "n": 321,
+            "mean": 0.5008,
+            "ci95_lo": 0.4478,
+            "ci95_hi": 0.5538
+          },
+          "recall@50": {
+            "n": 321,
+            "mean": 0.6124,
+            "ci95_lo": 0.5609,
+            "ci95_hi": 0.6639
+          },
+          "mrr": {
+            "n": 321,
+            "mean": 0.2418,
+            "ci95_lo": 0.204,
+            "ci95_hi": 0.2797
+          }
+        },
+        "temporal": {
+          "n": 92,
+          "recall@5": {
+            "n": 92,
+            "mean": 0.093,
+            "ci95_lo": 0.0386,
+            "ci95_hi": 0.1475
+          },
+          "recall@10": {
+            "n": 92,
+            "mean": 0.1727,
+            "ci95_lo": 0.1013,
+            "ci95_hi": 0.2442
+          },
+          "recall@25": {
+            "n": 92,
+            "mean": 0.2353,
+            "ci95_lo": 0.156,
+            "ci95_hi": 0.3147
+          },
+          "recall@50": {
+            "n": 92,
+            "mean": 0.2879,
+            "ci95_lo": 0.2051,
+            "ci95_hi": 0.3706
+          },
+          "mrr": {
+            "n": 92,
+            "mean": 0.1065,
+            "ci95_lo": 0.0561,
+            "ci95_hi": 0.1569
+          }
+        },
+        "open_domain": {
+          "n": 841,
+          "recall@5": {
+            "n": 841,
+            "mean": 0.3355,
+            "ci95_lo": 0.304,
+            "ci95_hi": 0.367
+          },
+          "recall@10": {
+            "n": 841,
+            "mean": 0.3962,
+            "ci95_lo": 0.3635,
+            "ci95_hi": 0.4288
+          },
+          "recall@25": {
+            "n": 841,
+            "mean": 0.5182,
+            "ci95_lo": 0.4848,
+            "ci95_hi": 0.5516
+          },
+          "recall@50": {
+            "n": 841,
+            "mean": 0.6173,
+            "ci95_lo": 0.5849,
+            "ci95_hi": 0.6497
+          },
+          "mrr": {
+            "n": 841,
+            "mean": 0.2489,
+            "ci95_lo": 0.2246,
+            "ci95_hi": 0.2732
+          }
+        },
+        "adversarial": {
+          "n": 446,
+          "recall@5": {
+            "n": 446,
+            "mean": 0.4159,
+            "ci95_lo": 0.3704,
+            "ci95_hi": 0.4614
+          },
+          "recall@10": {
+            "n": 446,
+            "mean": 0.4877,
+            "ci95_lo": 0.4417,
+            "ci95_hi": 0.5336
+          },
+          "recall@25": {
+            "n": 446,
+            "mean": 0.6076,
+            "ci95_lo": 0.5628,
+            "ci95_hi": 0.6525
+          },
+          "recall@50": {
+            "n": 446,
+            "mean": 0.704,
+            "ci95_lo": 0.6621,
+            "ci95_hi": 0.746
+          },
+          "mrr": {
+            "n": 446,
+            "mean": 0.3201,
+            "ci95_lo": 0.2833,
+            "ci95_hi": 0.3568
+          }
+        }
+      },
+      "overall": {
+        "recall@5": {
+          "n": 1982,
+          "mean": 0.3023,
+          "ci95_lo": 0.2826,
+          "ci95_hi": 0.322
+        },
+        "recall@10": {
+          "n": 1982,
+          "mean": 0.366,
+          "ci95_lo": 0.3455,
+          "ci95_hi": 0.3866
+        },
+        "recall@25": {
+          "n": 1982,
+          "mean": 0.477,
+          "ci95_lo": 0.4558,
+          "ci95_hi": 0.4981
+        },
+        "recall@50": {
+          "n": 1982,
+          "mean": 0.574,
+          "ci95_lo": 0.5532,
+          "ci95_hi": 0.5947
+        },
+        "mrr": {
+          "n": 1982,
+          "mean": 0.2369,
+          "ci95_lo": 0.2214,
+          "ci95_hi": 0.2525
+        }
+      },
+      "wall_clock_sec": 196.8,
+      "device": "mps"
+    },
+    "longmemeval": {
+      "version": "v0.4.0_hybrid",
+      "date": "2026-05-15",
+      "dry_run": false,
+      "mode": "real",
+      "retrieval_method": "pgmnemo.recall_hybrid() vec_weight=0.4 bm25_weight=0.4 RRF k=60",
+      "dataset": "xiaowu0162/longmemeval-cleaned (longmemeval_s_cleaned.json \u2014 full haystacks, ~47.7 sessions/item)",
+      "dataset_sha256": "d6f21ea9d60a0d56f34a05b609c79c88a451d2ae03597821ea3d5a9678c3a442",
+      "embedder": "BAAI/bge-m3 (1024d) \u2014 DEVIATION from Stella V5 paper canonical",
+      "deviation_rationale": "Stella V5 modeling_qwen.py incompat with transformers 5.8; bge-m3 same dim, MTEB-strong, matches production embedding setup",
+      "truncation_chars": 8000,
+      "truncation_note": "Sessions truncated to 8000 chars before embedding (bge-m3 ~8192 token ctx); baseline v0.2.1_pgmnemo used 500-char truncation",
+      "device": "mps",
+      "device_note": "CPU forced to avoid MPS OOM that required 500-char truncation in baseline",
+      "pgmnemo_version": "0.3.1",
+      "n_items": 500,
+      "n_evaluated": 500,
+      "qtype_distribution": {
+        "single-session-user": 70,
+        "multi-session": 133,
+        "single-session-preference": 30,
+        "temporal-reasoning": 133,
+        "knowledge-update": 78,
+        "single-session-assistant": 56
+      },
+      "by_qtype": {
+        "knowledge-update": {
+          "n": 78,
+          "recall@1": {
+            "n": 78,
+            "mean": 0.4103,
+            "ci95_lo": 0.3674,
+            "ci95_hi": 0.4531
+          },
+          "recall@5": {
+            "n": 78,
+            "mean": 0.8846,
+            "ci95_lo": 0.8255,
+            "ci95_hi": 0.9437
+          },
+          "recall@10": {
+            "n": 78,
+            "mean": 0.9359,
+            "ci95_lo": 0.8908,
+            "ci95_hi": 0.981
+          },
+          "recall@20": {
+            "n": 78,
+            "mean": 0.9808,
+            "ci95_lo": 0.9593,
+            "ci95_hi": 1
+          },
+          "mrr": {
+            "n": 78,
+            "mean": 0.8861,
+            "ci95_lo": 0.8294,
+            "ci95_hi": 0.9429
+          }
+        },
+        "multi-session": {
+          "n": 133,
+          "recall@1": {
+            "n": 133,
+            "mean": 0.3743,
+            "ci95_lo": 0.3457,
+            "ci95_hi": 0.4029
+          },
+          "recall@5": {
+            "n": 133,
+            "mean": 0.9236,
+            "ci95_lo": 0.8892,
+            "ci95_hi": 0.958
+          },
+          "recall@10": {
+            "n": 133,
+            "mean": 0.9603,
+            "ci95_lo": 0.9341,
+            "ci95_hi": 0.9864
+          },
+          "recall@20": {
+            "n": 133,
+            "mean": 0.9906,
+            "ci95_lo": 0.9796,
+            "ci95_hi": 1
+          },
+          "mrr": {
+            "n": 133,
+            "mean": 0.9332,
+            "ci95_lo": 0.8999,
+            "ci95_hi": 0.9665
+          }
+        },
+        "single-session-assistant": {
+          "n": 56,
+          "recall@1": {
+            "n": 56,
+            "mean": 0.9821,
+            "ci95_lo": 0.9471,
+            "ci95_hi": 1
+          },
+          "recall@5": {
+            "n": 56,
+            "mean": 1.0,
+            "ci95_lo": 1.0,
+            "ci95_hi": 1
+          },
+          "recall@10": {
+            "n": 56,
+            "mean": 1.0,
+            "ci95_lo": 1.0,
+            "ci95_hi": 1
+          },
+          "recall@20": {
+            "n": 56,
+            "mean": 1.0,
+            "ci95_lo": 1.0,
+            "ci95_hi": 1
+          },
+          "mrr": {
+            "n": 56,
+            "mean": 0.9911,
+            "ci95_lo": 0.9736,
+            "ci95_hi": 1
+          }
+        },
+        "single-session-preference": {
+          "n": 30,
+          "recall@1": {
+            "n": 30,
+            "mean": 0.5333,
+            "ci95_lo": 0.3518,
+            "ci95_hi": 0.7149
+          },
+          "recall@5": {
+            "n": 30,
+            "mean": 0.8333,
+            "ci95_lo": 0.6977,
+            "ci95_hi": 0.969
+          },
+          "recall@10": {
+            "n": 30,
+            "mean": 0.9,
+            "ci95_lo": 0.7908,
+            "ci95_hi": 1
+          },
+          "recall@20": {
+            "n": 30,
+            "mean": 1.0,
+            "ci95_lo": 1.0,
+            "ci95_hi": 1
+          },
+          "mrr": {
+            "n": 30,
+            "mean": 0.6467,
+            "ci95_lo": 0.5056,
+            "ci95_hi": 0.7878
+          }
+        },
+        "single-session-user": {
+          "n": 70,
+          "recall@1": {
+            "n": 70,
+            "mean": 0.5,
+            "ci95_lo": 0.382,
+            "ci95_hi": 0.618
+          },
+          "recall@5": {
+            "n": 70,
+            "mean": 0.7857,
+            "ci95_lo": 0.6889,
+            "ci95_hi": 0.8825
+          },
+          "recall@10": {
+            "n": 70,
+            "mean": 0.8571,
+            "ci95_lo": 0.7746,
+            "ci95_hi": 0.9397
+          },
+          "recall@20": {
+            "n": 70,
+            "mean": 1.0,
+            "ci95_lo": 1.0,
+            "ci95_hi": 1
+          },
+          "mrr": {
+            "n": 70,
+            "mean": 0.6259,
+            "ci95_lo": 0.533,
+            "ci95_hi": 0.7187
+          }
+        },
+        "temporal-reasoning": {
+          "n": 133,
+          "recall@1": {
+            "n": 133,
+            "mean": 0.4023,
+            "ci95_lo": 0.3555,
+            "ci95_hi": 0.449
+          },
+          "recall@5": {
+            "n": 133,
+            "mean": 0.8574,
+            "ci95_lo": 0.81,
+            "ci95_hi": 0.9047
+          },
+          "recall@10": {
+            "n": 133,
+            "mean": 0.9248,
+            "ci95_lo": 0.8884,
+            "ci95_hi": 0.9612
+          },
+          "recall@20": {
+            "n": 133,
+            "mean": 0.9731,
+            "ci95_lo": 0.9517,
+            "ci95_hi": 0.9944
+          },
+          "mrr": {
+            "n": 133,
+            "mean": 0.858,
+            "ci95_lo": 0.8092,
+            "ci95_hi": 0.9068
+          }
+        }
+      },
+      "overall": {
+        "recall@1": {
+          "n": 500,
+          "mean": 0.4826,
+          "ci95_lo": 0.4523,
+          "ci95_hi": 0.5128
+        },
+        "recall@5": {
+          "n": 500,
+          "mean": 0.8837,
+          "ci95_lo": 0.8593,
+          "ci95_hi": 0.9082
+        },
+        "recall@10": {
+          "n": 500,
+          "mean": 0.9334,
+          "ci95_lo": 0.914,
+          "ci95_hi": 0.9528
+        },
+        "recall@20": {
+          "n": 500,
+          "mean": 0.9873,
+          "ci95_lo": 0.9801,
+          "ci95_hi": 0.9946
+        },
+        "mrr": {
+          "n": 500,
+          "mean": 0.8521,
+          "ci95_lo": 0.8263,
+          "ci95_hi": 0.878
+        }
+      },
+      "wall_clock_sec": 3956.9,
+      "baseline_comparison": {
+        "baseline_run": "v0.2.1_pgmnemo_20260509",
+        "baseline_truncation_chars": 500,
+        "baseline_device": "mps",
+        "baseline_recall10": 0.9326,
+        "baseline_mrr": 0.8554
+      }
+    }
+  }
+}
