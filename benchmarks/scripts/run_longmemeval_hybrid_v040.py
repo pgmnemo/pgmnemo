@@ -168,7 +168,7 @@ def main():
         cur.execute(
             """SELECT lesson_id, metadata->>'sid' AS sid
                FROM pgmnemo.recall_hybrid(%s::vector, %s, %s, 'bench_lme_pgm_full', 1, 0.4, 0.4)
-               ORDER BY hybrid_score DESC LIMIT %s""",
+               ORDER BY score DESC LIMIT %s""",
             (vec_to_pgvector(item_qry[ii]), item["question"], K_MAX, K_MAX),
         )
         retrieved_sids = [r[1] for r in cur.fetchall()]
