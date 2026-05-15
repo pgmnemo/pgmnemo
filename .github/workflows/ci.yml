@@ -95,3 +95,40 @@ jobs:
           else
             echo "::notice::No extension SQL changes — bench gate not required for this PR"
           fi
+
+  smoke-recall-hybrid:
+    # Quick smoke test for pgmnemo.recall_hybrid() signature stability.
+    # Catches signature/output-column breaks (like "hybrid_score" → "score" bug
+    # discovered 2026-05-14) before they crash bench scripts at runtime.
+    # Runs on every push and PR — fast (~10s), independent of installcheck job.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install PostgreSQL 17 + pgvector
+        run: |
+          sudo sh -c 'echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
+          curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo gpg --dearmor -o /etc/apt/trusted.gpg.d/postgresql.gpg
+          sudo apt-get update
+          sudo apt-get install -y postgresql-17 postgresql-17-pgvector postgresql-server-dev-17 build-essential
+      - name: Start PG + create role/db
+        run: |
+          sudo pg_createcluster --start 17 main || sudo pg_ctlcluster 17 main start
+          sudo -u postgres /usr/lib/postgresql/17/bin/psql -p 5433 -c "CREATE USER runner SUPERUSER PASSWORD 'runner';"
+          sudo -u postgres /usr/lib/postgresql/17/bin/psql -p 5433 -c "CREATE DATABASE pgmnemo_test OWNER runner;"
+      - name: Build + install extension + load hybrid opt-in
+        env:
+          PGUSER: runner
+          PGPASSWORD: runner
+          PGHOST: localhost
+          PGPORT: 5433
+          PGDATABASE: pgmnemo_test
+        run: |
+          cd extension && make PG_CONFIG=/usr/lib/postgresql/17/bin/pg_config && sudo make install PG_CONFIG=/usr/lib/postgresql/17/bin/pg_config
+          /usr/lib/postgresql/17/bin/psql -c "CREATE EXTENSION pgmnemo CASCADE;"
+          /usr/lib/postgresql/17/bin/psql -f pgmnemo--0.2.1--0.2.2-hybrid.sql
+      - name: Run smoke test
+        env:
+          DATABASE_URL: postgresql://runner:runner@localhost:5433/pgmnemo_test
+        run: |
+          python3 -m pip install --quiet psycopg2-binary
+          python3 scripts/smoke_recall_hybrid.py

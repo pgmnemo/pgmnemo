@@ -43,6 +43,22 @@ jobs:
           PGDATABASE: pgmnemo_test
         run: cd extension && make installcheck PG_CONFIG=/usr/lib/postgresql/17/bin/pg_config
 
+      - name: Apply v0.2.2 hybrid opt-in (for smoke test only)
+        env:
+          PGUSER: runner
+          PGPASSWORD: runner
+          PGHOST: localhost
+          PGPORT: 5433
+          PGDATABASE: pgmnemo_test
+        run: /usr/lib/postgresql/17/bin/psql -f extension/pgmnemo--0.2.1--0.2.2-hybrid.sql
+
+      - name: Smoke test recall_hybrid signature
+        env:
+          DATABASE_URL: postgresql://runner:runner@localhost:5433/pgmnemo_test
+        run: |
+          python3 -m pip install --quiet psycopg2-binary
+          python3 scripts/smoke_recall_hybrid.py
+
   bench-gate:
     runs-on: ubuntu-latest
     outputs:
