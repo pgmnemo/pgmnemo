@@ -159,11 +159,14 @@ pgmnemo.recall_hybrid(
     role_filter       TEXT    DEFAULT NULL,
     project_id_filter INT     DEFAULT NULL,
     vec_weight        FLOAT   DEFAULT 0.4,
-    bm25_weight       FLOAT   DEFAULT 0.4
+    bm25_weight       FLOAT   DEFAULT 0.4,
+    rrf_k             INT     DEFAULT 60
 ) RETURNS TABLE (
     lesson_id     BIGINT,
-    hybrid_score  DOUBLE PRECISION,
-    rrf_score     DOUBLE PRECISION,   -- diagnostic
+    score         DOUBLE PRECISION,   -- weighted hybrid combination (sort key)
+    vec_score     DOUBLE PRECISION,   -- diagnostic: cosine similarity component
+    bm25_score    DOUBLE PRECISION,   -- diagnostic: ts_rank_cd component
+    rrf_score     DOUBLE PRECISION,   -- diagnostic: 1/(rrf_k+vec_rank) + 1/(rrf_k+bm25_rank)
     role          TEXT,
     project_id    INT,
     topic         TEXT,
@@ -177,8 +180,15 @@ pgmnemo.recall_hybrid(
 )
 ```
 
-Formula: `hybrid_score = vec_weight×cosine + bm25_weight×ts_rank_cd(lesson_tsv, q, 32)`.
-Union retrieval: candidates matched by **either** cosine **or** BM25.
+Sort by the `score` column (NOT `hybrid_score` — that name appears in some
+draft docs and is a documented error; the actual output column is `score`).
+A signature smoke test lives at `scripts/smoke_recall_hybrid.py` and runs in
+CI on every push (job `smoke-recall-hybrid` in `.github/workflows/ci.yml`).
+
+Formula: `score = vec_weight × cosine + bm25_weight × ts_rank_cd(lesson_tsv, q, 32)`
+plus minor importance/recency/provenance components matching the
+`recall_lessons()` §6.4 formula. Union retrieval: candidates matched by
+**either** cosine **or** BM25.
 
 ### 2.6 `pgmnemo.traverse_causal_chain(...)` (v0.2.0+, direction added in v0.2.1)
 
