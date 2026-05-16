@@ -60,6 +60,10 @@ Real numbers vs published academic benchmarks. **Canonical protocol:** [docs/BEN
 
 ## 30-second quickstart
 
+> 📘 **For maintainers:** [docs/WORKFLOW.md](docs/WORKFLOW.md) (principles) ·
+> [docs/RELEASE_CHECKLIST.md](docs/RELEASE_CHECKLIST.md) (end-to-end Phase 0–7) ·
+> [docs/BENCHMARK_PROTOCOL.md](docs/BENCHMARK_PROTOCOL.md) (bench methodology)
+>
 > 📘 **Full installation guide:** [docs/INSTALL.md](docs/INSTALL.md) — 4 paths
 > with Docker production setup, GitHub-zip install (no compiler needed), and
 > gotcha table. The quickstart below is for laptop evaluation only.
