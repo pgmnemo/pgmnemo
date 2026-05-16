@@ -103,6 +103,141 @@ notes include monitor watchlist for v0.4.1 follow-up:
 
 ---
 
+## [0.4.1] — 2026-05-17
+
+### Theme
+
+Production hardening per Agency RFC (first external production user, 2026-05-16).
+Operational observability + safe API deprecation + GUC default re-tuning.
+
+### Bench verdict
+
+`scripts/significance_test_extended.py` vs v0.4.0 (`benchmarks/gate/v0.4.0.json`):
+
+| Bench / scope | Metric | v0.4.0 | v0.4.1 | Δpp | Verdict |
+|---|---|---|---|---|---|
+| LoCoMo session | recall@10 | 0.8409 | 0.8409 | 0.00 | neutral (router path unchanged) |
+| LoCoMo session | MRR | 0.6365 | 0.6365 | 0.00 | neutral |
+| LoCoMo segment | recall@10 | 0.3660 | TBD | TBD | recency_weight 0.08→0.05 may shift vector-only path |
+| LongMemEval-S | recall@10 | 0.9334 | TBD | TBD | hybrid path saturated; expected neutral |
+
+5 R-items from Agency RFC shipped (#18, #20, #21, #24, #27). 3 R-items deferred
+to v0.5.0 (#22, #23 helper SP portion, #27 final removal). 2 R-items deferred
+to v0.6.0 (#25, #26).
+
+### Added
+
+- **`pgmnemo.stats()`** — single-row diagnostic SP with 13 health-check signals
+  (R3): version, lesson_count, embedded_count, embedding_coverage_pct,
+  tsv_coverage_pct, mem_edge_count, recency_weight, ef_search,
+  importance_weight, hybrid_enabled, recall_hybrid_available,
+  oldest_lesson_age_days, orphan_count. `LANGUAGE sql STABLE`, <50ms on
+  N=10k corpus. Issue #20.
+- **`recall_lessons()` diagnostic columns** (R4): output shape grew 12 → 15
+  columns. Appended `vec_score`, `bm25_score`, `rrf_score`. Hybrid path:
+  all 3 populated. Vector-only path: vec_score populated, bm25_score and
+  rrf_score are NULL (informative NULL — tells the caller which path fired).
+  Backward compatible for named-column callers; positional callers re-audit.
+  Issue #21.
+- **`orphan_count` signal in `pgmnemo.stats()`** (R7) — detects functions in
+  `pgmnemo` schema not owned by the extension. Typically caused by intermediate
+  manual SQL patches. Recovery recipe in `docs/MIGRATION.md §B.5`. Issue #24.
+- **`docs/INSTALL.md`** (NEW, shipped 2026-05-16) — 4-path install guide:
+  PGXN, GitHub release zip, **Docker production via Dockerfile bake** (the
+  canonical Docker path), vendored extension directory. Plus "Reading the
+  GUCs" section explaining `SHOW` vs `current_setting` and "Common gotchas"
+  table. Issue #19.
+- **`docs/SQL_REFERENCE.md §1.1` mem_edge population contract** (shipped
+  2026-05-16) — canonical `INSERT ... ON CONFLICT` pattern, `relation_type`
+  → `edge_kind` mapping, 3 update-policy modes (replace/max/avg). Docs
+  portion of R6; helper SP `pgmnemo.add_edge()` deferred to v0.5.0 per
+  issue #23 comment.
+- **`docs/RELEASE_CHECKLIST.md`** (NEW) — canonical end-to-end Phase 0–7
+  release procedure with SQL migration conventions reference + rollback
+  procedure. Closes 6 of 11 workflow audit gaps (audit 2026-05-16).
+- **`scripts/build_pgxn_bundle.sh`** — reproducible bundle build with
+  META.json consistency validation.
+- **CI multi-PG compatibility matrix** — `compat-matrix` job runs against
+  PG 14/15/16 with `continue-on-error: true` for visibility (PG 17 remains
+  the blocking gate). See `README.md` Compatibility matrix.
+- **CI upgrade-path test** — `upgrade-path-test` job verifies
+  `ALTER EXTENSION pgmnemo UPDATE TO '0.4.1'` chain from v0.2.1, v0.3.0,
+  v0.4.0 on every push.
+- **`docs/CONTRIBUTING.md` and `SECURITY.md`** — workflow pointers + supported
+  version matrix updated for v0.4.1.
+
+### Changed
+
+- **`pgmnemo.recency_weight` default 0.08 → 0.05** (R1 code part). Per Agency
+  ablation on production corpus (N=1081, age 0-365d). Adopters who set this
+  via `ALTER SYSTEM` keep their values across upgrade; only the function-default
+  fallback changes. To explicitly use the previous default: `SET pgmnemo.recency_weight = '0.08'`.
+- **`docs/SQL_REFERENCE.md §3 GUCs` rewritten** — 5 recall scoring GUCs +
+  2 ingest GUCs + multi-tenant scoping, with v0.4.1 defaults and
+  default-change history table. Earlier doc showed stale 0.08 default;
+  fixed in commit `1f12c12`.
+- **`docs/USAGE.md` Tuning section** — switched from documenting upstream
+  `hnsw.ef_search` to documenting the pgmnemo wrapper GUC; added recency-weight
+  tuning subsection with Agency ablation citation.
+- **README** — added Compatibility matrix table (PG 14-17 + pgvector range);
+  added pointer block to WORKFLOW + RELEASE_CHECKLIST + BENCHMARK_PROTOCOL
+  for maintainer audience.
+- **`docs/RELEASE_PROCESS.md` marked DEPRECATED** — superseded by
+  WORKFLOW.md + RELEASE_CHECKLIST.md. Mapping table in the document header
+  shows which canonical doc replaces each old section.
+
+### Deprecated
+
+- **`pgmnemo.traverse_causal_chain(BIGINT, INT, TEXT[], BOOLEAN)`** — the
+  4-arg overload now emits `RAISE NOTICE` on every call and delegates to
+  the 5-arg form with `direction='forward'`. **Will be REMOVED in v0.5.0.**
+  Update callers to pass `direction` explicitly (R10, Agency-specific).
+  Issue #27.
+
+### Fixed
+
+- `docs/SQL_REFERENCE.md §2.5` corrected (`recall_hybrid` output column was
+  documented as `hybrid_score`, actually `score`) — fixed in v0.4.0 cycle but
+  carried forward by reference here.
+
+### Upgrade
+
+```sql
+ALTER EXTENSION pgmnemo UPDATE TO '0.4.1';
+```
+
+Idempotent. Adopters with `recall_lessons()` callers using positional argument
+binding (not named) MUST re-audit: output column count grew 12 → 15. Named-column
+callers (`SELECT lesson_id, score FROM pgmnemo.recall_lessons(...)`) are unaffected.
+
+Adopters who relied on the deprecated 4-arg `traverse_causal_chain()` will see
+a `NOTICE` on every call in v0.4.1; update calls to pass `direction='forward'`
+explicitly before v0.5.0 ships.
+
+### Operator scheduling tip
+
+If you set `expires_at` on lessons, schedule `pgmnemo.evict_expired_lessons()`
+via `pg_cron`:
+
+```sql
+SELECT cron.schedule('pgmnemo-evict', '0 3 * * *',
+                     'SELECT pgmnemo.evict_expired_lessons()');
+```
+
+R8 (project-scoped TTL eviction) is scheduled for v0.6.0; until then,
+`evict_expired_lessons()` is global.
+
+### Workflow
+
+This is the first release shipped under the formalised
+[docs/RELEASE_CHECKLIST.md](docs/RELEASE_CHECKLIST.md) Phase 0–7 procedure.
+Maintainer audit (2026-05-16) found 11 gaps in the pre-v0.4.1 workflow; 6 are
+closed in this release (canonical end-to-end checklist, reproducible bundle
+build, deprecation of stale RELEASE_PROCESS doc, cross-linking, multi-PG
+visibility, upgrade-path testing).
+
+---
+
 ## [0.3.1] — 2026-05-13
 
 ### Theme

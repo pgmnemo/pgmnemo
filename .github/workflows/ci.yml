@@ -132,3 +132,97 @@ jobs:
         run: |
           python3 -m pip install --quiet psycopg2-binary
           python3 scripts/smoke_recall_hybrid.py
+
+  compat-matrix:
+    # Multi-PG-version compatibility check. PG 17 is the gate (covered by
+    # installcheck above); PG 14/15/16 are continue-on-error to give visibility
+    # without blocking ship while we verify older-version compatibility claims
+    # in META.json + README. As of v0.4.1 the compatibility matrix is
+    # aspirational — file an issue if any non-17 version fails.
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        pg: [14, 15, 16]
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install PostgreSQL ${{ matrix.pg }} + pgvector
+        run: |
+          sudo sh -c 'echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
+          curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo gpg --dearmor -o /etc/apt/trusted.gpg.d/postgresql.gpg
+          sudo apt-get update
+          sudo apt-get install -y postgresql-${{ matrix.pg }} postgresql-${{ matrix.pg }}-pgvector postgresql-server-dev-${{ matrix.pg }} build-essential
+      - name: Start PG ${{ matrix.pg }}
+        run: |
+          sudo pg_createcluster --start ${{ matrix.pg }} main || sudo pg_ctlcluster ${{ matrix.pg }} main start
+          PORT=$(sudo grep -E '^port' /etc/postgresql/${{ matrix.pg }}/main/postgresql.conf | head -1 | sed 's/[^0-9]//g')
+          echo "PG_PORT=${PORT}" >> $GITHUB_ENV
+          sudo -u postgres /usr/lib/postgresql/${{ matrix.pg }}/bin/psql -p ${PORT} -c "CREATE USER runner SUPERUSER PASSWORD 'runner';"
+          sudo -u postgres /usr/lib/postgresql/${{ matrix.pg }}/bin/psql -p ${PORT} -c "CREATE DATABASE pgmnemo_test OWNER runner;"
+      - name: Build + install extension
+        env:
+          PGUSER: runner
+          PGPASSWORD: runner
+          PGHOST: localhost
+          PGPORT: ${{ env.PG_PORT }}
+          PGDATABASE: pgmnemo_test
+        run: |
+          cd extension && make PG_CONFIG=/usr/lib/postgresql/${{ matrix.pg }}/bin/pg_config
+          sudo make install PG_CONFIG=/usr/lib/postgresql/${{ matrix.pg }}/bin/pg_config
+      - name: CREATE EXTENSION smoke
+        env:
+          PGUSER: runner
+          PGPASSWORD: runner
+          PGHOST: localhost
+          PGPORT: ${{ env.PG_PORT }}
+          PGDATABASE: pgmnemo_test
+        run: /usr/lib/postgresql/${{ matrix.pg }}/bin/psql -c "CREATE EXTENSION pgmnemo CASCADE; SELECT pgmnemo.version();"
+
+  upgrade-path-test:
+    # Verify ALTER EXTENSION UPDATE chain works end-to-end on PG 17.
+    # Tests every adopter-relevant upgrade path:
+    #   v0.2.1 → v0.4.1  (the longest realistic upgrade Agency-style)
+    #   v0.3.0 → v0.4.1
+    #   v0.4.0 → v0.4.1  (the most common immediate upgrade)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install PostgreSQL 17 + pgvector
+        run: |
+          sudo sh -c 'echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
+          curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo gpg --dearmor -o /etc/apt/trusted.gpg.d/postgresql.gpg
+          sudo apt-get update
+          sudo apt-get install -y postgresql-17 postgresql-17-pgvector postgresql-server-dev-17 build-essential
+      - name: Start PG
+        run: |
+          sudo pg_createcluster --start 17 main || sudo pg_ctlcluster 17 main start
+          sudo -u postgres /usr/lib/postgresql/17/bin/psql -p 5433 -c "CREATE USER runner SUPERUSER PASSWORD 'runner';"
+      - name: Install extension files
+        run: |
+          cd extension && make PG_CONFIG=/usr/lib/postgresql/17/bin/pg_config
+          sudo make install PG_CONFIG=/usr/lib/postgresql/17/bin/pg_config
+      - name: Test upgrade chains
+        env:
+          PGUSER: runner
+          PGPASSWORD: runner
+          PGHOST: localhost
+          PGPORT: 5433
+        run: |
+          PSQL=/usr/lib/postgresql/17/bin/psql
+          for FROM_VER in 0.2.1 0.3.0 0.4.0; do
+            echo "::group::Upgrade chain from $FROM_VER → 0.4.1"
+            sudo -u postgres $PSQL -p 5433 -c "DROP DATABASE IF EXISTS upgrade_test_$(echo $FROM_VER | tr . _)"
+            sudo -u postgres $PSQL -p 5433 -c "CREATE DATABASE upgrade_test_$(echo $FROM_VER | tr . _) OWNER runner"
+            DB=upgrade_test_$(echo $FROM_VER | tr . _)
+            $PSQL -d $DB -c "CREATE EXTENSION pgmnemo VERSION '$FROM_VER' CASCADE"
+            VER=$($PSQL -d $DB -tAc "SELECT pgmnemo.version()")
+            echo "  installed: $VER"
+            $PSQL -d $DB -c "ALTER EXTENSION pgmnemo UPDATE TO '0.4.1'"
+            VER=$($PSQL -d $DB -tAc "SELECT pgmnemo.version()")
+            echo "  upgraded:  $VER"
+            test "$VER" = "0.4.1" || { echo "FAIL: upgrade from $FROM_VER produced $VER"; exit 1; }
+            $PSQL -d $DB -c "SELECT version, lesson_count, mem_edge_count, hybrid_enabled, orphan_count FROM pgmnemo.stats()"
+            echo "::endgroup::"
+          done
+          echo "✓ All 3 upgrade paths verified"
