@@ -60,23 +60,37 @@ Real numbers vs published academic benchmarks. **Canonical protocol:** [docs/BEN
 
 ## 30-second quickstart
 
-**PGXN install (if pgxnclient is available):**
+> 📘 **Full installation guide:** [docs/INSTALL.md](docs/INSTALL.md) — 4 paths
+> with Docker production setup, GitHub-zip install (no compiler needed), and
+> gotcha table. The quickstart below is for laptop evaluation only.
+
+**PGXN install (if `pgxnclient` is available):**
 
 ```bash
-pgxn install pgmnemo
+pgxn install pgmnemo==0.4.0
 ```
 
-**From source (Docker):**
+**Docker (production):** pgmnemo is **pure SQL** — no compilation. Bake files
+into your image with a 3-line Dockerfile:
+
+```dockerfile
+FROM pgvector/pgvector:pg17
+ADD https://github.com/pgmnemo/pgmnemo/releases/download/v0.4.0/pgmnemo-0.4.0.zip /tmp/
+RUN apt-get update && apt-get install -y --no-install-recommends unzip \
+    && unzip /tmp/pgmnemo-0.4.0.zip -d /tmp/ \
+    && cp /tmp/pgmnemo-0.4.0/extension/pgmnemo.control \
+          /tmp/pgmnemo-0.4.0/extension/pgmnemo--*.sql \
+          /usr/share/postgresql/17/extension/ \
+    && apt-get remove -y unzip && rm -rf /tmp/pgmnemo-0.4.0* /var/lib/apt/lists/*
+```
+
+**Dev / laptop one-liner (NOT for production — state lost on container rebuild):**
 
 ```bash
-# 1. Start PG 17 + pgvector
 docker run --name pgmnemo-dev -e POSTGRES_PASSWORD=pass -p 5432:5432 -d pgvector/pgvector:pg17
-
-# 2. Build and install the extension (requires make, gcc, pg_config on PATH)
-git clone https://github.com/pgmnemo/pgmnemo.git
-docker exec pgmnemo-dev bash -c "apt-get install -y postgresql-server-dev-17 make gcc 2>/dev/null; true"
-docker cp pgmnemo/extension pgmnemo-dev:/tmp/pgmnemo
-docker exec pgmnemo-dev bash -c "cd /tmp/pgmnemo && make && make install"
+curl -L https://github.com/pgmnemo/pgmnemo/releases/download/v0.4.0/pgmnemo-0.4.0.zip -o /tmp/pg.zip
+docker cp /tmp/pg.zip pgmnemo-dev:/tmp/
+docker exec pgmnemo-dev bash -c "cd /tmp && unzip -q pg.zip && cp pgmnemo-0.4.0/extension/pgmnemo.control pgmnemo-0.4.0/extension/pgmnemo--*.sql /usr/share/postgresql/17/extension/"
 ```
 
 ```sql

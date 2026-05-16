@@ -60,6 +60,60 @@ GIN on `lesson_tsv` (v0.2.2+), GIN on `metadata`.
 
 Indexes: per-kind partial B-tree on `(lesson_a_id, lesson_b_id) WHERE edge_kind = '<value>'`.
 
+##### Population contract (canonical, since v0.4.0)
+
+Adopters streaming edges from their orchestration layer should follow this contract.
+`pgmnemo.add_edge()` helper SP shipping in v0.5.0 will encapsulate it; until then,
+write the `INSERT ... ON CONFLICT` pattern directly.
+
+**Semantics:**
+
+| Column | Convention |
+|---|---|
+| `lesson_a_id` | The **earlier** lesson in the causal chain (or the anchor of the relation) |
+| `lesson_b_id` | The **later** lesson, or the satellite |
+| `relation_type` | One of `CAUSED_BY`, `CO_OCCURRED`, `DERIVED_FROM`, `ENTITY_LINK` (freeform but canonical values shown) |
+| `edge_kind` | Required ENUM since v0.3.0 — must match the semantics of `relation_type` (mapping below) |
+| `weight` | Edge confidence in `[0.0, 1.0]`. `1.0` = certain (e.g. same git commit); `0.5` = inferred co-occurrence; `< 0.3` = weak, possibly noise. |
+| `metadata` | Optional context (e.g. `{"source": "run_12345"}`) |
+
+**Recommended `relation_type` → `edge_kind` mapping:**
+
+| relation_type | edge_kind |
+|---|---|
+| `CAUSED_BY`, `DERIVED_FROM`, `CONTRADICTS` | `causal` |
+| `CO_OCCURRED` | `temporal` |
+| `ENTITY_LINK`, `SHARED_TAG` | `entity` |
+| anything else | `semantic` (default) |
+
+**Idempotent insertion pattern (canonical):**
+
+```sql
+INSERT INTO pgmnemo.mem_edge
+    (lesson_a_id, lesson_b_id, relation_type, edge_kind, weight, metadata)
+VALUES
+    ($1, $2, $3, $4, $5, $6)
+ON CONFLICT (lesson_a_id, lesson_b_id, relation_type)
+DO UPDATE SET
+    weight   = EXCLUDED.weight,
+    metadata = pgmnemo.mem_edge.metadata || EXCLUDED.metadata;
+```
+
+Note: the unique constraint `(lesson_a_id, lesson_b_id, relation_type)` is the
+de-dup key. Edges with different `relation_type` between the same pair of lessons
+are intentionally allowed (e.g. `A CAUSED_BY B` and `A CO_OCCURRED B` may both be
+true).
+
+**Update policy options** (pick one and document in your application):
+
+- `mode='replace'` — `SET weight = EXCLUDED.weight` (last-writer-wins; default in the SQL above)
+- `mode='max'` — `SET weight = GREATEST(mem_edge.weight, EXCLUDED.weight)` (monotonic non-decreasing)
+- `mode='avg'` — `SET weight = (mem_edge.weight + EXCLUDED.weight) / 2.0` (running average; requires care with race conditions)
+
+When `pgmnemo.add_edge(...)` ships in v0.5.0 (per
+[issue #23](https://github.com/pgmnemo/pgmnemo/issues/23)), it will accept a
+`mode TEXT DEFAULT 'replace'` parameter encapsulating these patterns.
+
 ### 1.2 ENUM types
 
 ```sql
