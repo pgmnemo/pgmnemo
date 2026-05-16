@@ -278,17 +278,40 @@ FROM pgmnemo.recall_hybrid(
 
 ## Tuning
 
-### HNSW ef_search
+> **All pgmnemo GUCs** with current defaults are in
+> [`docs/SQL_REFERENCE.md §3`](SQL_REFERENCE.md#3-gucs). The most commonly tuned
+> ones are summarised below. `SELECT * FROM pgmnemo.stats()` (v0.4.1+) shows
+> what's currently active.
 
-Higher `ef_search` improves recall accuracy at the cost of query latency. Default is 40.
+### HNSW ef_search — via the pgmnemo GUC
+
+pgmnemo wraps pgvector's HNSW `ef_search` parameter so you don't need to know
+pgvector internals. Set the pgmnemo-namespaced GUC; recall_lessons() applies
+`SET LOCAL pgvector.hnsw.ef_search` internally for the duration of the call.
 
 ```sql
--- Per-session (no restart required)
-SET hnsw.ef_search = 100;
+-- Default 100 (v0.2.1+; was 40 in upstream pgvector). Per-session:
+SET pgmnemo.ef_search = '200';
+
+-- Or persistent (requires superuser):
+ALTER SYSTEM SET pgmnemo.ef_search = '200';
+SELECT pg_reload_conf();
 ```
 
-Rule of thumb: start at 40 for latency-sensitive paths, raise to 100–200 when recall
-accuracy matters more than p99 latency.
+Rule of thumb: start at 100 (v0.2.1+ default), raise to 200–400 when recall
+accuracy matters more than p99 latency. Below 40 = sharp recall degradation.
+
+### Recency-weight tuning
+
+```sql
+-- Default 0.05 in v0.4.1 (was 0.08 in v0.2.1-v0.4.0).
+-- Lower → less bias toward recent lessons (good for long-lived corpora).
+-- Higher → more bias toward recent (good for ephemeral / fast-moving corpora).
+SET pgmnemo.recency_weight = '0.10';
+```
+
+Agency RFC (Production corpus N=1081, age 0–365 days) found 0.05 near-optimal.
+If your corpus is shorter-lived (e.g. 30-day rolling window) you may want 0.10–0.15.
 
 ### HNSW index parameters
 

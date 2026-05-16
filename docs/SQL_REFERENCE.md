@@ -282,16 +282,66 @@ pgmnemo.traverse_temporal_window(
 
 ## 3. GUCs
 
+> **Reading GUCs:** `SHOW pgmnemo.*` will fail because pgmnemo is a pure-SQL extension
+> (cannot use `DefineCustomXxxVariable`). Use `current_setting('pgmnemo.X', TRUE)`.
+> Full guide: [docs/INSTALL.md "Reading the GUCs"](INSTALL.md#reading-the-gucs-read-this-if-you-came-from-show).
+> One-row inspection of current values: `SELECT * FROM pgmnemo.stats()` (v0.4.1+).
+
+### 3.1 Recall scoring GUCs (used by `recall_lessons()`)
+
 | GUC | Type | Default | Range | Description |
 |---|---|---|---|---|
-| `pgmnemo.recency_weight` | float | `0.08` (v0.2.1+, was 0.20) | 0.0 – 1.0 | Half-life multiplier for recency decay |
-| `pgmnemo.gate_strict` | enum | `enforce` | `enforce` / `warn` / `off` | Provenance gate behaviour in `ingest()` |
-| `pgmnemo.include_unverified` | bool | `false` | `true` / `false` | Include ghost lessons in `recall_lessons()` |
-| `pgmnemo.ef_search` | int | `100` (v0.2.1+) | 10 – 500 | Applied as `SET LOCAL hnsw.ef_search` at recall entry |
-| `pgmnemo.tenant_id` | text | `''` (empty = bypass) | any | RLS scoping key (v0.2.1+) |
+| `pgmnemo.recency_weight` | float | **`0.05`** (v0.4.1; was `0.08` in v0.2.1–v0.4.0, was `0.20` in v0.1.x) | 0.0 – 0.3 (rec.) | Coefficient on the recency-decay term (90-day half-life). Lower values reduce the bias toward recent lessons. Agency RFC ablation (N=1081, 0-365d age) found 0.05 near-optimal for long-lived corpora. |
+| `pgmnemo.importance_weight` | float | **`0.15`** (v0.4.1 documented; was implicit `0.20` in pre-v0.4.1 formula) | 0.0 – 0.3 | Coefficient on `importance / 5` term in scoring. Documents the per-formula importance coefficient. |
+| `pgmnemo.ef_search` | int | `100` (v0.2.1+) | 10 – 500 | Applied as `SET LOCAL pgvector.hnsw.ef_search` at recall entry. Higher = more accurate ANN at cost of latency. |
+| `pgmnemo.disable_hybrid` | bool | `false` (v0.4.0+) | `true` / `false` | Opt out of hybrid routing. When `true`, `recall_lessons()` always uses vector-only path regardless of `query_text`. Use for adopters who need deterministic v0.3.x behaviour. |
+| `pgmnemo.graph_proximity_weight` | float | `0.2` | 0.0 – 0.5 | Weight on `mem_edge` graph-walk proximity term in `recall_hybrid()` scoring. Set to `0.0` for pure semantic recall (Agency's bench setup). |
 
-Override per-session: `SET pgmnemo.<guc> = '<value>'`  
-Persist: `ALTER SYSTEM SET pgmnemo.<guc> = '<value>'; SELECT pg_reload_conf();`
+### 3.2 Write/ingest GUCs (used by `pgmnemo.ingest()` and `recall_lessons()` filtering)
+
+| GUC | Type | Default | Range | Description |
+|---|---|---|---|---|
+| `pgmnemo.gate_strict` | enum | `enforce` | `enforce` / `warn` / `off` | Provenance gate behaviour in `ingest()`. `enforce` blocks; `warn` logs and proceeds; `off` skips. |
+| `pgmnemo.include_unverified` | bool | `false` | `true` / `false` | Include ghost lessons (`verified_at IS NULL`) in `recall_lessons()` output. |
+
+### 3.3 Multi-tenant scoping (v0.2.1+)
+
+| GUC | Type | Default | Description |
+|---|---|---|---|
+| `pgmnemo.tenant_id` | text | `''` (empty = service-account bypass; all rows visible) | RLS scoping key. Non-empty restricts `agent_lesson` to rows where `project_id::text = current_setting('pgmnemo.tenant_id')`. |
+
+### 3.4 Override patterns
+
+```sql
+-- Session-scope (this connection only):
+SET pgmnemo.recency_weight = '0.05';
+
+-- System-scope (persistent until next ALTER SYSTEM; requires superuser):
+ALTER SYSTEM SET pgmnemo.recency_weight = '0.05';
+SELECT pg_reload_conf();
+
+-- Verify what's currently active (works without registration):
+SELECT * FROM pgmnemo.stats();  -- v0.4.1+
+-- Or individually:
+SELECT current_setting('pgmnemo.recency_weight', TRUE);
+-- (TRUE = return NULL on missing instead of error; falls back to function default)
+
+-- Verify what's persisted in postgresql.auto.conf:
+SELECT name, setting, sourcefile FROM pg_file_settings WHERE name LIKE 'pgmnemo.%';
+```
+
+### 3.5 Default-change history (operator notes)
+
+| Version | GUC | Old → New | Reason |
+|---|---|---|---|
+| v0.2.1 | `pgmnemo.recency_weight` | `0.20` → `0.08` | Pending REC-1 ablation (never completed our side) |
+| v0.4.1 | `pgmnemo.recency_weight` | `0.08` → `0.05` | Agency RFC ablation (N=1081 production corpus); see RFC §R1 |
+| v0.2.1 | `pgmnemo.ef_search` | (new GUC, default 100) | HNSW recall quality at production query rate |
+| v0.4.0 | `pgmnemo.disable_hybrid` | (new GUC, default FALSE) | Hybrid retrieval became default; this is the opt-out switch |
+
+Adopters who set GUCs via `ALTER SYSTEM` keep their values across version upgrades.
+Only the **function default fallback** changes when we ship a new default. To
+explicitly use the previous default after upgrade: `SET pgmnemo.recency_weight = '0.08'`.
 
 ---
 
