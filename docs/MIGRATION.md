@@ -247,6 +247,34 @@ ALTER EXTENSION pgmnemo UPDATE TO '0.2.1';
 - **Backfill:** trigger fires on next UPDATE; to backfill all existing rows:
   `UPDATE pgmnemo.agent_lesson SET lesson_text = lesson_text;`
 
+### v0.4.0 → v0.4.1 (production hardening + new diagnostic API)
+
+```sql
+ALTER EXTENSION pgmnemo UPDATE TO '0.4.1';
+```
+
+- **New SP `pgmnemo.stats()`** — 13-column health-check snapshot (R3 of Agency RFC).
+  Safe to call from monitoring loops.
+- **`recall_lessons()` output grew 12 → 15 columns** (R4). Appended diagnostic
+  columns: `vec_score`, `bm25_score`, `rrf_score`. Named-column callers
+  unaffected; **positional-argument callers MUST re-audit**.
+- **`pgmnemo.recency_weight` default 0.08 → 0.05** (R1). Adopters using
+  `ALTER SYSTEM SET pgmnemo.recency_weight` keep their explicit values across
+  the upgrade; only the function-default fallback changes. To preserve the
+  previous default explicitly:
+  ```sql
+  ALTER SYSTEM SET pgmnemo.recency_weight = '0.08';
+  SELECT pg_reload_conf();
+  ```
+- **4-arg `traverse_causal_chain()` DEPRECATED** with `RAISE NOTICE` (R10).
+  Will be REMOVED in v0.5.0. Update callers to pass `direction` explicitly:
+  ```sql
+  -- Before (deprecated):
+  SELECT * FROM pgmnemo.traverse_causal_chain(start_id, 5, ARRAY['causal'], TRUE);
+  -- After (canonical):
+  SELECT * FROM pgmnemo.traverse_causal_chain(start_id, 5, ARRAY['causal'], TRUE, 'forward');
+  ```
+
 ### v0.2.1 → v0.3.0 (edge_kind ENUM)
 
 ```sql
@@ -279,6 +307,64 @@ pgmnemo does not ship DOWN migrations. To revert:
 
 For production, the maintainer team keeps `rollback/v<previous>` git branches at
 each release; CI can redeploy from them.
+
+## B.5 Recovery from extension-orphan objects (v0.4.1+)
+
+**Symptom on `ALTER EXTENSION pgmnemo UPDATE`:**
+
+```
+ERROR: function pgmnemo.X(...) already exists but is not a member of extension "pgmnemo"
+```
+
+**Cause:** Someone applied an intermediate manual SQL patch (e.g. an old
+`step4-recall-mixin.sql` snippet from a WG iteration) **outside** the
+`ALTER EXTENSION ... UPDATE` mechanism. The function now exists in the schema
+but PostgreSQL doesn't consider it part of the extension, so it refuses to
+let the extension upgrade replace it.
+
+**Detection:** v0.4.1 ships `pgmnemo.stats()` with an `orphan_count` column.
+On a clean install this is `0`. Non-zero means orphans exist:
+
+```sql
+SELECT orphan_count FROM pgmnemo.stats();
+```
+
+To list the actual orphans:
+
+```sql
+SELECT p.proname, pg_get_function_identity_arguments(p.oid) AS signature
+FROM pg_proc p
+JOIN pg_namespace n ON n.oid = p.pronamespace
+LEFT JOIN pg_depend d
+    ON d.objid = p.oid
+   AND d.deptype = 'e'
+   AND d.refobjid = (SELECT oid FROM pg_extension WHERE extname = 'pgmnemo')
+WHERE n.nspname = 'pgmnemo' AND d.objid IS NULL
+  AND p.proname NOT LIKE '\_%' ESCAPE '\';
+```
+
+**Recovery — re-parent orphans to the extension:**
+
+```sql
+-- For each orphan listed by the query above:
+ALTER EXTENSION pgmnemo ADD FUNCTION pgmnemo.<proname>(<signature>);
+-- Then retry the upgrade:
+ALTER EXTENSION pgmnemo UPDATE TO '<target_version>';
+```
+
+Requires superuser. **Verify the function body matches the canonical
+extension version** before re-parenting — orphans may carry a divergent
+implementation from your prior manual patch. If unsure, `DROP FUNCTION` it
+and let the upgrade re-create the canonical version:
+
+```sql
+DROP FUNCTION pgmnemo.<proname>(<signature>);   -- only the orphan
+ALTER EXTENSION pgmnemo UPDATE TO '<target_version>';
+```
+
+**Prevention going forward:** never apply files from `extension/` directly via
+`psql -f` outside of `CREATE EXTENSION` / `ALTER EXTENSION UPDATE`. Migration
+files include a `\quit` directive at the top precisely to discourage this.
 
 ## B.4 Post-upgrade verification
 

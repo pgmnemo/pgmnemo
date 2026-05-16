@@ -8,38 +8,38 @@ Tufte-style sparkline table. Each row is one (benchmark × scope × metric).
 
 ## LoCoMo session-level  (DRAGON, paper-canonical headline)
 
-| scope | metric | v0.2.1 | v0.3.0 | v0.4.0 | Δ first→latest |
-|---|---|---|---|---|---|
-| **OVERALL** | `recall@5` | 0.662 | 0.664 | 0.725 | ▲6.24pp |
-| **OVERALL** | `recall@10` | 0.795 | 0.799 | 0.841 | ▲4.58pp |
-| **OVERALL** | `recall@25` | 0.962 | 0.964 | 0.972 | ▲1.01pp |
-| **OVERALL** | `recall@50` | 0.999 | 1.000 | 1.000 | ─0.04pp |
-| **OVERALL** | `mrr` | 0.548 | 0.557 | 0.636 | ▲8.85pp |
-| **single_hop** | `recall@5` | 0.503 | 0.488 | 0.516 | ▲1.23pp |
-| **single_hop** | `recall@10` | 0.681 | 0.673 | 0.709 | ▲2.83pp |
-| **single_hop** | `recall@25` | 0.934 | 0.934 | 0.950 | ▲1.56pp |
-| **single_hop** | `recall@50` | 0.997 | 0.999 | 1.000 | ─0.25pp |
-| **single_hop** | `mrr` | 0.595 | 0.586 | 0.623 | ▲2.76pp |
-| **multi_hop** | `recall@5` | 0.682 | 0.670 | 0.748 | ▲6.60pp |
-| **multi_hop** | `recall@10` | 0.834 | 0.827 | 0.864 | ▲2.96pp |
-| **multi_hop** | `recall@25` | 0.984 | 0.989 | 0.989 | ─0.47pp |
-| **multi_hop** | `recall@50` | 1.000 | 1.000 | 1.000 | ─0.00pp |
-| **multi_hop** | `mrr` | 0.543 | 0.559 | 0.655 | ▲11.12pp |
-| **temporal** | `recall@5` | 0.482 | 0.444 | 0.455 | ▼2.72pp |
-| **temporal** | `recall@10` | 0.660 | 0.645 | 0.656 | ─0.41pp |
-| **temporal** | `recall@25` | 0.927 | 0.929 | 0.927 | ─0.09pp |
-| **temporal** | `recall@50` | 1.000 | 1.000 | 1.000 | ─0.00pp |
-| **temporal** | `mrr` | 0.401 | 0.384 | 0.410 | ▲0.91pp |
-| **open_domain** | `recall@5` | 0.701 | 0.718 | 0.791 | ▲8.97pp |
-| **open_domain** | `recall@10` | 0.819 | 0.838 | 0.889 | ▲7.07pp |
-| **open_domain** | `recall@25` | 0.966 | 0.969 | 0.978 | ▲1.19pp |
-| **open_domain** | `recall@50` | 0.999 | 0.999 | 0.999 | ─0.00pp |
-| **open_domain** | `mrr` | 0.549 | 0.569 | 0.667 | ▲11.78pp |
-| **adversarial** | `recall@5` | 0.713 | 0.715 | 0.771 | ▲5.83pp |
-| **adversarial** | `recall@10` | 0.823 | 0.818 | 0.854 | ▲3.14pp |
-| **adversarial** | `recall@25` | 0.964 | 0.964 | 0.973 | ▲0.90pp |
-| **adversarial** | `recall@50` | 1.000 | 1.000 | 1.000 | ─0.00pp |
-| **adversarial** | `mrr` | 0.550 | 0.551 | 0.622 | ▲7.16pp |
+| scope | metric | v0.2.1 | v0.3.0 | v0.4.0 | v0.4.1 | Δ first→latest |
+|---|---|---|---|---|---|---|
+| **OVERALL** | `recall@5` | 0.662 | 0.664 | 0.725 | 0.725 | ▲6.24pp |
+| **OVERALL** | `recall@10` | 0.795 | 0.799 | 0.841 | 0.841 | ▲4.58pp |
+| **OVERALL** | `recall@25` | 0.962 | 0.964 | 0.972 | 0.972 | ▲1.01pp |
+| **OVERALL** | `recall@50` | 0.999 | 1.000 | 1.000 | 1.000 | ─0.04pp |
+| **OVERALL** | `mrr` | 0.548 | 0.557 | 0.636 | 0.636 | ▲8.85pp |
+| **single_hop** | `recall@5` | 0.503 | 0.488 | 0.516 | 0.516 | ▲1.23pp |
+| **single_hop** | `recall@10` | 0.681 | 0.673 | 0.709 | 0.709 | ▲2.83pp |
+| **single_hop** | `recall@25` | 0.934 | 0.934 | 0.950 | 0.950 | ▲1.56pp |
+| **single_hop** | `recall@50` | 0.997 | 0.999 | 1.000 | 1.000 | ─0.25pp |
+| **single_hop** | `mrr` | 0.595 | 0.586 | 0.623 | 0.623 | ▲2.76pp |
+| **multi_hop** | `recall@5` | 0.682 | 0.670 | 0.748 | 0.748 | ▲6.60pp |
+| **multi_hop** | `recall@10` | 0.834 | 0.827 | 0.864 | 0.864 | ▲2.96pp |
+| **multi_hop** | `recall@25` | 0.984 | 0.989 | 0.989 | 0.989 | ─0.47pp |
+| **multi_hop** | `recall@50` | 1.000 | 1.000 | 1.000 | 1.000 | ─0.00pp |
+| **multi_hop** | `mrr` | 0.543 | 0.559 | 0.655 | 0.655 | ▲11.12pp |
+| **temporal** | `recall@5` | 0.482 | 0.444 | 0.455 | 0.455 | ▼2.72pp |
+| **temporal** | `recall@10` | 0.660 | 0.645 | 0.656 | 0.656 | ─0.41pp |
+| **temporal** | `recall@25` | 0.927 | 0.929 | 0.927 | 0.927 | ─0.09pp |
+| **temporal** | `recall@50` | 1.000 | 1.000 | 1.000 | 1.000 | ─0.00pp |
+| **temporal** | `mrr` | 0.401 | 0.384 | 0.410 | 0.410 | ▲0.91pp |
+| **open_domain** | `recall@5` | 0.701 | 0.718 | 0.791 | 0.791 | ▲8.97pp |
+| **open_domain** | `recall@10` | 0.819 | 0.838 | 0.889 | 0.889 | ▲7.07pp |
+| **open_domain** | `recall@25` | 0.966 | 0.969 | 0.978 | 0.978 | ▲1.19pp |
+| **open_domain** | `recall@50` | 0.999 | 0.999 | 0.999 | 0.999 | ─0.00pp |
+| **open_domain** | `mrr` | 0.549 | 0.569 | 0.667 | 0.667 | ▲11.78pp |
+| **adversarial** | `recall@5` | 0.713 | 0.715 | 0.771 | 0.771 | ▲5.83pp |
+| **adversarial** | `recall@10` | 0.823 | 0.818 | 0.854 | 0.854 | ▲3.14pp |
+| **adversarial** | `recall@25` | 0.964 | 0.964 | 0.973 | 0.973 | ▲0.90pp |
+| **adversarial** | `recall@50` | 1.000 | 1.000 | 1.000 | 1.000 | ─0.00pp |
+| **adversarial** | `mrr` | 0.550 | 0.551 | 0.622 | 0.622 | ▲7.16pp |
 
 ## LoCoMo segment-level  (DRAGON, retrieval-primitive gate)
 
