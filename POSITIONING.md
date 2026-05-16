@@ -44,6 +44,8 @@ pgmnemo enforces provenance at the database constraint and row-security level, i
 | "Zero LLM cost per write" | A standard `pgmnemo.ingest()` call triggers any model inference — embedding generation or fact extraction — as part of the write path |
 | "Bypass-proof enforcement" | Application code executing under a normal role (`SET ROLE agent_role`) writes a provenance-free row without triggering an RLS policy error |
 | "Hybrid recall in-database" | `pgmnemo.recall_lessons()` issues any network call to an external service as part of retrieval |
+| Published recall@10 figures | A reproducible re-run of the bench scripts on the published corpus snapshot (following `docs/BENCHMARK_PROTOCOL.md`) produces a value outside the published 95% confidence interval — triggering a public correction and card row update |
+| Constructive AgenticDB facts (MIT / HNSW / bundled Ollama) | Constructive's public license file or official documentation contradicts any of the three corrected values — correct immediately and publish a correction note |
 
 ---
 
