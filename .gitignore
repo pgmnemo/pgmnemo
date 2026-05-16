@@ -57,3 +57,4 @@ design/
 # pgmnemo.com local backups
 index-*.html.bak
 .claude/
+!spec/competitive/
