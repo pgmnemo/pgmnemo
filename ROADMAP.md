@@ -3,14 +3,14 @@
 **Status:** v2 — customer-driven, bench-gated
 **Effective:** 2026-05-13
 **Supersedes:** the previous spec-driven ROADMAP (MAGMA §-numbered phases)
-**Workflow rules:** see `docs/WORKFLOW.md`
+**Workflow rules:** see core-team workflow
 
 ---
 
 ## Strategic frame
 
 pgmnemo is the **provenance-gated PostgreSQL memory layer** for AI agent developers
-who already run Postgres. Our wedge customer (`docs/POSITIONING.md §4`) installs us in
+who already run Postgres. Our wedge customer (the team positioning (internal)) installs us in
 under 5 minutes and replaces 200 lines of ad-hoc memory code with two SQL calls.
 
 We have **one fixable competitive weakness today** and **one durable moat:**
@@ -46,7 +46,7 @@ Everything in the next 18 months is shaped by these two facts.
 - All open issues (`#12`–`#16`) closed ✅ (done this session)
 - `docs/BENCHMARK_PROTOCOL.md` + `METRICS_BY_VERSION.md` + `scripts/significance_test_extended.py` + viz tools ✅ (done this session)
 - `docs/SQL_REFERENCE.md` ✅
-- `docs/WORKFLOW.md` (this discipline document) ✅
+- core-team workflow (this discipline document) ✅
 - CI: `.github/workflows/release.yml` adds a blocking step that runs `significance_test_extended.py` against the `benchmarks/gate/v<version>.json` snapshot. Missing file = fail.
 - LongMemEval v0.3.0 row in METRICS_BY_VERSION.md Table 3 (run is currently in-flight)
 
@@ -122,7 +122,7 @@ in favour of production-hardening items with concrete adopter pull.
 
 **Pivot driver:** First external production user RFC (Architecture C gate passed
 on Agency corpus, recall@10 = 0.5745 N=1060, p_adj < 0.001) requested specific
-production-readiness improvements. Per `docs/WORKFLOW.md §4.4` "Do we have an
+production-readiness improvements. Per `docs/the release process §4.4` "Do we have an
 adopter who asked for this?" — answer: yes, 6 of 10 R-items, with specific
 production evidence.
 
@@ -238,7 +238,7 @@ ICE:              I=6 C=7 E=9
 2. **"Compare to BM25" cookbook** (`docs/cookbook/vs_bm25.md`) — recipe that lets the
    adopter run our bench on their data with one command and see the side-by-side number
 3. **Docker Compose quick-start** (`examples/docker-compose.yml`)
-4. **First public case study** in `docs/ADOPTION.md` — concrete external adopter, real
+4. **First public case study** — concrete external adopter, real
    workload, real number
 
 ### Acceptance gate
@@ -305,7 +305,7 @@ and shows it helps. Until then, this release does not exist.
 
 ## Workflow integration
 
-Every release runs `docs/WORKFLOW.md §3` cycle. Each release ships with:
+Every release runs `docs/the release process §3` cycle. Each release ships with:
 - A new row in `benchmarks/METRICS_BY_VERSION.md` (all applicable tables)
 - A new `docs/img/scorecard_v<version>.svg`
 - A regenerated `docs/img/all_metrics_history.svg`
@@ -337,7 +337,7 @@ the strategic pivot of 2026-05-13.
 ## Roadmap-change policy
 
 - **Minor scope trim** (remove item from a release): Project Lead unilateral; logged in CHANGELOG
-- **Scope addition** (add item to release in progress): only if accompanied by hypothesis declaration (§2.1 of WORKFLOW.md) AND ICE re-score
+- **Scope addition** (add item to release in progress): only if accompanied by hypothesis declaration (§2.1 of the release process) AND ICE re-score
 - **Release date slip** ≤ 1 week: PI unilateral, posted in Monday status
 - **Release date slip** > 1 week: requires written postmortem (in `spec/reports/`)
 - **Cross-release pivot** (e.g. dropping a planned feature): WG vote 3/5 + customer-signal citation

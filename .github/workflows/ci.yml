@@ -90,7 +90,7 @@ jobs:
             if echo "$CHANGED" | grep -qE '^benchmarks/gate/v.*\.json$'; then
               echo "::notice::recall-affecting change + bench gate file updated → OK"
             else
-              echo "::warning::This PR modifies extension SQL but does not update benchmarks/gate/. Per docs/WORKFLOW.md §2.2, every release-affecting change should include a bench gate snapshot. Hygiene-only PRs (docs/CHANGELOG) may ignore this."
+              echo "::warning::This PR modifies extension SQL but does not update benchmarks/gate/. Per the release process, every release-affecting change should include a bench gate snapshot. Hygiene-only PRs (docs/CHANGELOG) may ignore this."
             fi
           else
             echo "::notice::No extension SQL changes — bench gate not required for this PR"

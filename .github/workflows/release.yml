@@ -88,7 +88,7 @@ jobs:
               echo "::warning::bench-gate bypassed via [bench-gate-override] in commit message"
               echo "BENCH_OVERRIDE=true" >> "$GITHUB_ENV"
             else
-              echo "::error::release-blocking: $GATE missing. Per docs/WORKFLOW.md §2.2, every tag requires a gate snapshot. Run benchmarks then commit the file. To bypass (rare), use [bench-gate-override] in the commit message."
+              echo "::error::release-blocking: $GATE missing. Per the release process, every tag requires a gate snapshot. Run benchmarks then commit the file. To bypass (rare), use [bench-gate-override] in the commit message."
               exit 1
             fi
           fi

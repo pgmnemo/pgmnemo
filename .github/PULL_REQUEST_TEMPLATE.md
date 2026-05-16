@@ -70,4 +70,4 @@ Concern (if NO-GO):
 - [ ] All files listed in PR description exist on disk (no phantom-DONE)
 - [ ] Migration script column names match actual source schema (not assumed)
 - [ ] `make check` output shown (pass or documented exception)
-- [ ] No prohibited claims (see `docs/RELEASE_PROCESS.md §5.2`)
+- [ ] No prohibited claims (no "we beat X" without methodology; benchmark numbers cite p_corr or CI)
