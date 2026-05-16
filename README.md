@@ -84,9 +84,7 @@ into a recent green run to see which PG versions the latest build passed on.
 
 ## 30-second quickstart
 
-> 📘 **For maintainers:** [docs/WORKFLOW.md](docs/WORKFLOW.md) (principles) ·
-> [docs/RELEASE_CHECKLIST.md](docs/RELEASE_CHECKLIST.md) (end-to-end Phase 0–7) ·
-> [docs/BENCHMARK_PROTOCOL.md](docs/BENCHMARK_PROTOCOL.md) (bench methodology)
+> 📘 **For maintainers:** [docs/BENCHMARK_PROTOCOL.md](docs/BENCHMARK_PROTOCOL.md) (bench methodology). Release workflow and internal process docs are maintained privately by the core team.
 >
 > 📘 **Full installation guide:** [docs/INSTALL.md](docs/INSTALL.md) — 4 paths
 > with Docker production setup, GitHub-zip install (no compiler needed), and
