@@ -3,14 +3,12 @@
 Thanks for your interest in contributing! `pgmnemo` is an Apache-2.0 licensed PostgreSQL
 extension and welcomes contributions of all sizes.
 
-> 📘 **Read first:** [`docs/WORKFLOW.md`](docs/WORKFLOW.md) (the customer-driven
-> bench-gated discipline that every change ships under) and
-> [`docs/RELEASE_CHECKLIST.md`](docs/RELEASE_CHECKLIST.md) (the end-to-end
-> Phase 0–7 list every release follows).
->
-> For feature proposals: open a GitHub Issue using the hypothesis-declaration
-> template documented in `docs/WORKFLOW.md §2.1` **before** writing code.
-> Untargeted PRs are likely to be rejected with a pointer back to the workflow.
+> 📘 **For feature proposals:** open a GitHub Issue stating the customer problem,
+> the hypothesis, and how you'll measure success **before** writing code.
+> Untargeted PRs may be rejected. The core team maintains an internal workflow
+> doc (release process, bench-gate discipline, hypothesis declaration template) —
+> reach out via Discussions if you want to align on a substantial contribution
+> before submitting.
 
 ## Quick rules
 
@@ -76,7 +74,7 @@ right to remove disruptive comments and ban repeat offenders.
 `pgmnemo` follows a documented decision process:
 
 - Architecture-level decisions are tracked as ADRs in `docs/adr/`
-- Strategic decisions are tracked in `docs/STRATEGY.md`
+- Strategic and roadmap decisions are maintained privately by the core team
 - Day-to-day decisions are made by the maintainers and recorded in PRs
 
 Bigger changes (license, governance, breaking API changes) require maintainer consensus and
