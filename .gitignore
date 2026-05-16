@@ -53,3 +53,7 @@ research/
 design/
 *.zip
 .embed_cache/
+
+# pgmnemo.com local backups
+index-*.html.bak
+.claude/
