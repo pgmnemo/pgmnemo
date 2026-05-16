@@ -69,4 +69,4 @@ done
 
 The only way to bypass the gate is a commit message containing `[bench-gate-override]`.
 That string is auto-extracted into the public release notes as a disclosure (see
-`docs/WORKFLOW.md §6`).
+`docs/the release process §6`).
