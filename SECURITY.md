@@ -2,11 +2,16 @@
 
 ## Supported Versions
 
-| Version | Supported |
-|---------|-----------|
-| 0.3.x   | Yes       |
-| 0.2.x   | Yes (critical fixes only) |
-| < 0.2   | No        |
+| Version | Supported | PG range | pgvector |
+|---|---|---|---|
+| 0.4.x | ✅ Yes (current) | 14 – 17 | ≥ 0.7.0 |
+| 0.3.x | ✅ Yes (security only) | 14 – 17 | ≥ 0.7.0 |
+| 0.2.x | ⚠️ Critical fixes only (until 2026-09-01) | 14 – 17 | ≥ 0.7.0 |
+| ≤ 0.1.x | ❌ Not supported | — | — |
+
+Policy: the two most recent minor versions receive routine security updates.
+Older versions receive critical-severity fixes for 90 days after the next
+minor release, then go end-of-life. See `README.md` § Compatibility matrix.
 
 ## Reporting a Vulnerability
 

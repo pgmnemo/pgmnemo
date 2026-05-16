@@ -3,7 +3,7 @@
 **Multi-agent memory substrate for PostgreSQL — provenance-gated, vector-hybrid recall.**
 
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.4.0-green.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.4.1-green.svg)](CHANGELOG.md)
 [![PGXN](https://badge.pgxn.org/stable/pgmnemo.svg)](https://pgxn.org/dist/pgmnemo/)
 [![CI](https://github.com/pgmnemo/pgmnemo/actions/workflows/ci.yml/badge.svg)](https://github.com/pgmnemo/pgmnemo/actions/workflows/ci.yml)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-17-4169E1.svg)](https://www.postgresql.org/)
@@ -57,6 +57,30 @@ Real numbers vs published academic benchmarks. **Canonical protocol:** [docs/BEN
 | Zero data egress | ✅ In-database | ❌ | ❌ |
 | Install model | `CREATE EXTENSION` | External service | SaaS API |
 | Self-hosted price | Free (Apache 2.0) | $$$$ | $$$$$ |
+
+## Compatibility matrix
+
+| pgmnemo | PostgreSQL | pgvector | CI status |
+|---|---|---|---|
+| **0.4.x** (current) | 14 – 17 | ≥ 0.7.0 | 17 ✅ blocking · 14/15/16 ⚠️ aspirational (see below) |
+| 0.3.x | 14 – 17 | ≥ 0.7.0 | 17 ✅ blocking · 14/15/16 ⚠️ aspirational |
+| 0.2.x | 14 – 17 | ≥ 0.7.0 | 17 ✅ (legacy CI) |
+| ≤ 0.1.x | end-of-life | — | — |
+
+**CI status legend:**
+
+- **17 ✅ blocking** — every release runs `installcheck` + `smoke-recall-hybrid` +
+  `bench-gate` on PG 17. A failure here blocks the tag.
+- **14/15/16 ⚠️ aspirational** — every CI run also fires a `compat-matrix` job
+  against PG 14/15/16 with `continue-on-error: true`. This is **visibility, not
+  enforcement** as of v0.4.1; we haven't yet validated every release on
+  every PG version. If you run pgmnemo on PG < 17 and hit a bug, file an
+  issue — we'll prioritise fixing or downgrading the support claim honestly.
+- **0.1.x EOL** — no security fixes, no compatibility commitment.
+
+**Adopters on PG < 17:** the `compat-matrix` job result is visible in every
+[CI run](https://github.com/pgmnemo/pgmnemo/actions/workflows/ci.yml). Click
+into a recent green run to see which PG versions the latest build passed on.
 
 ## 30-second quickstart
 

@@ -3,6 +3,15 @@
 Thanks for your interest in contributing! `pgmnemo` is an Apache-2.0 licensed PostgreSQL
 extension and welcomes contributions of all sizes.
 
+> 📘 **Read first:** [`docs/WORKFLOW.md`](docs/WORKFLOW.md) (the customer-driven
+> bench-gated discipline that every change ships under) and
+> [`docs/RELEASE_CHECKLIST.md`](docs/RELEASE_CHECKLIST.md) (the end-to-end
+> Phase 0–7 list every release follows).
+>
+> For feature proposals: open a GitHub Issue using the hypothesis-declaration
+> template documented in `docs/WORKFLOW.md §2.1` **before** writing code.
+> Untargeted PRs are likely to be rejected with a pointer back to the workflow.
+
 ## Quick rules
 
 1. **All contributions are licensed Apache-2.0** — by submitting a PR you agree your contribution
