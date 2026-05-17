@@ -1,7 +1,7 @@
 # SHEET_TEMPLATE — EA-FETCH FAILURE
 
 **Task**: PGMNEMO-WG-VC-260517 — EA-FETCH: pull startup template from Google Sheets  
-**Date**: 2026-05-17  
+**Date**: 2026-05-17 (re-attempted)  
 **Assignee**: EA (agent_id=4)
 
 ---
@@ -17,12 +17,12 @@
 | Step | Tool / Path | Result |
 |------|-------------|--------|
 | 1 | Google Workspace MCP (`mcp__google_workspace__*`) | Not available in this agent session |
-| 2 | `POST /api/connections/accounts/12/refresh-token` (app API) | `{"status":"error","message":"Token refresh failed: 400"}` |
-| 3 | Fernet-decrypt `credential_records` id=33 → `oauth2.googleapis.com/token` refresh | `HTTP 400: invalid_grant — Token has been expired or revoked` |
+| 2 | Public CSV export (`/export?format=csv&gid=2108518644`) | HTTP 401 — sheet is private |
+| 3 | Fernet-decrypt `credential_records` id=33 via `SECRET_KEY` → `oauth2.googleapis.com/token` refresh | `HTTP 400: invalid_grant — Token has been expired or revoked` |
 
 ### Root cause
 
-The Google OAuth2 refresh token for external account `id=12` (`asistentgaidaburas@gmail.com`) has been **expired or revoked** by Google. The credential was last health-checked on 2026-05-03; the token may have been revoked since then (Google revokes tokens after 6 months of inactivity or if the OAuth app is flagged).
+The Google OAuth2 refresh token for external account `id=12` (`asistentgaidaburas@gmail.com`, DB status: `error`) has been **expired or revoked** by Google. Both the cached access_token (len=253) and the refresh_token (len=103) stored in `credential_records` id=33 are rejected by Google's token endpoint.
 
 The stored scope **includes** `https://www.googleapis.com/auth/spreadsheets`, so re-authorization would grant Sheets access immediately.
 
