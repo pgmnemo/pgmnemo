@@ -1,0 +1,43 @@
+{
+  "version": "v0.5.0-stella-candidate",
+  "date": "2026-05-17",
+  "schema_version": "v1",
+  "hypothesis": "H-02: Stella V5 embedder (dunzhang/stella_en_1.5B_v5) recall@10 >= bge-m3 LongMemEval baseline (0.9334)",
+  "embedder_target": "dunzhang/stella_en_1.5B_v5",
+  "embedder_baseline": "BAAI/bge-m3 (1024d)",
+  "mode": "run_failed",
+  "run_failed_reason": "agent_env_no_torch",
+  "run_failed_detail": "Stella V5 inference requires PyTorch (dunzhang/stella_en_1.5B_v5 uses AutoModel + trust_remote_code). torch is not installed in agent execution environment. Additionally LONGMEMEVAL_DATA_DIR (full LongMemEval dataset ~47.7 sessions/item, n=500) is not available in bench DB. Both blockers must be resolved before a real bench run is possible.",
+  "blockers": [
+    {
+      "id": "B1",
+      "severity": "critical",
+      "description": "torch not installed",
+      "error": "ModuleNotFoundError: No module named 'torch'",
+      "resolution": "pip install torch>=2.0 in bench venv (or use machine with GPU/MPS)"
+    },
+    {
+      "id": "B2",
+      "severity": "critical",
+      "description": "LongMemEval dataset not available in agent env",
+      "error": "LONGMEMEVAL_DATA_DIR not set; dataset requires ~47.7 sessions/item, n=500",
+      "resolution": "Set LONGMEMEVAL_DATA_DIR to LongMemEval cleaned dataset path (xiaowu0162/longmemeval-cleaned)"
+    }
+  ],
+  "implement_h02_status": "DONE",
+  "implement_h02_evidence": "transformers==4.44.2 pin present in benchmarks/longmemeval/requirements.txt (rope_theta compatibility fix for Stella V5 bundled modeling_qwen.py)",
+  "gate_criterion": "recall@10 >= 0.9334 (LongMemEval bge-m3 baseline from v0.4.1.json tables.longmemeval.overall.recall@10.mean)",
+  "gate_verdict": "RUN_FAILED",
+  "significance_test_exit_code": 2,
+  "significance_test_note": "significance_test.py not invocable — no candidate metrics produced (run failed before bench execution)",
+  "projected_results_from_blocked_run": {
+    "source": "benchmarks/longmemeval/results/v0.2.1_stella_20260510/BLOCKED.md MTEB gap analysis + spec/v2/pgmnemo/WG_STELLA_V5_REPRODUCED.md",
+    "projected_recall_at_10_lo": 0.938,
+    "projected_recall_at_10_hi": 0.946,
+    "projected_mrr_lo": 0.853,
+    "projected_mrr_hi": 0.865,
+    "gate_would_pass_if_projection_holds": true,
+    "projection_confidence": "medium — based on MTEB BEIR gap analysis, not live bench"
+  },
+  "action_required": "ESCALATE — re-run on machine with PyTorch + LongMemEval dataset. Recommend pgmnemo dev machine (MPS, transformers==4.44.2, full dataset). See blockers B1/B2 above."
+}
