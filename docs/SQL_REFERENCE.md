@@ -50,15 +50,15 @@ GIN on `lesson_tsv` (v0.2.2+), GIN on `metadata`.
 | Column | Type | Notes |
 |---|---|---|
 | `id` | BIGSERIAL PRIMARY KEY | |
-| `lesson_a_id` | BIGINT REFERENCES `agent_lesson(lesson_id)` ON DELETE CASCADE | source endpoint |
-| `lesson_b_id` | BIGINT REFERENCES `agent_lesson(lesson_id)` ON DELETE CASCADE | target endpoint |
+| `source_id` | BIGINT REFERENCES `agent_lesson(id)` ON DELETE CASCADE | source endpoint |
+| `target_id` | BIGINT REFERENCES `agent_lesson(id)` ON DELETE CASCADE | target endpoint |
 | `relation_type` | TEXT | freeform annotation (e.g. `CAUSED_BY`, `CO_OCCURRED`) |
 | `edge_kind` | `pgmnemo.edge_kind` ENUM NOT NULL | v0.3.0+: `{semantic, temporal, causal, entity}` |
 | `weight` | DOUBLE PRECISION DEFAULT 1.0 | edge strength 0–1 |
 | `metadata` | JSONB DEFAULT '{}' | |
 | `created_at` | TIMESTAMPTZ DEFAULT NOW() | |
 
-Indexes: per-kind partial B-tree on `(lesson_a_id, lesson_b_id) WHERE edge_kind = '<value>'`.
+Indexes: per-kind partial B-tree on `(source_id, target_id) WHERE edge_kind = '<value>'`.
 
 ##### Population contract (canonical, since v0.4.0)
 
@@ -69,8 +69,8 @@ Adopters streaming edges from their orchestration layer should follow this contr
 
 | Column | Convention |
 |---|---|
-| `lesson_a_id` | The **earlier** lesson in the causal chain (or the anchor of the relation) |
-| `lesson_b_id` | The **later** lesson, or the satellite |
+| `source_id` | The **earlier** lesson in the causal chain (or the anchor of the relation) |
+| `target_id` | The **later** lesson, or the satellite |
 | `relation_type` | One of `CAUSED_BY`, `CO_OCCURRED`, `DERIVED_FROM`, `ENTITY_LINK` (freeform but canonical values shown) |
 | `edge_kind` | Required ENUM since v0.3.0 — must match the semantics of `relation_type` (mapping below) |
 | `weight` | Edge confidence in `[0.0, 1.0]`. `1.0` = certain (e.g. same git commit); `0.5` = inferred co-occurrence; `< 0.3` = weak, possibly noise. |
@@ -89,16 +89,16 @@ Adopters streaming edges from their orchestration layer should follow this contr
 
 ```sql
 INSERT INTO pgmnemo.mem_edge
-    (lesson_a_id, lesson_b_id, relation_type, edge_kind, weight, metadata)
+    (source_id, target_id, relation_type, edge_kind, weight, metadata)
 VALUES
     ($1, $2, $3, $4, $5, $6)
-ON CONFLICT (lesson_a_id, lesson_b_id, relation_type)
+ON CONFLICT (source_id, target_id, relation_type) WHERE valid_until IS NULL
 DO UPDATE SET
     weight   = EXCLUDED.weight,
     metadata = pgmnemo.mem_edge.metadata || EXCLUDED.metadata;
 ```
 
-Note: the unique constraint `(lesson_a_id, lesson_b_id, relation_type)` is the
+Note: the unique constraint `(source_id, target_id, relation_type)` (partial: `valid_until IS NULL`) is the
 de-dup key. Edges with different `relation_type` between the same pair of lessons
 are intentionally allowed (e.g. `A CAUSED_BY B` and `A CO_OCCURRED B` may both be
 true).

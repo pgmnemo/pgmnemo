@@ -55,14 +55,14 @@ BEGIN
         NULLIF(current_setting('pgmnemo.temporal_boost', TRUE), '')::DOUBLE PRECISION,
         1.0
     );
-    RETURN GREATEST(0.0, LEAST(5.0, _v));
+    RETURN GREATEST(0.0, LEAST(20.0, _v));
 END;
 $$;
 
 COMMENT ON FUNCTION pgmnemo.get_temporal_boost() IS
-    'Returns pgmnemo.temporal_boost GUC (default 1.0, range 0.0–5.0). '
+    'Returns pgmnemo.temporal_boost GUC (default 1.0, range 0.0–20.0). '
     'Score multiplier: effective_γ = recency_weight × temporal_boost. '
-    'H-06 optimal (C6): boost=10 with rw=0.05 → effective_γ=0.5. '
+    'H-06 optimal (C6): boost=10 with rw=0.05 → effective_γ=0.5; max boost=20 for aggressive recency. '
     'H-06 (v0.5.0).';
 
 -- ─────────────────────────────────────────────────────────────────────────────
@@ -218,8 +218,8 @@ BEGIN
         0.05
     );
 
-    -- H-06: effective_γ = _gamma × temporal_boost (range 0.0–5.0, default 1.0).
-    _temporal_boost := GREATEST(0.0, LEAST(5.0, COALESCE(
+    -- H-06: effective_γ = _gamma × temporal_boost (range 0.0–20.0, default 1.0).
+    _temporal_boost := GREATEST(0.0, LEAST(20.0, COALESCE(
         NULLIF(current_setting('pgmnemo.temporal_boost', TRUE), '')::DOUBLE PRECISION,
         1.0
     )));

@@ -103,14 +103,63 @@ notes include monitor watchlist for v0.4.1 follow-up:
 
 ---
 
-## [0.5.0] — unreleased
+## [0.5.0] — 2026-05-17
+
+### Theme
+
+Bitemporality, MCP server, and operational hardening. The `pgmnemo-mcp` package
+makes pgmnemo accessible to any MCP-compatible agent runtime without SQL. SQL
+temporal history and content-hash dedup via H-07 close the data-lineage gap for
+long-running agentic workflows.
 
 ### Added
 
 - **`pgmnemo-mcp`** — MCP server package (`pgmnemo_mcp/`) exposing two tools:
-  `pgmnemo.ingest(text, metadata)` and `pgmnemo.recall(query, top_k)`.
+  `pgmnemo.ingest(text, role, topic, importance, project_id, commit_sha, artifact_hash, metadata)`
+  and `pgmnemo.recall(query, top_k)`.
   Backed by psycopg2 connection pool; configurable via `DATABASE_URL` / `MCP_PORT`.
   Entry point: `pgmnemo-mcp` console script. Smoke gate: `python -m pgmnemo_mcp --smoke`.
+
+- **H-07 Bitemporality on `agent_lesson`** — `t_valid_from` / `t_valid_to` / `content_hash`
+  columns added. Active rows have `t_valid_to = 'infinity'`. INSERT of a duplicate
+  `content_hash` closes the prior row (trigger `trg_agent_lesson_bitemporal_close`).
+  `pgmnemo.mem_item` view: active-only alias. `pgmnemo.as_of(ts)`: point-in-time query.
+
+- **H-06 `pgmnemo.temporal_boost` GUC** — score multiplier for the recency component.
+  `effective_γ = recency_weight × temporal_boost`. Default 1.0, range 0.0–20.0.
+  `get_temporal_boost()` helper function. H-06 optimal (cell C6): `boost=10` with
+  `recency_weight=0.05` → `effective_γ=0.5`.
+
+- **R5 `pgmnemo.max_query_text_chars` GUC** — limits `query_text` in `recall_lessons()`
+  and `lesson_text` in `ingest()`. Default 2000 chars; set to 0 to disable.
+  Long input truncated with `RAISE NOTICE`.
+
+- **R6 `pgmnemo.add_edge()` helper** — idempotent edge upsert. 5-param (convenience)
+  and 6-param (full control) overloads. Conflict on `uq_mem_edge_active`
+  `(source_id, target_id, relation_type WHERE valid_until IS NULL)`. Modes:
+  `replace` (default) / `max` / `avg`. `edge_kind` auto-derived from `relation_type`.
+
+- **`pgmnemo.ingest()` SQL function** — validated public write API replacing raw INSERT.
+  R5 truncation, embedding dimension validation, auto `verified_at` stamping, `p_project_id`
+  NOT NULL parameter. Signature: `(p_role, p_project_id, p_topic, p_lesson_text, p_importance,
+  p_embedding, p_commit_sha, p_artifact_hash, p_metadata) RETURNS BIGINT`.
+
+### Changed
+
+- **`recall_lessons()` temporal_boost integration** — `effective_γ = recency_weight × temporal_boost`
+  (backward-compatible: default 0.05 × 1.0 = 0.05). R5 query_text cap applied before
+  all retrieval paths.
+
+- **`temporal_boost` range widened 0.0–5.0 → 0.0–20.0** — allows stronger recency emphasis
+  (e.g. `boost=10` with `recency_weight=0.05` → `effective_γ=0.5`) without changing the default.
+
+- **`mem_edge` column names** — `lesson_a_id`/`lesson_b_id` renamed to `source_id`/`target_id`
+  for consistency with `add_edge()` and `graph_walk` CTE internals. Adopters with positional
+  INSERTs into `mem_edge` must update column lists; named-column callers using the old names
+  must rename.
+
+- **`docs/SQL_REFERENCE.md`** — `mem_edge` table schema updated to reflect `source_id`/`target_id`
+  column names; idempotent INSERT pattern updated to use new names and partial index conflict target.
 
 ### Removed
 
@@ -118,6 +167,17 @@ notes include monitor watchlist for v0.4.1 follow-up:
   deprecated in v0.4.1 (Agency RFC R10) is now **dropped**. Use the 5-arg form with
   an explicit `direction` parameter (`'forward'`, `'backward'`, or `'both'`).
   Migration: `extension/pgmnemo--0.4.1--0.5.0.sql`.
+
+### Upgrade
+
+```sql
+ALTER EXTENSION pgmnemo UPDATE TO '0.5.0';
+```
+
+Idempotent. Breaking changes for adopters:
+1. `mem_edge` direct INSERTs must rename `lesson_a_id`→`source_id`, `lesson_b_id`→`target_id`.
+2. `traverse_causal_chain(4-arg)` callers must add `direction='forward'` (was deprecated in v0.4.1).
+3. Positional callers of `recall_lessons()` must re-audit: output columns unchanged from v0.4.1.
 
 ---
 
