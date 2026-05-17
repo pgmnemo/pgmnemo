@@ -63,8 +63,7 @@ Indexes: per-kind partial B-tree on `(lesson_a_id, lesson_b_id) WHERE edge_kind 
 ##### Population contract (canonical, since v0.4.0)
 
 Adopters streaming edges from their orchestration layer should follow this contract.
-`pgmnemo.add_edge()` helper SP shipping in v0.5.0 will encapsulate it; until then,
-write the `INSERT ... ON CONFLICT` pattern directly.
+`pgmnemo.add_edge()` (v0.5.0, see §1.2) encapsulates this pattern. You can also write the `INSERT ... ON CONFLICT` directly.
 
 **Semantics:**
 
@@ -110,11 +109,57 @@ true).
 - `mode='max'` — `SET weight = GREATEST(mem_edge.weight, EXCLUDED.weight)` (monotonic non-decreasing)
 - `mode='avg'` — `SET weight = (mem_edge.weight + EXCLUDED.weight) / 2.0` (running average; requires care with race conditions)
 
-When `pgmnemo.add_edge(...)` ships in v0.5.0 (per
-[issue #23](https://github.com/pgmnemo/pgmnemo/issues/23)), it will accept a
-`mode TEXT DEFAULT 'replace'` parameter encapsulating these patterns.
+### 1.2 `pgmnemo.add_edge()` helper (v0.5.0)
 
-### 1.2 ENUM types
+Two overloads are provided. Use the 5-param form for simple writes; the 6-param form when you need a specific conflict resolution mode.
+
+**5-param form** (convenience, mode=`'replace'`):
+
+```sql
+pgmnemo.add_edge(
+    p_source_id     BIGINT,
+    p_target_id     BIGINT,
+    p_relation_type TEXT,
+    p_weight        FLOAT8  DEFAULT 1.0,
+    p_metadata      JSONB   DEFAULT '{}'
+) RETURNS VOID
+```
+
+**6-param form** (full control):
+
+```sql
+pgmnemo.add_edge(
+    p_source_id     BIGINT,
+    p_target_id     BIGINT,
+    p_relation_type TEXT,
+    p_weight        FLOAT8  DEFAULT 1.0,
+    p_metadata      JSONB   DEFAULT '{}',
+    p_mode          TEXT    DEFAULT 'replace'
+) RETURNS VOID
+```
+
+Idempotent edge writer. Inserts a new active edge; on conflict on `(source_id, target_id, relation_type)` with `valid_until IS NULL`, updates weight and metadata per `p_mode`:
+
+| `p_mode` | Conflict action |
+|---|---|
+| `'replace'` (default) | `SET weight = EXCLUDED.weight, metadata = EXCLUDED.metadata, updated_at = now()` |
+| `'max'` | `SET weight = GREATEST(existing, EXCLUDED)` (monotonic non-decreasing) |
+| `'avg'` | `SET weight = (existing + EXCLUDED) / 2.0` (running mean) |
+
+`edge_kind` is derived automatically from `p_relation_type` using the canonical mapping in §1.1. `p_weight` is clamped to `[0.0, 1.0]`. FK violations on unknown `source_id`/`target_id` propagate to the caller. `NULL` inputs raise a NOT NULL constraint violation (not a PL/pgSQL null pointer error).
+
+```sql
+-- Simple write (5-param, mode='replace' by default)
+SELECT pgmnemo.add_edge(101, 205, 'CAUSED_BY');
+
+-- With explicit weight and metadata
+SELECT pgmnemo.add_edge(101, 205, 'CAUSED_BY', 0.85, '{"run_id": 7320}');
+
+-- Full control: running-max weight
+SELECT pgmnemo.add_edge(101, 205, 'CAUSED_BY', 0.85, '{"run_id": 7320}', 'max');
+```
+
+### 1.3 ENUM types
 
 ```sql
 CREATE TYPE pgmnemo.edge_kind AS ENUM ('semantic', 'temporal', 'causal', 'entity');
