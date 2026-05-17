@@ -1,6 +1,6 @@
 # pgmnemo SQL Reference
 
-**Version coverage:** v0.3.0 (current default)  
+**Version coverage:** v0.5.0 (current)  
 **Status:** authoritative — function signatures here match `extension/pgmnemo--*.sql`.
 
 For usage patterns and worked examples see `USAGE.md`; for upgrade paths see
@@ -41,6 +41,9 @@ installs the `pgmnemo` schema and pulls `vector` (pgvector) and `pg_trgm`.
 | `expires_at` | TIMESTAMPTZ | optional TTL (NULL = forever) |
 | `source_run_id` | BIGINT | optional pointer to producing run |
 | `source_task_id` | BIGINT | optional pointer to producing task |
+| `t_valid_from` | TIMESTAMPTZ | bitemporality: start of validity period; NULL = no start constraint (v0.5.0) |
+| `t_valid_to` | TIMESTAMPTZ | bitemporality: end of validity period; NULL = currently valid (v0.5.0) |
+| `content_hash` | TEXT | SHA-256 of `lesson_text` — detects content drift across versions (v0.5.0) |
 
 Indexes: HNSW on `embedding` (cosine_ops), B-tree on `(role, project_id)`,
 GIN on `lesson_tsv` (v0.2.2+), GIN on `metadata`.
@@ -175,7 +178,7 @@ CREATE TYPE pgmnemo.edge_kind AS ENUM ('semantic', 'temporal', 'causal', 'entity
 pgmnemo.version() RETURNS TEXT
 ```
 
-Returns the installed extension version (e.g. `'0.3.0'`).
+Returns the installed extension version (e.g. `'0.5.0'`).
 
 ### 2.2 `pgmnemo.ingest(...)`
 
@@ -404,9 +407,10 @@ Policies use `DROP IF EXISTS` then `CREATE`; safe to re-apply.
 
 ## 5. Deprecation log
 
-No public function signature has been removed since v0.1.0. Parameter renames
-(role → role_filter, project_id → project_id_filter) were applied in
-v0.2.0.1 / v0.2.1 to resolve `RETURNS TABLE` collisions; named-argument callers
-must use the new names.
+| Version | Change | Action required |
+|---|---|---|
+| v0.2.0.1 / v0.2.1 | `recall_lessons()` params renamed: `role`→`role_filter`, `project_id`→`project_id_filter` (resolved `RETURNS TABLE` collision) | Named-argument callers must use new names |
+| v0.5.0 | 4-argument `traverse_causal_chain(start, max_depth, role, project)` **removed** (deprecated since v0.4.1 with `RAISE NOTICE`) | Use 2-arg form + `WHERE` clause (see MIGRATION.md §0.4.1→0.5.0) |
+| v0.5.0 | `mem_edge.lesson_a_id` / `lesson_b_id` **renamed** to `source_id` / `target_id` | Use `pgmnemo.add_edge()` (§1.2) to avoid direct column references; or update INSERT statements |
 
 For all changes per release see `CHANGELOG.md`.
