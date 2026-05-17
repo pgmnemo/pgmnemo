@@ -35,6 +35,7 @@ changes — isolates retrieval-layer Δ without session-pooling reranker on top.
 |---|---|---|---|---|---|---|---|---|---|
 | v0.2.1 | 2026-05-09 | 0.2.1 | 0.3023 | 0.3660 | 0.4770 | 0.5740 | 0.2369 | — (baseline) | `locomo/results/v0.2.1_20260509/` |
 | v0.3.0 | 2026-05-10 | 0.3.0 | 0.3023 | 0.3660 | 0.4770 | 0.5740 | 0.2369 | **neutral** (Δ=0.0000, p_corr=1.0) | `locomo/results/v0.3.0_20260510/` |
+| v0.5.0 | 2026-05-17 | 0.5.0 | — | — | — | — | — | **not run** — R5/R6/R10/H-06 non-algorithmic; H-07 Δ=0 confirmed separately (Table 3 proxy); H-02 bench pending macOS host | pending |
 
 Frozen parameters: 10 conversations, 1986 questions, embedder `facebook/dragon-plus` (768d→1024 zero-pad).
 
@@ -51,6 +52,7 @@ and the number that appears in `docs/BENCHMARKS.md` and the README.
 |---|---|---|---|---|---|---|---|---|
 | v0.2.1 | 2026-05-09 | 0.2.1 | 0.6623 | 0.7951 | 0.9623 | 0.5480 | — (baseline) | `locomo/results/v0.2.1_session_20260509/` |
 | v0.3.0 | 2026-05-13 | 0.3.0 | 0.6640 | 0.7994 | 0.9641 | 0.5569 | **neutral** (Δr@10=+0.43pp, p_corr=1.0) | `locomo/results/v0.3.0_session_20260513/` |
+| v0.5.0 | 2026-05-17 | 0.5.0 | — | — | — | — | **not run** — non-algorithmic release; run pending macOS host | pending |
 
 ---
 
@@ -65,6 +67,7 @@ over the question-specific haystack.
 | v0.2.1 | 2026-05-09 | 0.2.1 | 0.4856 | 0.8692 | 0.9326 | 0.9773 | 0.8554 | — (baseline) | `longmemeval/results/v0.2.1_pgmnemo_20260509/` |
 | v0.2.1-full | 2026-05-09 | 0.2.1 | — | — | 0.9334 | — | 0.8472 | not significant vs above | `longmemeval/results/v0.2.1_pgmnemo_proper_20260509/` |
 | v0.3.0 | 2026-05-13 | 0.3.0 | 0.4762 | 0.8814 | 0.9334 | 0.9853 | 0.8472 | **neutral** (NEAR_THRESHOLD on r@5 +1.22pp, ns) | `longmemeval/results/v0.3.0_20260513/` |
+| v0.5.0 | 2026-05-17 | 0.5.0 | — | — | — | — | — | **not run** — H-07 Δ=0 (significance_test.py exit 0, all metrics, p_corr=1.0, run 9663); H-02 Stella V5 bench pending macOS host | `gate/v0.5.0-stella-candidate.json` (RUN_FAILED) |
 
 Frozen parameters: longmemeval_s_cleaned.json (500 queries), embedder `BAAI/bge-m3` (1024d, max_seq=512).
 
@@ -133,12 +136,13 @@ When tagging a new release `vX.Y.Z`:
 
 ---
 
-## Pending entries (will be filled by today's runs)
+## Pending entries
 
-| Table | Version | Status | ETA |
+| Table | Version | Status | Blocker |
 |---|---|---|---|
-| Table 2 | v0.3.0 | running (PID 88011) | ~20 min from 2026-05-10 22:00 UTC |
-| Table 3 | v0.3.0 | running (PID 87528) | ~55 min from 2026-05-10 21:48 UTC |
+| Table 1 | v0.5.0 | pending | macOS PG17 host required (infra-blocked in Docker) |
+| Table 2 | v0.5.0 | pending | macOS PG17 host required |
+| Table 3 | v0.5.0 (Stella V5) | pending | PyTorch + LongMemEval dataset on macOS MPS host; task 6301 |
 
-Once both complete, this file will be re-committed with the actual numbers and
-a fresh significance test run.
+v0.3.0 rows were completed as of 2026-05-13. v0.5.0 bench rows are "not run" stubs —
+fill in with actual numbers once macOS host execution completes (task 6301 MANUAL-INSTALLCHECK + [MANUAL-BENCH]).
