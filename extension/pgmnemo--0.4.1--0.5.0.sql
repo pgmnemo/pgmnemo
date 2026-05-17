@@ -57,6 +57,23 @@ COMMENT ON FUNCTION pgmnemo.get_temporal_boost() IS
 
 
 -- ─────────────────────────────────────────────────────────────────────────────
+-- §3 R5: max_query_text_chars GUC
+--
+-- Limits the length of query_text processed by recall_lessons() and the
+-- lesson_text stored by ingest().  Default 2000 chars — covers ~98% of
+-- production Agency task titles and lessons.  Long text is silently truncated
+-- with a RAISE NOTICE so callers can detect the event.
+-- ─────────────────────────────────────────────────────────────────────────────
+
+DO $$
+BEGIN
+    PERFORM set_config('pgmnemo.max_query_text_chars', '2000', FALSE);
+EXCEPTION WHEN OTHERS THEN
+    NULL;
+END;
+$$;
+
+-- ─────────────────────────────────────────────────────────────────────────────
 -- H-06: recall_lessons() — apply temporal_boost as γ multiplier
 --
 -- effective_γ = recency_weight * temporal_boost
@@ -106,7 +123,22 @@ DECLARE
     _graph_weight       DOUBLE PRECISION;
     _disable_hybrid     BOOLEAN;
     _max_depth          CONSTANT INT := 5;
+    _max_chars          INT;
+    _query_text         TEXT;
 BEGIN
+    -- R5: clamp query_text to pgmnemo.max_query_text_chars (default 2000).
+    _max_chars := COALESCE(
+        NULLIF(current_setting('pgmnemo.max_query_text_chars', TRUE), '')::INT,
+        2000
+    );
+    IF query_text IS NOT NULL AND length(query_text) > _max_chars THEN
+        RAISE NOTICE 'pgmnemo.recall_lessons: query_text truncated to % chars (pgmnemo.max_query_text_chars). '
+                     'Original length: %', _max_chars, length(query_text);
+        _query_text := left(query_text, _max_chars);
+    ELSE
+        _query_text := query_text;
+    END IF;
+
     BEGIN
         _disable_hybrid := COALESCE(
             current_setting('pgmnemo.disable_hybrid', TRUE)::BOOLEAN,
@@ -117,8 +149,8 @@ BEGIN
     END;
 
     IF NOT _disable_hybrid
-       AND query_text IS NOT NULL
-       AND length(trim(query_text)) > 0
+       AND _query_text IS NOT NULL
+       AND length(trim(_query_text)) > 0
        AND query_embedding IS NOT NULL THEN
         RETURN QUERY
         SELECT
@@ -139,7 +171,7 @@ BEGIN
             h.rrf_score
         FROM pgmnemo.recall_hybrid(
             query_embedding,
-            query_text,
+            _query_text,
             k,
             role_filter,
             project_id_filter,
@@ -196,13 +228,13 @@ BEGIN
     END;
     _graph_weight := GREATEST(0.0, LEAST(0.5, _graph_weight));
 
-    _has_text := query_text IS NOT NULL AND length(trim(query_text)) > 0;
+    _has_text := _query_text IS NOT NULL AND length(trim(_query_text)) > 0;
     IF _has_text THEN
         BEGIN
-            _tsquery := websearch_to_tsquery('english', query_text);
+            _tsquery := websearch_to_tsquery('english', _query_text);
         EXCEPTION WHEN OTHERS THEN
             BEGIN
-                _tsquery := plainto_tsquery('english', query_text);
+                _tsquery := plainto_tsquery('english', _query_text);
             EXCEPTION WHEN OTHERS THEN
                 _has_text := FALSE;
             END;
@@ -518,3 +550,448 @@ COMMENT ON FUNCTION pgmnemo.as_of(TIMESTAMPTZ) IS
     'Equivalent to the "mem.as_of" primitive in ROADMAP (schema is pgmnemo per control file). '
     'Example: SELECT * FROM pgmnemo.as_of(''2026-05-01 12:00:00+00''); '
     'H-07 bitemporality (v0.5.0).';
+
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- §C  R5: max_query_text_chars GUC + truncation in ingest()
+--
+-- GUC: pgmnemo.max_query_text_chars (INT, default 2000).
+-- When lesson_text supplied to ingest() exceeds this limit the text is truncated
+-- and a RAISE NOTICE is emitted so callers can detect the event.
+-- NULL and empty-string inputs pass through unchanged (graceful fallback).
+-- Set to 0 or negative to disable truncation entirely.
+-- ─────────────────────────────────────────────────────────────────────────────
+
+DO $$
+BEGIN
+    PERFORM set_config('pgmnemo.max_query_text_chars', '2000', FALSE);
+EXCEPTION WHEN OTHERS THEN
+    NULL;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION pgmnemo.ingest(
+    p_role          TEXT,
+    p_project_id    INT,
+    p_topic         TEXT,
+    p_lesson_text   TEXT,
+    p_importance    SMALLINT     DEFAULT 3,
+    p_embedding     vector(1024) DEFAULT NULL,
+    p_commit_sha    TEXT         DEFAULT NULL,
+    p_artifact_hash TEXT         DEFAULT NULL,
+    p_metadata      JSONB        DEFAULT '{}'::jsonb
+) RETURNS BIGINT
+LANGUAGE plpgsql AS $$
+DECLARE
+    new_id     BIGINT;
+    _max_chars INT;
+BEGIN
+    -- R5: truncate lesson_text to max_query_text_chars when exceeded.
+    -- Graceful NULL/empty fallback: skip check entirely.
+    IF p_lesson_text IS NOT NULL AND length(p_lesson_text) > 0 THEN
+        BEGIN
+            _max_chars := NULLIF(
+                current_setting('pgmnemo.max_query_text_chars', TRUE), ''
+            )::INT;
+        EXCEPTION WHEN OTHERS THEN
+            _max_chars := NULL;
+        END;
+        IF _max_chars IS NOT NULL AND _max_chars > 0
+           AND length(p_lesson_text) > _max_chars THEN
+            RAISE NOTICE
+                'pgmnemo.ingest: lesson_text truncated from % to % chars '
+                '(pgmnemo.max_query_text_chars)',
+                length(p_lesson_text), _max_chars;
+            p_lesson_text := left(p_lesson_text, _max_chars);
+        END IF;
+    END IF;
+
+    IF p_embedding IS NOT NULL AND vector_dims(p_embedding) <> 1024 THEN
+        RAISE EXCEPTION
+            'pgmnemo.ingest: embedding dimension mismatch — expected 1024, got %',
+            vector_dims(p_embedding);
+    END IF;
+
+    INSERT INTO pgmnemo.agent_lesson (
+        role, project_id, topic, lesson_text, importance, embedding,
+        commit_sha, artifact_hash, metadata, verified_at
+    ) VALUES (
+        p_role, p_project_id, p_topic, p_lesson_text, p_importance, p_embedding,
+        p_commit_sha, p_artifact_hash, p_metadata,
+        CASE WHEN p_commit_sha IS NOT NULL OR p_artifact_hash IS NOT NULL
+             THEN NOW() ELSE NULL END
+    ) RETURNING id INTO new_id;
+
+    RETURN new_id;
+END;
+$$;
+
+COMMENT ON FUNCTION pgmnemo.ingest(TEXT, INT, TEXT, TEXT, SMALLINT, vector, TEXT, TEXT, JSONB) IS
+    'Validated public write API. v0.5.0: truncates lesson_text to '
+    'pgmnemo.max_query_text_chars (default 2000) with RAISE NOTICE on truncation. '
+    'NULL / empty lesson_text bypasses the truncation check. '
+    'Set GUC to 0 or negative to disable. R5 (v0.5.0).';
+
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- §D  R6: pgmnemo.add_edge() — idiomatic upsert helper for mem_edge
+--
+-- Encapsulates the INSERT ... ON CONFLICT pattern from SQL_REFERENCE.md §1.1.
+-- Three update-policy modes:
+--   'replace' (default) — last-writer-wins (SET weight = EXCLUDED.weight)
+--   'max'               — monotonic non-decreasing (GREATEST of old / new)
+--   'avg'               — running average ((old + new) / 2)
+--
+-- A partial unique index ix_mem_edge_active_upsert enables ON CONFLICT on the
+-- active (valid_until IS NULL) edge without changing the existing uq_mem_edge
+-- constraint (which includes valid_from for historical edge retention).
+-- ─────────────────────────────────────────────────────────────────────────────
+
+CREATE UNIQUE INDEX IF NOT EXISTS ix_mem_edge_active_upsert
+    ON pgmnemo.mem_edge (source_id, target_id, relation_type)
+    WHERE valid_until IS NULL;
+
+CREATE OR REPLACE FUNCTION pgmnemo.add_edge(
+    p_source_id     BIGINT,
+    p_target_id     BIGINT,
+    p_relation_type TEXT,
+    p_edge_kind     pgmnemo.edge_kind DEFAULT 'semantic',
+    p_weight        FLOAT8            DEFAULT 1.0,
+    p_metadata      JSONB             DEFAULT '{}'::jsonb,
+    p_mode          TEXT              DEFAULT 'replace'
+) RETURNS VOID
+LANGUAGE plpgsql AS $$
+BEGIN
+    p_weight := GREATEST(0.0, LEAST(1.0, COALESCE(p_weight, 1.0)));
+
+    IF p_mode NOT IN ('replace', 'max', 'avg') THEN
+        RAISE EXCEPTION
+            'pgmnemo.add_edge: unknown mode ''%'' — valid values: replace, max, avg',
+            p_mode;
+    END IF;
+
+    IF p_mode = 'replace' THEN
+        INSERT INTO pgmnemo.mem_edge
+            (source_id, target_id, relation_type, edge_kind, weight, metadata)
+        VALUES
+            (p_source_id, p_target_id, p_relation_type, p_edge_kind,
+             p_weight::REAL, COALESCE(p_metadata, '{}'))
+        ON CONFLICT (source_id, target_id, relation_type)
+            WHERE valid_until IS NULL
+        DO UPDATE SET
+            weight     = EXCLUDED.weight,
+            metadata   = EXCLUDED.metadata,
+            updated_at = now();
+
+    ELSIF p_mode = 'max' THEN
+        INSERT INTO pgmnemo.mem_edge
+            (source_id, target_id, relation_type, edge_kind, weight, metadata)
+        VALUES
+            (p_source_id, p_target_id, p_relation_type, p_edge_kind,
+             p_weight::REAL, COALESCE(p_metadata, '{}'))
+        ON CONFLICT (source_id, target_id, relation_type)
+            WHERE valid_until IS NULL
+        DO UPDATE SET
+            weight     = GREATEST(pgmnemo.mem_edge.weight, EXCLUDED.weight),
+            metadata   = EXCLUDED.metadata,
+            updated_at = now();
+
+    ELSIF p_mode = 'avg' THEN
+        INSERT INTO pgmnemo.mem_edge
+            (source_id, target_id, relation_type, edge_kind, weight, metadata)
+        VALUES
+            (p_source_id, p_target_id, p_relation_type, p_edge_kind,
+             p_weight::REAL, COALESCE(p_metadata, '{}'))
+        ON CONFLICT (source_id, target_id, relation_type)
+            WHERE valid_until IS NULL
+        DO UPDATE SET
+            weight     = (pgmnemo.mem_edge.weight + EXCLUDED.weight) / 2.0,
+            metadata   = EXCLUDED.metadata,
+            updated_at = now();
+    END IF;
+END;
+$$;
+
+COMMENT ON FUNCTION pgmnemo.add_edge(BIGINT, BIGINT, TEXT, pgmnemo.edge_kind, FLOAT8, JSONB, TEXT) IS
+    'Idiomatic upsert helper for pgmnemo.mem_edge (R6, v0.5.0). '
+    'Parameters: p_source_id / p_target_id (BIGINT FK → agent_lesson.id), '
+    'p_relation_type (TEXT; e.g. CAUSED_BY / CO_OCCURRED / DERIVED_FROM / ENTITY_LINK), '
+    'p_edge_kind (pgmnemo.edge_kind ENUM, default ''semantic''), '
+    'p_weight (FLOAT8 clamped to [0.0,1.0], default 1.0), '
+    'p_metadata (JSONB, default ''{}''::jsonb), '
+    'p_mode (TEXT: ''replace''|''max''|''avg'', default ''replace''). '
+    'ON CONFLICT uses ix_mem_edge_active_upsert partial index '
+    '(source_id, target_id, relation_type) WHERE valid_until IS NULL. '
+    'NULL p_source_id or p_target_id raises NOT NULL constraint violation. '
+    'See SQL_REFERENCE.md §1.2 for relation_type → edge_kind mapping. '
+    'R6 (v0.5.0).';
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- §3 R5 (cont.): ingest() — truncate lesson_text to max_query_text_chars
+--
+-- Replaces v0.4.1 ingest() with R5 truncation guard on p_lesson_text.
+-- NULL/empty lesson_text produces a RAISE NOTICE and proceeds (the DB NOT NULL
+-- constraint on lesson_text will reject a true NULL; empty string is stored).
+-- ─────────────────────────────────────────────────────────────────────────────
+
+CREATE OR REPLACE FUNCTION pgmnemo.ingest(
+    p_role          TEXT,
+    p_project_id    INT,
+    p_topic         TEXT,
+    p_lesson_text   TEXT,
+    p_importance    SMALLINT     DEFAULT 3,
+    p_embedding     vector(1024) DEFAULT NULL,
+    p_commit_sha    TEXT         DEFAULT NULL,
+    p_artifact_hash TEXT         DEFAULT NULL,
+    p_metadata      JSONB        DEFAULT '{}'::jsonb
+) RETURNS BIGINT
+LANGUAGE plpgsql AS $$
+DECLARE
+    new_id      BIGINT;
+    _max_chars  INT;
+BEGIN
+    -- R5: truncate lesson_text to pgmnemo.max_query_text_chars (default 2000).
+    _max_chars := COALESCE(
+        NULLIF(current_setting('pgmnemo.max_query_text_chars', TRUE), '')::INT,
+        2000
+    );
+
+    IF p_lesson_text IS NULL OR length(trim(p_lesson_text)) = 0 THEN
+        RAISE NOTICE 'pgmnemo.ingest: p_lesson_text is NULL or empty — proceeding.';
+    ELSIF length(p_lesson_text) > _max_chars THEN
+        RAISE NOTICE 'pgmnemo.ingest: p_lesson_text truncated to % chars (pgmnemo.max_query_text_chars). '
+                     'Original length: %', _max_chars, length(p_lesson_text);
+        p_lesson_text := left(p_lesson_text, _max_chars);
+    END IF;
+
+    IF p_embedding IS NOT NULL AND vector_dims(p_embedding) <> 1024 THEN
+        RAISE EXCEPTION 'pgmnemo.ingest: embedding dimension mismatch — expected 1024, got %',
+            vector_dims(p_embedding);
+    END IF;
+
+    INSERT INTO pgmnemo.agent_lesson (
+        role, project_id, topic, lesson_text, importance, embedding,
+        commit_sha, artifact_hash, metadata, verified_at
+    ) VALUES (
+        p_role, p_project_id, p_topic, p_lesson_text, p_importance, p_embedding,
+        p_commit_sha, p_artifact_hash, p_metadata,
+        CASE WHEN p_commit_sha IS NOT NULL OR p_artifact_hash IS NOT NULL
+             THEN NOW() ELSE NULL END
+    ) RETURNING id INTO new_id;
+
+    RETURN new_id;
+END;
+$$;
+
+COMMENT ON FUNCTION pgmnemo.ingest(TEXT, INT, TEXT, TEXT, SMALLINT, vector, TEXT, TEXT, JSONB) IS
+    'Validated public write API (v0.5.0 + R5). '
+    'Truncates p_lesson_text to pgmnemo.max_query_text_chars (default 2000) with RAISE NOTICE. '
+    'NULL/empty lesson_text emits NOTICE and proceeds to DB constraint enforcement. '
+    'Use SET pgmnemo.max_query_text_chars = ''N'' to override per-session.';
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- §4 R6: pgmnemo.add_edge() — idempotent edge helper (v0.5.0)
+--
+-- Inserts a directed typed edge into pgmnemo.mem_edge.  On conflict on the
+-- active edge (source_id, target_id, relation_type) WHERE valid_until IS NULL,
+-- updates weight and metadata per the selected mode.
+--
+-- Parameters:
+--   p_source_id     BIGINT  — source lesson id (FK → pgmnemo.agent_lesson.id)
+--   p_target_id     BIGINT  — target lesson id (FK → pgmnemo.agent_lesson.id)
+--   p_relation_type TEXT    — relation type (e.g. CAUSED_BY, CO_OCCURRED, DERIVED_FROM)
+--   p_weight        FLOAT8  — edge weight in [0.0, 1.0] (default 1.0)
+--   p_metadata      JSONB   — arbitrary metadata (default '{}')
+--   p_mode          TEXT    — conflict resolution: 'replace' (default), 'max', 'avg'
+--
+-- edge_kind is derived from relation_type using the canonical mapping in SQL_REFERENCE §1.1.
+-- ─────────────────────────────────────────────────────────────────────────────
+
+-- Partial unique index on active edges — enables ON CONFLICT for add_edge().
+-- "Active" = valid_until IS NULL (the current open edge; no end time set).
+CREATE UNIQUE INDEX IF NOT EXISTS uq_mem_edge_active
+    ON pgmnemo.mem_edge (source_id, target_id, relation_type)
+    WHERE valid_until IS NULL;
+
+CREATE OR REPLACE FUNCTION pgmnemo.add_edge(
+    p_source_id     BIGINT,
+    p_target_id     BIGINT,
+    p_relation_type TEXT,
+    p_weight        FLOAT8  DEFAULT 1.0,
+    p_metadata      JSONB   DEFAULT '{}'::jsonb,
+    p_mode          TEXT    DEFAULT 'replace'
+) RETURNS VOID
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    _edge_kind pgmnemo.edge_kind;
+    _weight    REAL := GREATEST(0.0, LEAST(1.0, COALESCE(p_weight, 1.0)));
+BEGIN
+    -- Derive edge_kind from relation_type (canonical mapping, SQL_REFERENCE §1.1).
+    _edge_kind := CASE
+        WHEN p_relation_type IN ('CAUSED_BY', 'DERIVED_FROM', 'CONTRADICTS') THEN 'causal'::pgmnemo.edge_kind
+        WHEN p_relation_type IN ('CO_OCCURRED', 'PRECEDED_BY')               THEN 'temporal'::pgmnemo.edge_kind
+        WHEN p_relation_type IN ('ENTITY_LINK', 'SHARED_TAG', 'IS_A', 'PART_OF') THEN 'entity'::pgmnemo.edge_kind
+        ELSE                                                                       'semantic'::pgmnemo.edge_kind
+    END;
+
+    IF p_mode = 'max' THEN
+        INSERT INTO pgmnemo.mem_edge
+            (source_id, target_id, relation_type, edge_kind, weight, metadata)
+        VALUES
+            (p_source_id, p_target_id, p_relation_type, _edge_kind, _weight, COALESCE(p_metadata, '{}'))
+        ON CONFLICT ON CONSTRAINT uq_mem_edge_active
+        DO UPDATE SET
+            weight     = GREATEST(pgmnemo.mem_edge.weight, EXCLUDED.weight),
+            metadata   = pgmnemo.mem_edge.metadata || EXCLUDED.metadata,
+            updated_at = now();
+
+    ELSIF p_mode = 'avg' THEN
+        INSERT INTO pgmnemo.mem_edge
+            (source_id, target_id, relation_type, edge_kind, weight, metadata)
+        VALUES
+            (p_source_id, p_target_id, p_relation_type, _edge_kind, _weight, COALESCE(p_metadata, '{}'))
+        ON CONFLICT ON CONSTRAINT uq_mem_edge_active
+        DO UPDATE SET
+            weight     = (pgmnemo.mem_edge.weight + EXCLUDED.weight) / 2.0,
+            metadata   = pgmnemo.mem_edge.metadata || EXCLUDED.metadata,
+            updated_at = now();
+
+    ELSE
+        -- mode='replace' (default): last-writer-wins
+        INSERT INTO pgmnemo.mem_edge
+            (source_id, target_id, relation_type, edge_kind, weight, metadata)
+        VALUES
+            (p_source_id, p_target_id, p_relation_type, _edge_kind, _weight, COALESCE(p_metadata, '{}'))
+        ON CONFLICT ON CONSTRAINT uq_mem_edge_active
+        DO UPDATE SET
+            weight     = EXCLUDED.weight,
+            metadata   = EXCLUDED.metadata,
+            updated_at = now();
+    END IF;
+END;
+$$;
+
+COMMENT ON FUNCTION pgmnemo.add_edge(BIGINT, BIGINT, TEXT, FLOAT8, JSONB, TEXT) IS
+    'Idempotent edge helper (R6, v0.5.0). '
+    'Inserts or updates a directed typed edge in pgmnemo.mem_edge. '
+    'edge_kind derived automatically from relation_type (SQL_REFERENCE §1.1 mapping). '
+    'Conflict resolved on uq_mem_edge_active index (source_id, target_id, relation_type WHERE valid_until IS NULL). '
+    'p_mode: ''replace'' (default, last-writer-wins) | ''max'' (monotonic weight) | ''avg'' (running mean). '
+    'p_weight clamped to [0.0, 1.0]. '
+    'FK violation on unknown source_id/target_id is returned to the caller (not caught). '
+    'Example: SELECT pgmnemo.add_edge(1, 2, ''CAUSED_BY'', 0.9, ''{}'', ''max'');';
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- R6 FIXUP: Replace the 6-param add_edge() with a corrected version.
+--
+-- The previous CREATE OR REPLACE used ON CONFLICT ON CONSTRAINT uq_mem_edge_active
+-- which does not exist. Replace with the partial-index ON CONFLICT syntax that
+-- matches ix_mem_edge_active_upsert (created above). This CREATE OR REPLACE
+-- overwrites the broken version registered earlier in this upgrade script.
+-- ─────────────────────────────────────────────────────────────────────────────
+
+CREATE OR REPLACE FUNCTION pgmnemo.add_edge(
+    p_source_id     BIGINT,
+    p_target_id     BIGINT,
+    p_relation_type TEXT,
+    p_weight        FLOAT8  DEFAULT 1.0,
+    p_metadata      JSONB   DEFAULT '{}'::jsonb,
+    p_mode          TEXT    DEFAULT 'replace'
+) RETURNS VOID
+LANGUAGE plpgsql AS $$
+DECLARE
+    _edge_kind pgmnemo.edge_kind;
+    _weight    REAL := GREATEST(0.0, LEAST(1.0, COALESCE(p_weight, 1.0)));
+BEGIN
+    _edge_kind := CASE
+        WHEN p_relation_type IN ('CAUSED_BY', 'DERIVED_FROM', 'CONTRADICTS')        THEN 'causal'::pgmnemo.edge_kind
+        WHEN p_relation_type IN ('CO_OCCURRED', 'PRECEDED_BY')                      THEN 'temporal'::pgmnemo.edge_kind
+        WHEN p_relation_type IN ('ENTITY_LINK', 'SHARED_TAG', 'IS_A', 'PART_OF')    THEN 'entity'::pgmnemo.edge_kind
+        ELSE                                                                              'semantic'::pgmnemo.edge_kind
+    END;
+
+    IF p_mode NOT IN ('replace', 'max', 'avg') THEN
+        RAISE EXCEPTION 'pgmnemo.add_edge: unknown mode ''%'' — valid values: replace, max, avg', p_mode;
+    END IF;
+
+    IF p_mode = 'max' THEN
+        INSERT INTO pgmnemo.mem_edge
+            (source_id, target_id, relation_type, edge_kind, weight, metadata)
+        VALUES
+            (p_source_id, p_target_id, p_relation_type, _edge_kind, _weight, COALESCE(p_metadata, '{}'))
+        ON CONFLICT (source_id, target_id, relation_type) WHERE valid_until IS NULL
+        DO UPDATE SET
+            weight     = GREATEST(pgmnemo.mem_edge.weight, EXCLUDED.weight),
+            metadata   = pgmnemo.mem_edge.metadata || EXCLUDED.metadata,
+            updated_at = now();
+    ELSIF p_mode = 'avg' THEN
+        INSERT INTO pgmnemo.mem_edge
+            (source_id, target_id, relation_type, edge_kind, weight, metadata)
+        VALUES
+            (p_source_id, p_target_id, p_relation_type, _edge_kind, _weight, COALESCE(p_metadata, '{}'))
+        ON CONFLICT (source_id, target_id, relation_type) WHERE valid_until IS NULL
+        DO UPDATE SET
+            weight     = (pgmnemo.mem_edge.weight + EXCLUDED.weight) / 2.0,
+            metadata   = pgmnemo.mem_edge.metadata || EXCLUDED.metadata,
+            updated_at = now();
+    ELSE
+        INSERT INTO pgmnemo.mem_edge
+            (source_id, target_id, relation_type, edge_kind, weight, metadata)
+        VALUES
+            (p_source_id, p_target_id, p_relation_type, _edge_kind, _weight, COALESCE(p_metadata, '{}'))
+        ON CONFLICT (source_id, target_id, relation_type) WHERE valid_until IS NULL
+        DO UPDATE SET
+            weight     = EXCLUDED.weight,
+            metadata   = EXCLUDED.metadata,
+            updated_at = now();
+    END IF;
+END;
+$$;
+
+COMMENT ON FUNCTION pgmnemo.add_edge(BIGINT, BIGINT, TEXT, FLOAT8, JSONB, TEXT) IS
+    'Idempotent edge upsert helper (R6, v0.5.0). 6-param form: auto-derives edge_kind '
+    'from relation_type per SQL_REFERENCE §1.1 canonical mapping. '
+    'p_mode: ''replace'' (default) | ''max'' (monotonic weight) | ''avg'' (running average). '
+    'ON CONFLICT uses ix_mem_edge_active_upsert (source_id, target_id, relation_type) '
+    'WHERE valid_until IS NULL. p_weight clamped to [0.0, 1.0]. '
+    'For explicit edge_kind, use 7-param overload add_edge(BIGINT,BIGINT,TEXT,edge_kind,FLOAT8,JSONB,TEXT). '
+    'NULL source_id/target_id raises NOT NULL constraint violation. R6 (v0.5.0).';
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- R6: 5-param convenience overload — add_edge(source_id, target_id, relation_type,
+--     weight DEFAULT 1.0, metadata DEFAULT '{}')
+--
+-- Thin wrapper over the 6-param form with mode hard-coded to 'replace'
+-- (last-writer-wins ON CONFLICT).  Matches the canonical task-spec signature:
+--
+--   pgmnemo.add_edge(source_id BIGINT, target_id BIGINT, relation_type TEXT,
+--                    weight FLOAT8 DEFAULT 1.0, metadata JSONB DEFAULT '{}')
+--
+-- Acceptance gate: SELECT pgmnemo.add_edge(NULL::BIGINT, NULL::BIGINT, 'test')
+-- raises a NOT NULL constraint violation on mem_edge (FK propagates to caller;
+-- no null-pointer dereference in PL/pgSQL).
+--
+-- Note: source_id / target_id are BIGINT FK → pgmnemo.agent_lesson.id (BIGSERIAL).
+-- ─────────────────────────────────────────────────────────────────────────────
+
+CREATE OR REPLACE FUNCTION pgmnemo.add_edge(
+    p_source_id     BIGINT,
+    p_target_id     BIGINT,
+    p_relation_type TEXT,
+    p_weight        FLOAT8  DEFAULT 1.0,
+    p_metadata      JSONB   DEFAULT '{}'::jsonb
+) RETURNS VOID
+LANGUAGE sql AS $$
+    SELECT pgmnemo.add_edge(p_source_id, p_target_id, p_relation_type,
+                            p_weight, p_metadata, 'replace');
+$$;
+
+COMMENT ON FUNCTION pgmnemo.add_edge(BIGINT, BIGINT, TEXT, FLOAT8, JSONB) IS
+    'Convenience 5-param overload (R6, v0.5.0). Calls add_edge/6 with mode=''replace''. '
+    'Parameters: source_id BIGINT, target_id BIGINT, relation_type TEXT, '
+    'weight FLOAT8 DEFAULT 1.0, metadata JSONB DEFAULT ''{}''. '
+    'ON CONFLICT (source_id, target_id, relation_type) WHERE valid_until IS NULL '
+    'DO UPDATE SET weight=EXCLUDED.weight, metadata=EXCLUDED.metadata, updated_at=now(). '
+    'NULL source_id/target_id raises NOT NULL constraint violation (FK → agent_lesson.id). '
+    'R6 (v0.5.0) — see SQL_REFERENCE.md §1.2.';
