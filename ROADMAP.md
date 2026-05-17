@@ -22,6 +22,16 @@ We have **one fixable competitive weakness today** and **one durable moat:**
 
 Everything in the next 18 months is shaped by these two facts.
 
+### Competitive response (2026-05-17)
+
+WG-STRAT-260517 ratified the following threat postures (full synthesis: `spec/competitive/SYNTHESIS_PGMNEMO_2026-05-17.md`):
+
+- **T1 — Mem0 / AWS Agent SDK:** 3-day research spike (due 2026-05-30) to determine if the SDK memory provider interface is pluggable. If pluggable → build Lambda adapter for v0.6.0. If locked → kill AWS track; Anthropic MCP Registry wrapper proceeds regardless.
+- **T2 — Graphiti pgvector driver (est. Q3 2026):** Monitor `getzep/graphiti` PRs for postgres/pgvector. Counter with bitemporality (H-07, v0.5.0) — DB-level trigger resolution vs LLM-detected contradiction. No feature parity race.
+- **T3 — Letta Aurora in production:** "Postgres-native" is surrendered. Claim is now "write-time enforcement at the RLS layer." Letta is reframed as category-validator ("MemGPT showed agents need memory; pgmnemo shows memory needs a gate"). No defensive pivot required.
+
+Tagline updated to: **"The write-time gate for agent memory."** (POSITIONING.md updated 2026-05-17.)
+
 ---
 
 ## Releases at a glance
@@ -30,7 +40,7 @@ Everything in the next 18 months is shaped by these two facts.
 |---|---|---|---|
 | **v0.3.1** | Hygiene + documentation + bench-gate in CI | All issues closed; gate file mechanism live; no recall change | 2026-05-13 (✅ SHIPPED) |
 | **v0.4.0** | Hybrid retrieval promoted to default | LoCoMo session recall@10 +4.15pp (p<0.05); LongMemEval neutral | 2026-05-15 (✅ SHIPPED) |
-| **v0.4.1** | **Production hardening** (per Agency RFC 2026-05-16) | R1, R2 docs, R3, R4, R7 from `AGENCY_REQUIREMENTS_FOR_PGMNEMO.md`; Agency bench recall@10 ≥ 0.55 maintained | 2026-05-30 |
+| **v0.4.1** | **Production hardening** (per Agency RFC 2026-05-16) | R1, R2 docs, R3, R4, R7 from `AGENCY_REQUIREMENTS_FOR_PGMNEMO.md`; Agency bench recall@10 ≥ 0.55 maintained | 2026-05-17 (✅ SHIPPED) |
 | **v0.5.0** | Per-category lift + graph helpers | R5, R6, R10 + H-06 temporal weight tune; previously-planned graph-deprecation cycle folded in here | 2026-06-20 |
 | **v0.6.0** | Adoption tooling + multi-tenant | R8, R9 + framework adapters + first external case study | 2026-08-15 |
 | **v0.7.0** | Optional graph eval (only if adopter pulls) | Bench that exercises `mem_edge`; +X pp gate | 2026-09 (conditional) |
@@ -113,7 +123,7 @@ Alternative:      Stay EXPERIMENTAL, lose the BM25 race
 
 ---
 
-## v0.4.1 — Production hardening (target 2026-05-30) **— REPRIORITISED**
+## v0.4.1 — Production hardening (✅ SHIPPED 2026-05-17) **— REPRIORITISED**
 
 **Theme:** ship the items that the first external production adopter (Agency v2)
 asked for in `AGENCY_REQUIREMENTS_FOR_PGMNEMO.md` (2026-05-16). Previously this
@@ -173,6 +183,21 @@ in ~2.7 hours (was 45 hours). Phase B of v0.5.0 will use this.
 
 ---
 
+## Inter-release docs (post-v0.4.1, pre-v0.5.0) — WG-STRAT-260517
+
+Documentation and positioning work that landed in `main` after the v0.4.1 release
+tag (2026-05-17). These items do **not** require their own extension version —
+they ship continuously as docs commits, not PGXN releases. Tracked here so the
+next release planning checkpoint sees them as done before v0.5.0 scope is locked.
+
+| Item | Rec # | Priority | Owner | Status |
+|---|---|---|---|---|
+| POSITIONING.md created (MIT/HNSW/bundled Ollama corrections) + tagline "The write-time gate for agent memory." (Candidate A) | #1, #2 | **P0** | growth_lead | ✅ shipped 2026-05-17 (commits `01895f7`, `a27c3f9`) |
+| Cost-per-1K-memories comparison table validated and published | #3 | P1 | growth_lead | due 2026-05-30 — validate GPT-5-mini pricing before publish; table drafted in POS-GROWTH §3 |
+| Letta citation added to README §"Why this exists": "MemGPT showed agents need memory; pgmnemo shows memory needs a gate." | #8 | P2 | growth_lead | due 2026-05-30 |
+
+---
+
 ## v0.5.0 — Per-category lift + graph helpers (target 2026-06-20)
 
 **Theme:** fix the weakest LoCoMo category (`temporal`), unblock Stella V5, AND
@@ -214,9 +239,18 @@ ICE:              I=6 C=7 E=9
 - Stella V5 instructions documented in `benchmarks/ADDENDA/LONGMEMEVAL_EMBEDDER_STELLA.md`
 - Optional: a `pgmnemo.temporal_boost` GUC for adopters with timestamp-sensitive workloads
 
+### Competitive response items (WG-STRAT-260517, P1 + P2)
+
+Added alongside Agency RFC items. R5, R6, R10 scope unchanged.
+
+| Item | Rec # | Priority | Owner | Notes |
+|---|---|---|---|---|
+| Bitemporality primitive (H-07): `t_valid_from TIMESTAMPTZ DEFAULT now()` + `t_valid_to TIMESTAMPTZ DEFAULT 'infinity'` on `mem_item`; trigger sets `t_valid_to = NOW()` on conflicting write; `mem.as_of(ts TIMESTAMPTZ)` view | #6 | P2 | chief_architect | Hypothesis declaration required per ROADMAP change policy. ICE score pre-addition. Acceptance gate: `significance_test_extended.py` exit ≤ 1 on all cells (additive schema, no recall-path change expected). 1-week effort. |
+| Anthropic MCP server wrapper — HTTP wrapper on `pgmnemo.ingest()` / `pgmnemo.recall_lessons()` SQL API; ships as separate `pgmnemo-mcp` Python package (does NOT require extension version bump), tracked here for visibility | — | P1 | chief_architect | 1-2 days. Submit to Anthropic MCP Registry when available. Execute regardless of AWS Agent SDK research verdict (independent counter-channel). |
+
 ### Out of scope
 - Graph features (no adopter has asked)
-- New schema columns
+- New schema columns beyond H-07 bitemporality
 - API breaking changes
 
 ### Customer value
@@ -241,10 +275,22 @@ ICE:              I=6 C=7 E=9
 4. **First public case study** — concrete external adopter, real
    workload, real number
 
+### Competitive response items (WG-STRAT-260517, P1 + P2)
+
+Added alongside adoption tooling. R8, R9 scope unchanged.
+
+| Item | Rec # | Priority | Owner | Notes |
+|---|---|---|---|---|
+| `pgpm install pgmnemo` — publish to npm registry under `@pgmnemo/pgmnemo`; manifest + smoke test via `pgpm deploy` | #5 | P1 | chief_architect | 3-5 days. pgmnemo is pure SQL — no compilation needed. Declare `pgvector >= 0.7.0` as dependency. |
+| AWS Agent SDK Lambda adapter (Pattern A) + CDK L3 construct | #4 | P1-gated | chief_architect | **Gated on 2026-05-30 research verdict.** If SDK memory provider interface is public and pluggable: build. If contractually locked: kill; slot reclaimed for another adapter. |
+| Benchmark card v0 (8-cell design per POS-RS spec; pre-registered protocol; CI auto-publish on tag) | #7 | P1 | research_supervisor | **Target: published pre-v0.6.0 tag, by 2026-07-15.** Mandatory negative cells C4 (BM25 gap) and C5 (production corpus) included. Raw per-question outputs committed to repo. |
+
 ### Acceptance gate
 - ≥ 3 of the 5 adapters tested end-to-end against `docker compose up`
 - Cookbook walkthrough completes in under 10 minutes from `git clone`
 - At least one external project (not by us) committed to using pgmnemo in production
+- `pgpm install pgmnemo` smoke test passes (if shipped in this release)
+- Benchmark card v0 published and accessible (if shipped pre-tag)
 
 ### Out of scope
 - Adapter framework breaking changes (we just wrap our SQL API; if they break, we patch)
