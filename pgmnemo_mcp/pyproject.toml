@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=42", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pgmnemo-mcp"
+version = "0.5.0"
+description = "MCP server wrapping pgmnemo ingest and recall for AI agent memory"
+readme = "README.md"
+license = { text = "Apache-2.0" }
+requires-python = ">=3.11"
+dependencies = [
+    "mcp>=1.0",
+    "psycopg2-binary>=2.9",
+    "pydantic>=2.0",
+]
+
+[project.scripts]
+pgmnemo-mcp = "pgmnemo_mcp.server:run"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["pgmnemo_mcp*"]
