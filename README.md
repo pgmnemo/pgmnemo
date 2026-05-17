@@ -160,6 +160,51 @@ FROM pgmnemo.recall_lessons(
 | < 14 | Not supported | — | — |
 | arm64 | Source-build only | ≥ 0.7.0 required | No pre-built images |
 
+## MCP Wrapper
+
+`pgmnemo-mcp` is an [MCP](https://modelcontextprotocol.io/) server that exposes
+pgmnemo's ingest and recall capabilities as tool calls for AI agents and LLM hosts.
+
+### Install
+
+```bash
+pip install pgmnemo-mcp          # from PyPI (once published)
+# or from source:
+pip install -e pgmnemo_mcp/
+```
+
+### Configuration
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `DATABASE_URL` | `postgresql://localhost/pgmnemo` | libpq connection string |
+| `MCP_PORT` | `8765` | Port for HTTP/SSE transport |
+
+### Usage
+
+```bash
+# Start the MCP server (stdio transport — works with Claude Desktop, Cursor, etc.)
+pgmnemo-mcp
+
+# Smoke test: verify DB connectivity
+DATABASE_URL=postgresql://user:pass@host/db python -m pgmnemo_mcp --smoke
+```
+
+### Tools exposed
+
+| Tool | Arguments | Description |
+|------|-----------|-------------|
+| `pgmnemo.ingest` | `text: str, metadata?: dict` | Store a lesson in agent memory |
+| `pgmnemo.recall` | `query: str, top_k?: int` | Retrieve relevant lessons |
+
+`metadata` keys for ingest: `role`, `topic`, `importance` (1–5), `commit_sha`.
+
+### MCP Registry
+
+Server name: `pgmnemo`
+Entry point: `pgmnemo-mcp` (console script)
+Transport: stdio (default) · SSE (set `MCP_PORT`)
+
 ## Documentation
 
 - [INSTALL.md](INSTALL.md) — build, install, configure, upgrade
