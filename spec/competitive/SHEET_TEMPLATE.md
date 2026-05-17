@@ -1,55 +1,130 @@
-# SHEET_TEMPLATE — EA-FETCH FAILURE
+# pgmnemo Startup Template — Source Structure
 
-**Task**: PGMNEMO-WG-VC-260517 — EA-FETCH: pull startup template from Google Sheets  
-**Date**: 2026-05-17 (re-attempted)  
-**Assignee**: EA (agent_id=4)
+**Source:** founder Google Sheets `1SKNHJwcytVMJmgXKD-LCdruKZTnHTXR4`, extracted 2026-05-17 via Chrome MCP (asistentgaidaburas@gmail.com).
+
+**For RATIFY task #6317:** fill values into THIS structure (7 sheets, all in Russian). Output `STARTUP_TEMPLATE_FILLED.md` mirrors these 7 sections. Founder will paste columns back into Google Sheets manually (OAuth refresh required for direct write).
 
 ---
 
-## FAILURE: Could not fetch Google Sheet
+## Sheet: Актуальность и Уникальность
+*(220 rows × 24 cols, non-empty subset shown)*
 
-**Source**: `https://docs.google.com/spreadsheets/d/1SKNHJwcytVMJmgXKD-LCdruKZTnHTXR4/edit?gid=2108518644`  
-**Spreadsheet ID**: `1SKNHJwcytVMJmgXKD-LCdruKZTnHTXR4`  
-**Sheet GID**: `2108518644`
+| Концепция стартап-идеи |  |  |
+|---|---|---|
+| Описание бизнес-идеи |  |  |
+| Параметр | Описание параметра | Значение |
+| Наименование проекта | Название стартапа, отражающее суть идеи |  |
+| Краткое описание продукта/услуги | Краткое объяснение, что предлагает продукт или услуга и как это работает |  |
+| Команда проекта | ФИО, роль в проекте |  |
+| Оценка актуальности и уникальность идеи |  |  |
+| Критерий | Описание критерия | Значение |
+| Проблема/потребность | Оценка степени боли, частоты и срочности проблемы для клиентов |  |
+| Тренды и своевременность | Почему сейчас важно решать задачу? Какие тренды поддерживают проект? |  |
+| Стастистика | Сколько людей/компаний затрагивает проблема? Как часто возникает? |  |
+| Регуляторные/социальные факторы | Внешние стимулы или барьеры (законодательство, поддержка, запреты) |  |
+| Новизна/оригинальность | Есть ли аналоги? Чем проект отличается? Что нового придумали? |  |
+| Сложность копирования | Насколько просто повторить решение? Есть ли барьеры для входа? |  |
+| Потенциал масштабирования | Можно ли быстро расти на существующих рынках/сегментах? |  |
+| Социальная/экологическая значимость | Есть ли дополнительная ценность для общества или среды? |  |
 
-### Tools attempted (in order)
+---
 
-| Step | Tool / Path | Result |
-|------|-------------|--------|
-| 1 | Google Workspace MCP (`mcp__google_workspace__*`) | Not available in this agent session |
-| 2 | Public CSV export (`/export?format=csv&gid=2108518644`) | HTTP 401 — sheet is private |
-| 3 | Fernet-decrypt `credential_records` id=33 via `SECRET_KEY` → `oauth2.googleapis.com/token` refresh | `HTTP 400: invalid_grant — Token has been expired or revoked` |
+## Sheet: Проблема и решение
+*(3 rows × 8 cols, non-empty subset shown)*
 
-### Root cause
+| Проблемы и решения стартапа |  |  |  |  |  |  |  |
+|---|---|---|---|---|---|---|---|
+| № | Проблема | Описание проблемы | Корневая причина | Текущее решение/альтернатива и её недостатки | Решение стартапа (описание) | Ключевые преимущества решения | Рекомендации по улучшению |
 
-The Google OAuth2 refresh token for external account `id=12` (`asistentgaidaburas@gmail.com`, DB status: `error`) has been **expired or revoked** by Google. Both the cached access_token (len=253) and the refresh_token (len=103) stored in `credential_records` id=33 are rejected by Google's token endpoint.
+---
 
-The stored scope **includes** `https://www.googleapis.com/auth/spreadsheets`, so re-authorization would grant Sheets access immediately.
+## Sheet: Ценностное предложение и целева
+*(7 rows × 8 cols, non-empty subset shown)*
 
-### Recommendation for founder
+| Ценностное предложение и целевая аудитория стартапа |  |  |  |  |  |  |  |
+|---|---|---|---|---|---|---|---|
+| № | Целевая аудитория | Описание сегмента (кто, где, как живет/работает, особенности) | Ключевые проблемы/потребности сегмента | Ценностное предложение (формулировка для сегмента) | Уникальные преимущества/отстройка | Каналы коммуникации и продаж | Рекомендации по доработке |
+| 1.0 |  |  |  |  |  |  |  |
+| 2.0 |  |  |  |  |  |  |  |
+| 3.0 |  |  |  |  |  |  |  |
+| 4.0 |  |  |  |  |  |  |  |
+| 5.0 |  |  |  |  |  |  |  |
 
-**Option A (fastest)**: Re-authorize the Google Workspace connection:
-1. Go to Agency admin → Connections → Google Workspace (`asistentgaidaburas@gmail.com`) → Reconnect
-2. Complete the OAuth flow — this will issue a new refresh token
-3. Re-run this task; EA will fetch and convert the sheet automatically
+---
 
-**Option B (manual, no re-auth needed)**:
-1. Open the spreadsheet and go to the tab with GID `2108518644`
-2. File → Download → CSV
-3. Place the CSV at `spec/competitive/startup_template.csv`
-4. The RATIFY task will work from the CSV directly
+## Sheet: Оценка рынка
+*(16 rows × 9 cols, non-empty subset shown)*
 
-### Note for RATIFY task
+| Объем рынка |  |  |  |  |  |  |  |  |
+|---|---|---|---|---|---|---|---|---|
+| № | Показатель | Описание | Формула | Число клиентов | Средний чек | Ожидаемая доля рынка | Значение для проекта (в руб.) | Источник данных |
+| 1.0 | TAM |  |  |  |  |  |  |  |
+| 2.0 | SAM |  |  |  |  |  |  |  |
+| 3.0 | SOM |  |  |  |  |  |  |  |
+| Ключевые параметры оценки рынка |  |  |  |  |  |  |  |  |
+| № | Параметр рынка | Описание | Для заполнения |  |  |  |  |  |
+| 1.0 | Темпы роста | Динамика рынка |  |  |  |  |  |  |
+| 2.0 | Основные сегменты | Крупнейшие группы потребителей |  |  |  |  |  |  |
+| 3.0 | География | Ключевые регионы |  |  |  |  |  |  |
+| 4.0 | Тренды и драйверы | Главные факторы роста |  |  |  |  |  |  |
+| 5.0 | Конкуренты | Основные игроки, их преимущества |  |  |  |  |  |  |
+| 6.0 | Барьеры для входа | Лицензии, технологии, бренд |  |  |  |  |  |  |
+| 7.0 | Готовность платить | Средний чек, % готовых платить |  |  |  |  |  |  |
 
-`SHEET_TEMPLATE.md` is unavailable. Per task spec, RATIFY should fall back to generic template. If the founder exports a CSV manually, it can be converted to markdown with:
+---
 
-```bash
-python3 -c "
-import csv, sys
-rows = list(csv.reader(open('spec/competitive/startup_template.csv')))
-if not rows: exit()
-print('| ' + ' | '.join(rows[0]) + ' |')
-print('|' + '---|' * len(rows[0]))
-for r in rows[1:]: print('| ' + ' | '.join(r) + ' |')
-"
-```
+## Sheet: Конкурентный анализ
+*(14 rows × 6 cols, non-empty subset shown)*
+
+| Ключевые параметры конкурентного анализа |  |  |  |  |  |
+|---|---|---|---|---|---|
+| № | Критерий | Описание/Формула | Ваш стартап | Конкурент 1 | Конкурент 2 |
+| 1.0 | Название компании |  |  |  |  |
+| 2.0 | Сайт / контакты |  |  |  |  |
+| 3.0 | Продукт / услуга |  |  |  |  |
+| 4.0 | Целевая аудитория |  |  |  |  |
+| 5.0 | Цена |  |  |  |  |
+| 6.0 | Каналы продаж |  |  |  |  |
+| 7.0 | Каналы продвижения |  |  |  |  |
+| 8.0 | Ключевые преимущества |  |  |  |  |
+| 9.0 | Слабые стороны |  |  |  |  |
+| 10.0 | Технологии |  |  |  |  |
+| 11.0 | Команда / экспертиза |  |  |  |  |
+| 12.0 | Отзывы / репутация |  |  |  |  |
+
+---
+
+## Sheet: Canvas
+*(10 rows × 5 cols, non-empty subset shown)*
+
+| № | Блок Canvas | Вопрос для заполнения | Пояснение | Для заполнения |
+|---|---|---|---|---|
+| 1.0 | Ключевые партнеры | Кто ваши основные партнеры и поставщики? Какова форма сотрудничества? | Внешние организации и лица, без которых невозможна реализация бизнес-модели |  |
+| 2.0 | Ключевые виды деятельности | Какие ключевые действия нужны для работы и развития бизнеса? | Основные процессы: производство, разработка, маркетинг, продажи |  |
+| 3.0 | Ключевые ресурсы | Какие ресурсы необходимы для работы? | Команда, технологии, лицензии, интеллектуальная собственность, источники финансирования |  |
+| 4.0 | Ценностные предложения | Какую основную ценность вы даете клиенту? | Главная польза для клиента, уникальность, отличие от конкурентов |  |
+| 5.0 | Взаимоотношения с клиентами | Как вы строите и поддерживаете отношения с клиентами? | Способы привлечения, удержания, поддержки, персонализация |  |
+| 6.0 | Сегменты клиентов | Кто ваши целевые клиенты? | Описание целевой аудитории по возрасту, интересам, географии и т.д. |  |
+| 7.0 | Каналы коммуникации и сбыта | Через какие каналы вы общаетесь и продаете? | Онлайн, офлайн, партнеры, соцсети, магазины |  |
+| 8.0 | Структура издержек | Какие основные расходы есть у бизнеса? | Основные статьи расходов: команда, маркетинг, лицензии, аренда и т.д. |  |
+| 9.0 | Потоки доходов | Как бизнес зарабатывает? Какие источники дохода? | Продажи, подписка, реклама, аренда, партнерские программы |  |
+
+---
+
+## Sheet: Финмодель
+*(220 rows × 26 cols, non-empty subset shown)*
+
+| Показатель | Год 1 | Год 2 | Год 3 |
+|---|---|---|---|
+| Клиенты (кумулятивно) |  |  |  |
+| Выручка, млн ₽ |  |  |  |
+| CPU лицензии |  |  |  |
+| GPU лицензии |  |  |  |
+| ФОТ, млн ₽ |  |  |  |
+| Прочие операц. затраты, млн ₽ |  |  |  |
+| Комиссии партнёрам, млн ₽ |  |  |  |
+| Итого расходы, млн ₽ |  |  |  |
+| EBITDA, млн ₽ |  |  |  |
+| EBITDA margin, % |  |  |  |
+
+---
