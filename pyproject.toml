@@ -1,0 +1,22 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "pgmnemo-mcp"
+version = "0.5.0"
+description = "MCP server wrapper for pgmnemo — exposes ingest and recall as MCP tools"
+readme = "README.md"
+license = { text = "Apache-2.0" }
+requires-python = ">=3.11"
+dependencies = [
+    "mcp>=1.0.0",
+    "psycopg2-binary>=2.9",
+    "pydantic>=2.0",
+]
+
+[project.scripts]
+pgmnemo-mcp = "pgmnemo_mcp.server:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["pgmnemo_mcp"]
