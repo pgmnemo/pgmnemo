@@ -25,6 +25,7 @@ def ingest(
     role: str = "mcp_agent",
     topic: str = "general",
     importance: int = 3,
+    project_id: int = 1,
     commit_sha: str | None = None,
     artifact_hash: str | None = None,
     metadata: dict[str, Any] | None = None,
@@ -34,6 +35,7 @@ def ingest(
     BUG-1 fix: INSERT now uses RETURNING id (column is 'id', not 'lesson_id').
     BUG-2 fix: role/topic are explicit required-with-defaults params (NOT NULL cols);
                artifact_hash added so provenance gate can be satisfied.
+    FIX-A: project_id param added (NOT NULL col, default 1).
     """
     p = get_pool()
     conn = p.getconn()
@@ -42,12 +44,12 @@ def ingest(
             cur.execute(
                 """
                 INSERT INTO pgmnemo.agent_lesson
-                    (lesson_text, role, topic, importance,
+                    (lesson_text, role, topic, importance, project_id,
                      commit_sha, artifact_hash, verified_at)
-                VALUES (%s, %s, %s, %s, %s, %s, NOW())
+                VALUES (%s, %s, %s, %s, %s, %s, %s, NOW())
                 RETURNING id, created_at
                 """,
-                (text, role, topic, importance, commit_sha, artifact_hash),  # verified_at=NOW() above
+                (text, role, topic, importance, project_id, commit_sha, artifact_hash),
             )
             row = cur.fetchone()
             conn.commit()
