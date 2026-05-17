@@ -306,3 +306,215 @@ COMMENT ON FUNCTION pgmnemo.recall_lessons(vector, INT, TEXT, INT, TEXT) IS
     'temporal_boost range: 0.0–5.0 (clamped internally). '
     'Diagnostic cols (R4): vec_score=cosine; bm25_score/rrf_score=NULL on vector path. '
     'Opt-out hybrid: SET pgmnemo.disable_hybrid = ''true''.';
+
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- H-07: Bitemporality primitive on agent_lesson (v0.5.0)
+-- Consistent with mem_edge.valid_from / valid_until pattern (pgmnemo--0.4.1.sql:278-280).
+-- All guards use IF NOT EXISTS / CREATE OR REPLACE — safe to run twice on same DB.
+-- See spec/v2/pgmnemo/H07_BITEMPORALITY_PLAN.md for ICE score, idempotency proof,
+-- rollback SQL, and acceptance gate.
+-- ─────────────────────────────────────────────────────────────────────────────
+
+ALTER TABLE pgmnemo.agent_lesson
+    ADD COLUMN IF NOT EXISTS t_valid_from  TIMESTAMPTZ NOT NULL DEFAULT now(),
+    ADD COLUMN IF NOT EXISTS t_valid_to    TIMESTAMPTZ NOT NULL DEFAULT 'infinity'::TIMESTAMPTZ;
+
+ALTER TABLE pgmnemo.agent_lesson
+    ADD COLUMN IF NOT EXISTS content_hash  TEXT GENERATED ALWAYS AS (
+        MD5(
+            COALESCE(role,        '') || '|' ||
+            COALESCE(topic,       '') || '|' ||
+            COALESCE(commit_sha, COALESCE(artifact_hash, ''))
+        )
+    ) STORED;
+
+-- Backfill: existing rows get t_valid_from = their actual created_at.
+-- Condition matches only rows whose t_valid_from was just set to now() by this migration.
+UPDATE pgmnemo.agent_lesson
+SET    t_valid_from = created_at
+WHERE  t_valid_from >= (now() - INTERVAL '1 second');
+
+CREATE INDEX IF NOT EXISTS ix_agent_lesson_valid_range
+    ON pgmnemo.agent_lesson (t_valid_from, t_valid_to)
+    WHERE t_valid_to = 'infinity'::TIMESTAMPTZ;
+
+CREATE INDEX IF NOT EXISTS ix_agent_lesson_content_hash_active
+    ON pgmnemo.agent_lesson (content_hash)
+    WHERE t_valid_to = 'infinity'::TIMESTAMPTZ;
+
+-- Trigger: on INSERT, close any prior active row with the same content_hash.
+-- NULL-safe: if content_hash IS NULL, no rows are closed (NULL != anything).
+CREATE OR REPLACE FUNCTION pgmnemo._bitemporal_close_prior()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    IF NEW.content_hash IS NOT NULL THEN
+        UPDATE pgmnemo.agent_lesson
+        SET    t_valid_to = now()
+        WHERE  content_hash = NEW.content_hash
+          AND  t_valid_to   = 'infinity'::TIMESTAMPTZ
+          AND  id           <> NEW.id;
+    END IF;
+    RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_agent_lesson_bitemporal_close ON pgmnemo.agent_lesson;
+
+CREATE TRIGGER trg_agent_lesson_bitemporal_close
+    AFTER INSERT ON pgmnemo.agent_lesson
+    FOR EACH ROW
+    EXECUTE FUNCTION pgmnemo._bitemporal_close_prior();
+
+-- pgmnemo.mem_item: active-only view (forward-compat alias for ROADMAP "mem_item").
+CREATE OR REPLACE VIEW pgmnemo.mem_item AS
+    SELECT *
+    FROM   pgmnemo.agent_lesson
+    WHERE  t_valid_to = 'infinity'::TIMESTAMPTZ;
+
+COMMENT ON VIEW pgmnemo.mem_item IS
+    'Active-row alias for pgmnemo.agent_lesson (t_valid_to = infinity). '
+    'H-07 bitemporality (v0.5.0). Forward-compat alias for ROADMAP mem_item.';
+
+-- pgmnemo.as_of(ts): time-travel — state of agent_lesson as of timestamp ts.
+CREATE OR REPLACE FUNCTION pgmnemo.as_of(ts TIMESTAMPTZ)
+RETURNS SETOF pgmnemo.agent_lesson
+LANGUAGE sql
+STABLE
+PARALLEL SAFE
+AS $$
+    SELECT *
+    FROM   pgmnemo.agent_lesson
+    WHERE  t_valid_from <= ts
+      AND  t_valid_to   >  ts;
+$$;
+
+COMMENT ON FUNCTION pgmnemo.as_of(TIMESTAMPTZ) IS
+    'Time-travel: returns agent_lesson state as of timestamp ts. '
+    'Returns rows where t_valid_from <= ts < t_valid_to. '
+    'H-07 bitemporality primitive (v0.5.0). '
+    'For edge time-travel: join pgmnemo.as_of(ts) with pgmnemo.mem_edge.';
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- H-07: Bitemporality primitive on agent_lesson (v0.5.0)
+-- Research: spec/v2/pgmnemo/H07_BITEMPORALITY_RESEARCH.md
+-- Plan:     spec/v2/pgmnemo/H07_BITEMPORALITY_PLAN.md
+--
+-- Adds valid-time columns (t_valid_from, t_valid_to) + computed dedup key
+-- (content_hash) to pgmnemo.agent_lesson.  All DDL uses IF NOT EXISTS /
+-- CREATE OR REPLACE — idempotent on re-run.
+--
+-- Note on task-spec vs plan discrepancy:
+--   The task spec references "pgmnemo.mem_item" as the target table and a
+--   "mem" schema for as_of().  mem_item does not exist as a table in v0.4.1;
+--   the research clarified it as a view alias over agent_lesson
+--   (H07_BITEMPORALITY_RESEARCH.md §1a).  All objects are placed in the
+--   pgmnemo schema, consistent with extension schema = pgmnemo in control file.
+-- ─────────────────────────────────────────────────────────────────────────────
+
+-- Step 1: Bitemporality columns + computed dedup key
+ALTER TABLE pgmnemo.agent_lesson
+    ADD COLUMN IF NOT EXISTS t_valid_from  TIMESTAMPTZ NOT NULL DEFAULT now(),
+    ADD COLUMN IF NOT EXISTS t_valid_to    TIMESTAMPTZ NOT NULL DEFAULT 'infinity'::TIMESTAMPTZ,
+    ADD COLUMN IF NOT EXISTS content_hash  TEXT GENERATED ALWAYS AS (
+        MD5(
+            COALESCE(role,       '') || '|' ||
+            COALESCE(topic,      '') || '|' ||
+            COALESCE(commit_sha, COALESCE(artifact_hash, ''))
+        )
+    ) STORED;
+
+COMMENT ON COLUMN pgmnemo.agent_lesson.t_valid_from IS
+    'Valid-time start: when this row''s content became true. '
+    'Defaults to row creation time; backfilled to created_at for pre-H-07 rows. '
+    'H-07 bitemporality (v0.5.0).';
+COMMENT ON COLUMN pgmnemo.agent_lesson.t_valid_to IS
+    'Valid-time end: ''infinity'' = currently active row. '
+    'Set to now() by trigger when a new row with the same content_hash is inserted. '
+    'H-07 bitemporality (v0.5.0).';
+COMMENT ON COLUMN pgmnemo.agent_lesson.content_hash IS
+    'MD5(role|topic|commit_sha_or_artifact_hash). Computed dedup key for bitemporal trigger. '
+    'NULL-safe: when all three fields are NULL the hash is still computed (empty string fallback). '
+    'H-07 bitemporality (v0.5.0).';
+
+-- Step 2: Backfill — existing rows are "always valid" from their creation time.
+-- The WHERE guard targets only rows whose t_valid_from was just set to now()
+-- by the ADD COLUMN DEFAULT (within the last second).  On a second migration
+-- run all existing t_valid_from values are historical and outside this window.
+UPDATE pgmnemo.agent_lesson
+SET    t_valid_from = created_at
+WHERE  t_valid_from >= (now() - INTERVAL '1 second');
+
+-- Step 3: Indexes (partial on active rows — keeps recall_lessons() scan unchanged)
+CREATE INDEX IF NOT EXISTS ix_agent_lesson_valid_range
+    ON pgmnemo.agent_lesson (t_valid_from, t_valid_to)
+    WHERE t_valid_to = 'infinity'::TIMESTAMPTZ;
+
+CREATE INDEX IF NOT EXISTS ix_agent_lesson_content_hash_active
+    ON pgmnemo.agent_lesson (content_hash)
+    WHERE t_valid_to = 'infinity'::TIMESTAMPTZ;
+
+-- Step 4: Trigger function — expire the prior active row on conflicting insert.
+-- AFTER INSERT so NEW.id is available; uses content_hash for O(1) index lookup.
+CREATE OR REPLACE FUNCTION pgmnemo._bitemporal_close_prior()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    -- Close any currently-active row with the same content_hash.
+    -- When content_hash is identical across rows it means the same logical lesson
+    -- (same role + topic + provenance) is being re-ingested; close the prior version.
+    -- NULL content_hash: all-NULL provenance is unusual (provenance gate blocks it),
+    -- but we still compute a hash from empty-string fallbacks, so this branch
+    -- is retained for safety in case a caller bypasses the gate.
+    IF NEW.content_hash IS NOT NULL THEN
+        UPDATE pgmnemo.agent_lesson
+        SET    t_valid_to = now()
+        WHERE  content_hash = NEW.content_hash
+          AND  t_valid_to   = 'infinity'::TIMESTAMPTZ
+          AND  id           <> NEW.id;
+    END IF;
+    RETURN NEW;
+END;
+$$;
+
+-- DROP + CREATE is the idempotent pattern for triggers (no CREATE OR REPLACE TRIGGER).
+DROP TRIGGER IF EXISTS trg_agent_lesson_bitemporal_close ON pgmnemo.agent_lesson;
+CREATE TRIGGER trg_agent_lesson_bitemporal_close
+    AFTER INSERT ON pgmnemo.agent_lesson
+    FOR EACH ROW
+    EXECUTE FUNCTION pgmnemo._bitemporal_close_prior();
+
+-- Step 5: mem_item — active-only view alias (ROADMAP forward-compat naming).
+CREATE OR REPLACE VIEW pgmnemo.mem_item AS
+    SELECT * FROM pgmnemo.agent_lesson
+    WHERE  t_valid_to = 'infinity'::TIMESTAMPTZ;
+
+COMMENT ON VIEW pgmnemo.mem_item IS
+    'Active-only alias for pgmnemo.agent_lesson (t_valid_to = infinity). '
+    'Forward-compat with ROADMAP mem_item naming (H-07, v0.5.0). '
+    'For time-travel queries use pgmnemo.as_of(ts).';
+
+-- Step 6: as_of() — point-in-time query function.
+-- Named pgmnemo.as_of (not mem.as_of) because the extension schema is pgmnemo.
+-- The "mem.as_of" in the task spec refers to this function in documentation context.
+CREATE OR REPLACE FUNCTION pgmnemo.as_of(ts TIMESTAMPTZ)
+RETURNS SETOF pgmnemo.agent_lesson
+LANGUAGE sql
+STABLE
+PARALLEL SAFE
+AS $$
+    SELECT *
+    FROM   pgmnemo.agent_lesson
+    WHERE  t_valid_from <= ts
+      AND  t_valid_to   >  ts;
+$$;
+
+COMMENT ON FUNCTION pgmnemo.as_of(TIMESTAMPTZ) IS
+    'Time-travel query: returns the state of agent_lesson as of timestamp ts. '
+    'Returns rows where t_valid_from <= ts < t_valid_to (half-open interval). '
+    'Equivalent to the "mem.as_of" primitive in ROADMAP (schema is pgmnemo per control file). '
+    'Example: SELECT * FROM pgmnemo.as_of(''2026-05-01 12:00:00+00''); '
+    'H-07 bitemporality (v0.5.0).';
