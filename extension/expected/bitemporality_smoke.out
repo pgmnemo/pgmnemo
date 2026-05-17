@@ -2,6 +2,7 @@
 -- Verifies: t_valid columns, trigger close-prior, mem_item view, as_of() function.
 -- Apply migration to get H-07 objects (extension loaded at v0.4.1 by default).
 ALTER EXTENSION pgmnemo UPDATE TO '0.5.0';
+NOTICE:  version "0.5.0" of extension "pgmnemo" is already installed
 -- ── Schema checks ────────────────────────────────────────────────────────────
 -- t_valid_from and t_valid_to columns exist on agent_lesson
 SELECT COUNT(*) AS bitemporal_cols_exist
@@ -9,7 +10,7 @@ FROM   information_schema.columns
 WHERE  table_schema = 'pgmnemo'
   AND  table_name   = 'agent_lesson'
   AND  column_name  IN ('t_valid_from', 't_valid_to', 'content_hash');
- bitemporal_cols_exist
+ bitemporal_cols_exist 
 -----------------------
                      3
 (1 row)
@@ -19,7 +20,7 @@ SELECT COUNT(*) AS mem_item_exists
 FROM   information_schema.views
 WHERE  table_schema = 'pgmnemo'
   AND  table_name   = 'mem_item';
- mem_item_exists
+ mem_item_exists 
 -----------------
                1
 (1 row)
@@ -30,7 +31,7 @@ FROM   pg_proc p
 JOIN   pg_namespace n ON n.oid = p.pronamespace
 WHERE  n.nspname = 'pgmnemo'
   AND  p.proname = 'as_of';
- as_of_exists
+ as_of_exists 
 --------------
             1
 (1 row)
@@ -44,7 +45,7 @@ VALUES
 RETURNING
     t_valid_from IS NOT NULL AS has_valid_from,
     t_valid_to = 'infinity'::TIMESTAMPTZ AS is_active;
- has_valid_from | is_active
+ has_valid_from | is_active 
 ----------------+-----------
  t              | t
 (1 row)
@@ -53,7 +54,7 @@ RETURNING
 SELECT COUNT(*) AS active_via_as_of
 FROM   pgmnemo.as_of(now())
 WHERE  role = 'test_role' AND topic = 'smoke_topic';
- active_via_as_of
+ active_via_as_of 
 ------------------
                 1
 (1 row)
@@ -62,7 +63,7 @@ WHERE  role = 'test_role' AND topic = 'smoke_topic';
 SELECT COUNT(*) AS active_via_mem_item
 FROM   pgmnemo.mem_item
 WHERE  role = 'test_role' AND topic = 'smoke_topic';
- active_via_mem_item
+ active_via_mem_item 
 ---------------------
                    1
 (1 row)
@@ -72,13 +73,12 @@ INSERT INTO pgmnemo.agent_lesson
     (role, topic, lesson_text, importance, commit_sha, verified_at)
 VALUES
     ('test_role', 'smoke_topic', 'second version', 3, 'abc123', now());
-INSERT 0 1
 -- After second insert: exactly 1 active row (t_valid_to = infinity)
 SELECT COUNT(*) AS active_count
 FROM   pgmnemo.agent_lesson
 WHERE  role = 'test_role' AND topic = 'smoke_topic'
   AND  t_valid_to = 'infinity'::TIMESTAMPTZ;
- active_count
+ active_count 
 --------------
             1
 (1 row)
@@ -88,7 +88,7 @@ SELECT COUNT(*) AS closed_count
 FROM   pgmnemo.agent_lesson
 WHERE  role = 'test_role' AND topic = 'smoke_topic'
   AND  t_valid_to < 'infinity'::TIMESTAMPTZ;
- closed_count
+ closed_count 
 --------------
             1
 (1 row)
@@ -97,11 +97,10 @@ WHERE  role = 'test_role' AND topic = 'smoke_topic'
 SELECT COUNT(*) AS past_count
 FROM   pgmnemo.as_of('2000-01-01 00:00:00+00')
 WHERE  role = 'test_role';
- past_count
+ past_count 
 ------------
           0
 (1 row)
 
 -- Cleanup
 DELETE FROM pgmnemo.agent_lesson WHERE role = 'test_role' AND topic = 'smoke_topic';
-DELETE 2
