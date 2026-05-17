@@ -103,6 +103,24 @@ notes include monitor watchlist for v0.4.1 follow-up:
 
 ---
 
+## [0.5.0] — unreleased
+
+### Added
+
+- **`pgmnemo-mcp`** — MCP server package (`pgmnemo_mcp/`) exposing two tools:
+  `pgmnemo.ingest(text, metadata)` and `pgmnemo.recall(query, top_k)`.
+  Backed by psycopg2 connection pool; configurable via `DATABASE_URL` / `MCP_PORT`.
+  Entry point: `pgmnemo-mcp` console script. Smoke gate: `python -m pgmnemo_mcp --smoke`.
+
+### Removed
+
+- **`pgmnemo.traverse_causal_chain(BIGINT, INT, TEXT[], BOOLEAN)`** — 4-arg overload
+  deprecated in v0.4.1 (Agency RFC R10) is now **dropped**. Use the 5-arg form with
+  an explicit `direction` parameter (`'forward'`, `'backward'`, or `'both'`).
+  Migration: `extension/pgmnemo--0.4.1--0.5.0.sql`.
+
+---
+
 ## [0.4.1] — 2026-05-17
 
 ### Theme

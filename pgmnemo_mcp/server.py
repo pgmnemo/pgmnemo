@@ -70,5 +70,10 @@ def run() -> None:
     mcp.run()
 
 
-if __name__ == "__main__":
+def main() -> None:
+    """Console script entry point (pgmnemo-mcp = pgmnemo_mcp.server:main)."""
     run()
+
+
+if __name__ == "__main__":
+    main()
