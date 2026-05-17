@@ -1,3 +1,8 @@
 openai>=1.30.0
 psycopg2-binary>=2.9.9
 datasets>=2.19.0
+# Pin for Stella V5 compatibility: transformers 5.x removed Qwen2Config.rope_theta
+# (absorbed into config.rope_parameters["rope_theta"]); bundled modeling_qwen.py
+# in dunzhang/stella_en_1.5B_v5 requires the 4.x direct-attribute form.
+# See benchmarks/longmemeval/ADDENDA/LONGMEMEVAL_EMBEDDER_STELLA.md
+transformers==4.44.2
