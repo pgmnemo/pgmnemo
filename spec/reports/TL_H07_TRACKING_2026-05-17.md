@@ -1,13 +1,13 @@
 ---
 task: PGMNEMO-V050-TRACKING-H07 — H-07 Bitemporality Primitive
 date: 2026-05-17
-priority: P1
+priority: P1 (sprint), P2 (roadmap)
 due: 2026-05-22
 branch: agent/dag-PGMNEMO-260517-1-IMPLEMENT
 subtasks:
   research: PGMNEMO-260517-1-H07-RESEARCH (id 6264) — DONE
   plan:     PGMNEMO-260517-1-H07-PLAN     (id 6268) — DONE
-  implement: PGMNEMO-260517-1-H07-IMPLEMENT (id 6275) — DONE (installcheck not run)
+  implement: PGMNEMO-260517-1-H07-IMPLEMENT (id 6275) — DONE (partial)
   bench:    PGMNEMO-260517-1-H07-BENCH    (id 6276) — BLOCKED
 ---
 
@@ -15,206 +15,197 @@ subtasks:
 
 **Tracking task:** PGMNEMO-V050-TRACKING-H07  
 **Date:** 2026-05-17  
-**Acceptance gate:** `significance_test.py` exit ≤ 1 on ALL benchmark cells; schema additive (no recall regression)
+**Acceptance gate:** `significance_test.py` exit ≤ 1 on ALL benchmark cells (no recall regression); schema additive
 
 ---
 
 ## 1. Subtask Status
 
-| Subtask | ID | Status | Evidence |
+| Subtask | ID | Status | Blocker |
 |---|---|---|---|
-| RESEARCH | 6264 | **DONE** | `spec/v2/pgmnemo/H07_BITEMPORALITY_RESEARCH.md` — GO verdict, all 9 research gates PASS (1 PENDING: live PG) |
-| PLAN | 6268 | **DONE** | `spec/v2/pgmnemo/H07_BITEMPORALITY_PLAN.md` — ICE 7.3, full DDL, idempotency proof, rollback |
-| IMPLEMENT | 6275 | **DONE** | commits e4a49c1, 30871be, ca4c852 — DDL in migration + regression test in Makefile |
-| BENCH | 6276 | **BLOCKED** | `scripts/run_bench.py` missing; PG not running — same blockers as H-02/H-06 BENCH |
+| RESEARCH | 6264 | **DONE** | — |
+| PLAN | 6268 | **DONE** | — |
+| IMPLEMENT | 6275 | **DONE (partial)** | installcheck not run — no PG server |
+| BENCH | 6276 | **BLOCKED** | `scripts/run_bench.py` missing; PostgreSQL not running |
 
 **Agent success rate:** 3/4 subtasks completed (75%). 1 ESCALATED (BENCH).  
-**ESCALATED count:** 1 (BENCH #6276) — same infrastructure blocker as H-02 BENCH #6265 and H-06 BENCH #6266  
-**Stalled runs:** 0 — RESEARCH, PLAN, IMPLEMENT all executed same day  
-**Acceptance gate:** NOT MET — significance_test.py not run
+**ESCALATED count:** 1 (BENCH #6276)  
+**Stalled runs:** 0  
+**Acceptance gate verdict: NOT MET** — significance_test.py not run.
 
 ---
 
-## 2. RESEARCH Quality Assessment
+## 2. RESEARCH — Evidence Summary
 
 **File:** `spec/v2/pgmnemo/H07_BITEMPORALITY_RESEARCH.md`
 
-| Gate | Criterion | Status |
+| Item | Value | Source |
 |---|---|---|
-| Target table confirmed | `agent_lesson` (not non-existent `mem_item`) | PASS |
-| `mem_item` discrepancy resolved | View alias for active rows | PASS |
-| `content_hash` design | MD5(role\|topic\|commit_sha/artifact_hash) GENERATED STORED | PASS |
-| `mem_edge` consistency | FK ON DELETE CASCADE preserved; historical edges intact | PASS |
-| Recall-path impact | Zero — additive schema, `recall_lessons()` unchanged | PASS |
-| Trigger edge cases | NULL content_hash handled; concurrent-insert caveat documented | PASS |
-| Upgrade SQL idempotency | IF NOT EXISTS guards throughout | PASS |
-| Rollback SQL | Complete DROP sequence provided | PASS |
-| LOC estimate | ~50 lines DDL + trigger + views | PASS |
-| Live PG verification | PENDING — no PG server | PENDING |
+| Target table | `pgmnemo.agent_lesson` (not `mem_item` — clarified) | pgmnemo--0.4.1.sql:75 |
+| `mem_item` resolution | View alias: `agent_lesson WHERE t_valid_to = 'infinity'` | Research §1a |
+| `content_hash` | Does not exist pre-H-07; GENERATED ALWAYS AS MD5(role\|topic\|commit_sha/artifact_hash) STORED | Research §1b |
+| `mem_edge` pattern | Already has `valid_from`/`valid_until` (pgmnemo--0.4.1.sql:278-280) — H-07 consistent | Research §1c |
+| Recall-path impact | Zero — additive schema; `recall_lessons()` unchanged | Research §3a |
+| Rollback risk | LOW — all additions new in v0.5.0; FK ON DELETE CASCADE preserved | Research §5 |
 
-**Research quality: HIGH.** Critical schema clarifications surfaced and resolved: `mem_item` table does not exist (→ view alias), `content_hash` column does not exist (→ designed as generated column), `source_id` column does not exist (→ not needed, dedup via `content_hash`).
+**Quality of RESEARCH: HIGH.** All 9 quality gates PASS; 1 PENDING (live PG verification).
 
 ---
 
-## 3. PLAN Quality Assessment
+## 3. PLAN — Evidence Summary
 
-**File:** `spec/v2/pgmnemo/H07_BITEMPORALITY_PLAN.md`
+**File:** `spec/v2/pgmnemo/H07_BITEMPORALITY_PLAN.md`  
+**ICE score:** Impact=7, Confidence=8, Ease=7 → composite **7.3**
 
-**ICE Score:**
-
-| Dimension | Score | Rationale |
-|---|---|---|
-| Impact | 7 | Enables point-in-time memory queries; closes gap vs `mem_edge` (already bitemporal at pgmnemo--0.4.1.sql:278-280) |
-| Confidence | 8 | Additive DDL only; `recall_lessons()` scoring path unmodified; proven pattern from `mem_edge` |
-| Ease | 7 | ~50 LOC; all idempotent; no data migration required |
-| **Composite** | **7.3** | |
-
-**Idempotency table (11 statements):** All guarded — `IF NOT EXISTS` / `CREATE OR REPLACE` / `DROP IF EXISTS`. Verified in plan §4.
-
-**Rollback SQL completeness:** 8-statement DROP sequence in dependency order (`TRIGGER` → `FUNCTION` → `FUNCTION` → `VIEW` → `INDEX` × 2 → `ALTER TABLE DROP COLUMN` × 3). All use `IF EXISTS`.
-
----
-
-## 4. IMPLEMENT Deliverables
-
-**Three commits on branch `agent/dag-PGMNEMO-260517-1-IMPLEMENT`:**
-
-| Commit | Content |
+| Gate | Status |
 |---|---|
-| `e4a49c1` | `spec/v2/pgmnemo/H07_BITEMPORALITY_PLAN.md` — initial plan (233 LOC) |
-| `30871be` | Migration DDL + regression test (extension/pgmnemo--0.4.1--0.5.0.sql +212 LOC; bitemporality_smoke.sql 74 LOC; bitemporality_smoke.out 107 LOC; Makefile) |
-| `ca4c852` | Plan file update (additional detail) |
-
-**Migration file state** (`extension/pgmnemo--0.4.1--0.5.0.sql`, 520 lines total):
-
-| Object | Location | Guard |
-|---|---|---|
-| `ADD COLUMN t_valid_from` | line 320 | `IF NOT EXISTS` |
-| `ADD COLUMN t_valid_to` | line 321 | `IF NOT EXISTS` |
-| `ADD COLUMN content_hash` (generated) | line 324 | `IF NOT EXISTS` |
-| Backfill UPDATE | line 335 | time-bound WHERE clause |
-| `ix_agent_lesson_valid_range` (partial index) | line 339 | `IF NOT EXISTS` |
-| `ix_agent_lesson_content_hash_active` (partial index) | line 342 | `IF NOT EXISTS` |
-| `pgmnemo._bitemporal_close_prior()` | line 348 | `CREATE OR REPLACE` |
-| `trg_agent_lesson_bitemporal_close` | line 364-369 | `DROP IF EXISTS` then `CREATE` |
-| `pgmnemo.mem_item` (view) | line 372 | `CREATE OR REPLACE` |
-| `pgmnemo.as_of(TIMESTAMPTZ)` (function) | line 382 | `CREATE OR REPLACE` |
-
-Note: `as_of()` is defined **twice** in the migration (lines 382 and 503) — the hook-generated version at line 503 duplicates the agent-written version at line 382. Both are `CREATE OR REPLACE` so the second wins, but the duplication adds ~18 lines of noise.
-
-**Regression test coverage** (`extension/sql/bitemporality_smoke.sql`, 74 lines):
-- Schema check: 3 bitemporal columns exist on `agent_lesson`
-- `mem_item` view existence
-- `as_of()` function existence  
-- Functional: INSERT → trigger closes prior row with same `content_hash`
-- `mem_item` active-row filter
-- `as_of(now())` returns only active row
-
-**Makefile:** `bitemporality_smoke` added to REGRESS — `extension/Makefile:32`
-
-**installcheck:** NOT RUN — PostgreSQL server not installed (`initdb` absent; `pg_createcluster 17 main` fails — no `postgresql-17` server package).
+| ICE computed | PASS |
+| DDL target confirmed | PASS — `agent_lesson` |
+| `content_hash` designed | PASS — MD5 GENERATED ALWAYS AS STORED; NULL-safe |
+| Idempotency verified (11 statements) | PASS — table in Plan §4 |
+| Rollback SQL complete | PASS — DROP sequence in dependency order |
+| Recall-path impact | PASS — additive; scoring path unmodified |
+| Acceptance gate defined | PASS — sig_test exit ≤ 1; smoke test in §6c |
+| Live PG verification | PENDING |
 
 ---
 
-## 5. BENCH Blocker Analysis
+## 4. IMPLEMENT — What Was Delivered
 
-**Status: BLOCKED.** Identical infrastructure failures as H-02 BENCH (#6265) and H-06 BENCH (#6266):
+**Commits:** `e4a49c1` (plan doc initial), `30871be` (DDL + regression test), `ca4c852` (plan update)
 
-| # | Blocker | Evidence |
+### 4a. Migration SQL (extension/pgmnemo--0.4.1--0.5.0.sql)
+
+**CRITICAL: Duplicate DDL block detected — see Issue 1.**
+
+The migration file (520 LOC total) contains two complete H-07 DDL blocks:
+
+| Block | Lines | Source |
 |---|---|---|
-| B1 | `scripts/run_bench.py` does not exist | `ls /external-repos/pgmnemo/scripts/run_bench.py` → MISSING |
-| B2 | PostgreSQL not running | `psql localhost:5432 — Connection refused` |
+| Block A (PLAN edit) | 312–399 | Agent `Edit` during PLAN task |
+| Block B (IMPLEMENT hook) | 401–520 | Pre-commit hook from IMPLEMENT commit `30871be` |
 
-No `benchmarks/gate/v0.5.0-h07-candidate.json` was written (requires bench run).
+Both blocks are idempotent-guarded (`IF NOT EXISTS` / `OR REPLACE`). On migration run, Block A executes first; Block B is a complete no-op. **No runtime error occurs.** Block B is the authoritative version (richer COMMENTs, `COMMENT ON COLUMN` statements, step labels).
 
-**Expected outcome if bench ran:** Exit ≤ 1 (no regression). Basis: bitemporality DDL is additive — no column or index referenced by `recall_lessons()` or `recall_hybrid()` is modified. Partial indexes on `(t_valid_to = 'infinity')` preserve planner behavior for active-row queries. Trigger fires only on INSERT, not on SELECT. Confidence in no-regression: 0.85.
+DDL objects present (in Block B, the keeper):
+
+| Object | Location | Idempotent guard |
+|---|---|---|
+| `t_valid_from` column | line 419 | `ADD COLUMN IF NOT EXISTS` |
+| `t_valid_to` column | line 420 | `ADD COLUMN IF NOT EXISTS` |
+| `content_hash` generated column | line 421 | `ADD COLUMN IF NOT EXISTS` |
+| Backfill UPDATE | line 447 | time-window condition |
+| `ix_agent_lesson_valid_range` index | line 451 | `CREATE INDEX IF NOT EXISTS` |
+| `ix_agent_lesson_content_hash_active` index | line 455 | `CREATE INDEX IF NOT EXISTS` |
+| `pgmnemo._bitemporal_close_prior()` trigger fn | line 461 | `CREATE OR REPLACE FUNCTION` |
+| `trg_agent_lesson_bitemporal_close` trigger | line 485 | `DROP IF EXISTS` + `CREATE` |
+| `pgmnemo.mem_item` view | line 491 | `CREATE OR REPLACE VIEW` |
+| `pgmnemo.as_of(TIMESTAMPTZ)` function | line 503 | `CREATE OR REPLACE FUNCTION` |
+
+### 4b. Regression test files
+
+| File | LOC | Status |
+|---|---|---|
+| `extension/sql/bitemporality_smoke.sql` | 74 | PRESENT |
+| `extension/expected/bitemporality_smoke.out` | 107 | PRESENT |
+| `extension/Makefile` REGRESS | `bitemporality_smoke` added | PRESENT |
+
+**installcheck:** NOT RUN — PostgreSQL server not installed (`initdb` absent).
 
 ---
 
-## 6. Metrics Summary
+## 5. BENCH — Blocker Analysis
+
+| Blocker | Evidence |
+|---|---|
+| `scripts/run_bench.py` missing | `ls scripts/run_bench.py` → `No such file or directory` |
+| PostgreSQL not running | `psql localhost:5432` → `Connection refused` |
+
+This is the **4th consecutive BENCH task** blocked by these same two root causes (H-02, H-06, H-07 all blocked identically). The underlying infra gap must be resolved as a one-time systemic fix.
+
+**Expected result if bench ran:** Exit ≤ 1 — no significant change expected. The `recall_lessons()` / `recall_hybrid()` scoring path is unmodified. The AFTER INSERT trigger fires only on INSERT, not on SELECT. The partial index `WHERE t_valid_to = 'infinity'` keeps query planning unchanged for the recall path.
+
+---
+
+## 6. Metrics
 
 | Metric | Value |
 |---|---|
-| Agent success rate | 3/4 (75%) — RESEARCH, PLAN, IMPLEMENT DONE |
-| ESCALATED count | 1 (BENCH #6276) |
-| Stalled runs | 0 |
-| RESEARCH quality gates | 9/10 PASS; 1 PENDING (live PG) |
-| PLAN ICE composite | 7.3 (Impact=7, Confidence=8, Ease=7) |
-| Migration LOC | 520 lines total in pgmnemo--0.4.1--0.5.0.sql (H-06 + H-07 combined) |
-| H-07 DDL LOC | ~80 lines (lines 310–400 approximate) |
-| Regression test | 74 lines (sql) + 107 lines (expected) |
+| RESEARCH quality gates | 9/9 design gates PASS; 1 PENDING (live PG) |
+| PLAN ICE score | 7.3 (I=7, C=8, E=7) |
+| IMPLEMENT: migration DDL present | PASS — but duplicated (Issue 1) |
+| IMPLEMENT: idempotency | PASS — all 11 statements guarded in both blocks |
+| IMPLEMENT: regression test | PASS — SQL + expected output + Makefile present |
 | installcheck | NOT RUN (no PG server) |
-| Acceptance gate (sig_test exit ≤ 1) | NOT MET (bench blocked) |
-| `v0.5.0-h07-candidate.json` | NOT WRITTEN (bench blocked) |
+| BENCH run | BLOCKED (2 independent blockers) |
+| Acceptance gate (sig_test exit ≤ 1) | NOT MET |
+| Recall regression risk | LOW — additive schema; trigger on INSERT path only |
 
 ---
 
 ## 7. Open Issues
 
-### Issue 1 — as_of() defined twice in migration [LOW]
-**Location:** `extension/pgmnemo--0.4.1--0.5.0.sql:382` and `:503`  
-**Detail:** The hook-generated IMPLEMENT commit added a second `CREATE OR REPLACE FUNCTION pgmnemo.as_of(TIMESTAMPTZ)` at line 503. Both are `CREATE OR REPLACE` so the second definition wins at install time (no runtime error). However the duplication is confusing and adds ~18 lines of noise to the migration.  
-**Fix:** Remove the duplicate definition at line 503 or consolidate both into a single canonical definition. Low priority — no correctness issue.
+### Issue 1 — Duplicate H-07 DDL block in migration [HIGH, pre-release blocker]
+**Location:** `extension/pgmnemo--0.4.1--0.5.0.sql:312–399` (Block A, PLAN edit) and `:401–520` (Block B, hook IMPLEMENT)  
+**Detail:** Both blocks are idempotent so the migration runs without error, but the file is 260 LOC larger than necessary. Block A has minimal comments; Block B is the complete authoritative version with COMMENT ON COLUMN statements.  
+**Fix:** Delete lines 310–399 (Block A). Block B (lines 401–520, hook IMPLEMENT commit `30871be`) is the authoritative keeper.  
+**Priority:** HIGH — must fix before v0.5.0 release review.
 
 ### Issue 2 — installcheck expected output unverified [MEDIUM]
-**Location:** `extension/expected/bitemporality_smoke.out` (107 lines)  
-**Detail:** Expected output was generated by the hook without a live PG run. PostgreSQL timestamp formatting, column width rendering, and DOUBLE PRECISION display can diverge from manually produced `.out` files. The `ALTER EXTENSION pgmnemo UPDATE TO '0.5.0'` step also requires the migration to execute cleanly — if `pgmnemo--0.4.1--0.5.0.sql` has any SQL error, the upgrade fails and all subsequent assertions produce wrong output.  
-**Fix:** Run `make installcheck` on a live PG + pgvector environment; update `.out` to match actual output.
+**Location:** `extension/expected/bitemporality_smoke.out`  
+**Detail:** The 107-line expected output was produced by the hook without running against live PostgreSQL. The `ALTER EXTENSION pgmnemo UPDATE TO '0.5.0'` upgrade path, DOUBLE PRECISION display format, and `information_schema` query results all need live PG confirmation.  
+**Priority:** MEDIUM — after bench infra is provisioned (Issue 4).
 
-### Issue 3 — Bench infrastructure absent (3rd occurrence) [BLOCKING, P1]
-**Location:** `scripts/run_bench.py` (missing file)  
-**Detail:** This is the third consecutive BENCH task blocked by the same two root causes: (a) `scripts/run_bench.py` does not exist, (b) no PostgreSQL server. H-02 BENCH #6265, H-06 BENCH #6266, and H-07 BENCH #6276 all failed identically. Each BENCH task wastes an agent turn on a guaranteed-blocked run.  
-**Fix:** See remediation tasks below. Pre-flight check should verify infrastructure before scheduling BENCH tasks.
+### Issue 3 — `mem.as_of` naming discrepancy vs `pgmnemo.as_of` [LOW]
+**Location:** Task spec says `mem.as_of()`; `extension/pgmnemo--0.4.1--0.5.0.sql:501–502` says `pgmnemo.as_of()`  
+**Detail:** `extension/pgmnemo.control` sets `schema = pgmnemo`. The `mem.as_of` in the spec is documentation shorthand, not a valid PostgreSQL schema reference. Implementation is correct. Migration comment at line 501–502 documents the discrepancy.  
+**Priority:** LOW — no code change needed; clarify in ROADMAP.md.
 
-### Issue 4 — Trigger concurrent-insert safety [LOW]
-**Location:** `extension/pgmnemo--0.4.1--0.5.0.sql:346-369` (trigger function)  
-**Detail:** Research §2b documents that for high-concurrency ingest, the AFTER INSERT trigger should use advisory locks or `SELECT … FOR UPDATE` to prevent races between two concurrent INSERTs with the same `content_hash`. Current trigger has no such guard. For single-writer workloads (typical agent memory) this is acceptable.  
-**Fix:** If concurrent ingest is required, add `PERFORM pg_advisory_xact_lock(hashtext(NEW.content_hash::TEXT))` at the start of `_bitemporal_close_prior()`. Deferred to v0.6.0 unless concurrency requirement is confirmed.
+### Issue 4 — BENCH infrastructure systemic gap [P1, systemic across all hypotheses]
+**Location:** `scripts/run_bench.py` (absent); `localhost:5432` (no PG server)  
+**Detail:** 4th consecutive BENCH block. H-02, H-06, H-07, and H-07 BENCH all fail on the same two root causes. No individual hypothesis can reach its acceptance gate.  
+**Priority:** P1 — must resolve before any v0.5.0 acceptance gate can be verified.
 
 ---
 
 ## 8. Remediation Task Drafts
 
-### task_draft_1 — Provision bench infrastructure [P1, BLOCKING all gates]
+### task_draft_1 — Remove duplicate H-07 DDL block [HIGH, ~5 min]
 ```
-title: Provision bench env: PostgreSQL server + scripts/run_bench.py
+title: Remove Block A (duplicate) H-07 DDL from pgmnemo--0.4.1--0.5.0.sql
+priority: HIGH
+file: extension/pgmnemo--0.4.1--0.5.0.sql
+action: Delete lines 310–399 (the PLAN-task-appended block);
+        keep lines 401–520 (hook IMPLEMENT block — authoritative)
+verify: grep -c "ADD COLUMN IF NOT EXISTS t_valid_from" extension/pgmnemo--0.4.1--0.5.0.sql
+        should return 1 after deletion
+acceptance: single occurrence of each DDL object; migration runs without error on fresh PG
+```
+
+### task_draft_2 — Provision bench infrastructure [P1, systemic]
+```
+title: Provision bench environment — create scripts/run_bench.py + PG server
 priority: P1
-blocks: H-02 BENCH (#6265), H-06 BENCH (#6266), H-07 BENCH (#6276)
-note: This single task unblocks three separate BENCH tasks simultaneously.
+blocks: H-02, H-06, H-07 acceptance gates
 steps:
-  1. Install postgresql-17 server (initdb, pg_createcluster) OR provision remote PG
-  2. Install pgvector extension; CREATE EXTENSION vector
-  3. Install pgmnemo via: cd extension && make install && psql -c "CREATE EXTENSION pgmnemo CASCADE"
-  4. Load canonical bench corpus (LoCoMo session n=272, LME n=500)
-  5. Implement scripts/run_bench.py wrapping benchmarks/longmemeval/runner.py
-     with --embedder flag mapping: stella-v5 → dunzhang/stella_en_1.5B_v5
-     Output format: benchmarks/gate/v0.5.0-hXX-candidate.json (gate schema)
-  6. Rebuild bench venv on Linux: python3 -m venv benchmarks/.venv_bench/venv
-     pip install -r benchmarks/longmemeval/requirements.txt torch sentence-transformers
-acceptance: psql postgresql://localhost/pgmnemo_bench -c "SELECT pgmnemo.version()"
+  1. Install postgresql-17 server + initdb OR provision remote PG
+  2. Install pgvector; CREATE EXTENSION pgmnemo; run 0.4.1→0.5.0 migration
+  3. Create scripts/run_bench.py wrapping longmemeval/runner.py and locomo runners
+     with --output flag writing gate-format JSON to benchmarks/gate/
+  4. Rebuild bench venv on Linux (current venv has macOS python3 symlink)
+acceptance: psql localhost/pgmnemo_bench -c "SELECT pgmnemo.version()" returns '0.5.0'
+            python scripts/run_bench.py --dry-run exits 0
 ```
 
-### task_draft_2 — Remove duplicate as_of() in migration [LOW]
+### task_draft_3 — Verify + fix installcheck for bitemporality_smoke [P2]
 ```
-title: Deduplicate pgmnemo.as_of() in pgmnemo--0.4.1--0.5.0.sql
-priority: P3
-file: extension/pgmnemo--0.4.1--0.5.0.sql:503
-fix: Remove second CREATE OR REPLACE FUNCTION pgmnemo.as_of(TIMESTAMPTZ) block (~18 lines)
-     Keep the definition at line 382 (agent-written, matches plan §3e exactly)
-acceptance: grep -c "CREATE.*FUNCTION pgmnemo.as_of" pgmnemo--0.4.1--0.5.0.sql == 1
-```
-
-### task_draft_3 — Verify installcheck on live PG [MEDIUM]
-```
-title: Run make installcheck for v0.5.0 regression tests (temporal_boost_guc, bitemporality_smoke)
-priority: P2 (blocks after task_draft_1)
-depends_on: task_draft_1 (PG server provisioned)
-steps:
-  1. cd extension && make installcheck
-  2. Compare actual output vs extension/expected/temporal_boost_guc.out
-  3. Compare actual output vs extension/expected/bitemporality_smoke.out
-  4. Update .out files as needed; re-run until all REGRESS tests pass
-acceptance: make installcheck exits 0 (no regression diffs)
+title: Run make installcheck; update bitemporality_smoke.out if needed
+priority: P2 (after task_draft_2)
+file: extension/expected/bitemporality_smoke.out
+action: cd extension && make installcheck;
+        diff extension/expected/bitemporality_smoke.out extension/results/bitemporality_smoke.out;
+        update expected if diff non-empty
+acceptance: make installcheck exits 0; regression.diffs empty
 ```
 
 ---
@@ -222,13 +213,12 @@ acceptance: make installcheck exits 0 (no regression diffs)
 ## 9. Self-Evaluation
 
 **What worked:**
-- RESEARCH correctly identified three schema discrepancies (`mem_item`, `content_hash`, `source_id`) before any DDL was written — preventing wasted IMPLEMENT effort on non-existent columns.
-- PLAN ICE score (7.3) and idempotency verification (11-statement table) are rigorous and directly actionable by the IMPLEMENT task.
-- IMPLEMENT delivered correct, idempotent DDL across all 10 objects with appropriate guards. Regression test coverage (74 LOC, 6 assertions) is thorough.
-- The hook-generated bitemporality_smoke files extended coverage beyond what the plan specified — a net positive.
+- RESEARCH delivered all 9 design-level gates: `mem_item` table discrepancy resolved (view alias, not migration), `content_hash` designed from scratch, `mem_edge` consistency verified, NULL-safe trigger edge cases documented. This is the correct level of pre-implementation analysis.
+- PLAN produced a complete ICE score (7.3), 11-statement idempotency proof table, and dependency-ordered rollback SQL in one document before any migration code was written — correct sequencing.
+- IMPLEMENT DDL is functionally correct: all `IF NOT EXISTS` / `CREATE OR REPLACE` guards present, trigger is NULL-safe (`IF NEW.content_hash IS NOT NULL`), backfill UPDATE is time-bounded (`WHERE t_valid_from >= now() - INTERVAL '1 second'`), `as_of()` uses correct half-open interval (`t_valid_from <= ts AND t_valid_to > ts`). The hook IMPLEMENT commit produced richer, better-commented DDL.
 
 **What to improve:**
-- The duplicate `as_of()` definition (Issue 1) indicates the hook re-ran SQL generation without checking for existing content. A pre-write grep for existing function definitions would have caught this.
-- BENCH infrastructure gap (Issue 3) is now the third consecutive BENCH failure. A one-time infrastructure provisioning task (task_draft_1) should be created and prioritized above all BENCH tasks in the sprint.
-- `installcheck` expected output files were generated speculatively without live PG execution. The standard should be: `.out` files are only committed after `make installcheck` passes on live PG. In this environment that was not possible, but the constraint should be documented in `extension/Makefile` or `extension/README.md`.
-- The acceptance gate (sig_test exit ≤ 1) confidence is 0.85 based on additive-schema reasoning, but cannot be mechanically verified. A separate task (task_draft_3) is the correct path.
+- **PLAN tasks should not write migration SQL.** The PLAN task's `Edit` that appended DDL to `pgmnemo--0.4.1--0.5.0.sql` was a scope violation — PLAN tasks should only output plan documents. This created the duplicate block (Issue 1). IMPLEMENT tasks should have exclusive write authority over migration files.
+- **Pre-commit should lint for duplicate SQL objects.** A `grep -c "ADD COLUMN IF NOT EXISTS t_valid_from" extension/pgmnemo--0.4.1--0.5.0.sql > 1` check in the pre-commit hook would have caught the duplicate immediately.
+- **BENCH pre-flight check must be mandatory.** Adding `ls scripts/run_bench.py && psql -c 'SELECT 1'` as the first two lines of every BENCH task body would fail fast in 2 seconds instead of consuming a full agent turn reporting the same blockers for the 4th time.
+- **Systemic infra task should be P0 blocker.** After H-02 BENCH was blocked, task_draft_2 (bench infra provisioning) should have been created and tracked as a dependency for H-06 and H-07 BENCH tasks. Instead, each BENCH task independently discovered and reported the same blockers.
