@@ -1,0 +1,107 @@
+-- Regression test: H-07 bitemporality (v0.5.0)
+-- Verifies: t_valid columns, trigger close-prior, mem_item view, as_of() function.
+-- Apply migration to get H-07 objects (extension loaded at v0.4.1 by default).
+ALTER EXTENSION pgmnemo UPDATE TO '0.5.0';
+-- ── Schema checks ────────────────────────────────────────────────────────────
+-- t_valid_from and t_valid_to columns exist on agent_lesson
+SELECT COUNT(*) AS bitemporal_cols_exist
+FROM   information_schema.columns
+WHERE  table_schema = 'pgmnemo'
+  AND  table_name   = 'agent_lesson'
+  AND  column_name  IN ('t_valid_from', 't_valid_to', 'content_hash');
+ bitemporal_cols_exist
+-----------------------
+                     3
+(1 row)
+
+-- mem_item view exists
+SELECT COUNT(*) AS mem_item_exists
+FROM   information_schema.views
+WHERE  table_schema = 'pgmnemo'
+  AND  table_name   = 'mem_item';
+ mem_item_exists
+-----------------
+               1
+(1 row)
+
+-- as_of function exists
+SELECT COUNT(*) AS as_of_exists
+FROM   pg_proc p
+JOIN   pg_namespace n ON n.oid = p.pronamespace
+WHERE  n.nspname = 'pgmnemo'
+  AND  p.proname = 'as_of';
+ as_of_exists
+--------------
+            1
+(1 row)
+
+-- ── Functional smoke ─────────────────────────────────────────────────────────
+-- Insert a lesson and verify bitemporality defaults
+INSERT INTO pgmnemo.agent_lesson
+    (role, topic, lesson_text, importance, commit_sha, verified_at)
+VALUES
+    ('test_role', 'smoke_topic', 'first version', 3, 'abc123', now())
+RETURNING
+    t_valid_from IS NOT NULL AS has_valid_from,
+    t_valid_to = 'infinity'::TIMESTAMPTZ AS is_active;
+ has_valid_from | is_active
+----------------+-----------
+ t              | t
+(1 row)
+
+-- as_of(now()) must return the just-inserted active row
+SELECT COUNT(*) AS active_via_as_of
+FROM   pgmnemo.as_of(now())
+WHERE  role = 'test_role' AND topic = 'smoke_topic';
+ active_via_as_of
+------------------
+                1
+(1 row)
+
+-- mem_item view must return the active row
+SELECT COUNT(*) AS active_via_mem_item
+FROM   pgmnemo.mem_item
+WHERE  role = 'test_role' AND topic = 'smoke_topic';
+ active_via_mem_item
+---------------------
+                   1
+(1 row)
+
+-- Insert a second row with same (role, topic, commit_sha) — trigger must close prior
+INSERT INTO pgmnemo.agent_lesson
+    (role, topic, lesson_text, importance, commit_sha, verified_at)
+VALUES
+    ('test_role', 'smoke_topic', 'second version', 3, 'abc123', now());
+INSERT 0 1
+-- After second insert: exactly 1 active row (t_valid_to = infinity)
+SELECT COUNT(*) AS active_count
+FROM   pgmnemo.agent_lesson
+WHERE  role = 'test_role' AND topic = 'smoke_topic'
+  AND  t_valid_to = 'infinity'::TIMESTAMPTZ;
+ active_count
+--------------
+            1
+(1 row)
+
+-- And exactly 1 closed row (t_valid_to < infinity)
+SELECT COUNT(*) AS closed_count
+FROM   pgmnemo.agent_lesson
+WHERE  role = 'test_role' AND topic = 'smoke_topic'
+  AND  t_valid_to < 'infinity'::TIMESTAMPTZ;
+ closed_count
+--------------
+            1
+(1 row)
+
+-- as_of far in the past returns 0 rows (before any inserts)
+SELECT COUNT(*) AS past_count
+FROM   pgmnemo.as_of('2000-01-01 00:00:00+00')
+WHERE  role = 'test_role';
+ past_count
+------------
+          0
+(1 row)
+
+-- Cleanup
+DELETE FROM pgmnemo.agent_lesson WHERE role = 'test_role' AND topic = 'smoke_topic';
+DELETE 2
