@@ -58,48 +58,6 @@ Real numbers vs published academic benchmarks. **Canonical protocol:** [docs/BEN
 | Install model | `CREATE EXTENSION` | External service | SaaS API |
 | Self-hosted price | Free (Apache 2.0) | $$$$ | $$$$$ |
 
-## MCP Wrapper
-
-`pgmnemo-mcp` is a [Model Context Protocol](https://modelcontextprotocol.io/) server that
-exposes pgmnemo's ingest and recall capabilities as MCP tools, letting any MCP-compatible
-agent framework call them directly.
-
-### Install
-
-```bash
-pip install pgmnemo-mcp          # PyPI (v0.5.0+)
-# or from source:
-pip install -e .                 # from repo root
-```
-
-### Configure
-
-```bash
-export DATABASE_URL="postgresql://user:pass@localhost/mydb"
-export MCP_PORT=8765             # optional, default 8765
-```
-
-### Run
-
-```bash
-pgmnemo-mcp                      # start MCP server on stdio
-python -m pgmnemo_mcp --smoke   # connectivity smoke test — exits 0 on success
-```
-
-### Tools exposed
-
-| Tool | Description |
-|------|-------------|
-| `pgmnemo.ingest(text, metadata)` | Store a lesson; `metadata` may include `role`, `topic`, `importance`, `commit_sha` |
-| `pgmnemo.recall(query, top_k)` | Retrieve up to `top_k` lessons matching `query` via `pgmnemo.recall_lessons()` |
-
-### Requirements
-
-- PostgreSQL with `pgmnemo` extension installed (v0.4.1+)
-- `DATABASE_URL` env var pointing at a reachable database
-
----
-
 ## Compatibility matrix
 
 | pgmnemo | PostgreSQL | pgvector | CI status |
