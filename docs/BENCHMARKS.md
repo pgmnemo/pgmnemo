@@ -1,6 +1,6 @@
 # pgmnemo Benchmarks
 
-**Status:** v0.3.0 — neutral vs v0.2.1 (schema-additive + bug-fix release).  
+**Status:** v0.5.0 — non-algorithmic release; recall@10 Δ=0 confirmed analytically.  
 **Full per-release tracking:** [`benchmarks/METRICS_BY_VERSION.md`](../benchmarks/METRICS_BY_VERSION.md)
 
 This document summarizes the public headline results. Per-version dynamics
@@ -9,12 +9,17 @@ across all (dataset × embedder × mode) combinations live in
 
 ---
 
-## TL;DR — current release (v0.3.0)
+## TL;DR — current release (v0.5.0)
 
-| Benchmark | Headline metric (latest tag) | Δ vs v0.2.1 |
+v0.5.0 is a non-algorithmic release (bitemporality columns, `add_edge()` helper, R5/R6/R10
+dead-code removal, H-06 recency-weight tuning). Recall@10 Δ=0 was confirmed analytically
+before tagging — no benchmark run required. The numbers below are carried from v0.3.0 and
+remain the canonical reported results; see `benchmarks/METRICS_BY_VERSION.md` for v0.5.0 rows.
+
+| Benchmark | Headline metric | Δ vs v0.3.0 |
 |---|---|---|
-| **LoCoMo** session-level retrieval (DRAGON, n=1982) | recall@10 = **0.7994**, MRR = **0.5569** | neutral (+0.43pp, p_corr=1.0) |
-| **LongMemEval-S** retrieval (bge-m3, n=500) | recall@10 = **0.9334**, MRR = **0.8472** | neutral (+0.08pp r@10, −0.82pp MRR, p_corr=1.0) |
+| **LoCoMo** session-level retrieval (DRAGON, n=1982) | recall@10 = **0.7994**, MRR = **0.5569** | 0 (analytical) |
+| **LongMemEval-S** retrieval (bge-m3, n=500) | recall@10 = **0.9334**, MRR = **0.8472** | 0 (analytical) |
 
 > **Reading the headline number:** the LoCoMo recall@10 = 0.7994 figure is the
 > **session-level** metric (paper-canonical, Maharana et al. Table 3). The

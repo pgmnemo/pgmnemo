@@ -3,20 +3,20 @@
 **Multi-agent memory substrate for PostgreSQL — provenance-gated, vector-hybrid recall.**
 
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.4.1-green.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.5.0-green.svg)](CHANGELOG.md)
 [![PGXN](https://badge.pgxn.org/stable/pgmnemo.svg)](https://pgxn.org/dist/pgmnemo/)
 [![CI](https://github.com/pgmnemo/pgmnemo/actions/workflows/ci.yml/badge.svg)](https://github.com/pgmnemo/pgmnemo/actions/workflows/ci.yml)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-17-4169E1.svg)](https://www.postgresql.org/)
 [![LoCoMo recall@10](https://img.shields.io/badge/LoCoMo_recall%4010-0.8409-success.svg)](docs/img/all_metrics_history.md)
 [![LongMemEval recall@10](https://img.shields.io/badge/LongMemEval_recall%4010-0.9334-yellow.svg)](docs/img/all_metrics_history.md)
 
-> **v0.4.0 (2026-05-15):** hybrid retrieval promoted to default. LoCoMo session recall@10 **+4.15pp** (0.7951 → 0.8409, p_corr=0.0156), MRR **+7.96pp** (p_corr<0.0001). 5 significant improvements, 0 regressions across 24 LoCoMo cells. **LongMemEval remains neutral** — hybrid does NOT close the BM25 gap (BM25 = 0.982; pgmnemo dense = 0.933). See [release scorecard](docs/img/scorecard_v0.4.0.md) and [honest competitive reality](docs/COMPETITIVE_REALITY.md).
+> **v0.5.0 (2026-05-17):** bitemporality (`t_valid_from` / `t_valid_to` / `content_hash` columns on `agent_lesson`), `pgmnemo.add_edge()` idempotent helper, MCP server (`pgmnemo-mcp`) promoted to stable, R5/R6/R10 dead-code removal, H-06 recency-weight tuning. Non-algorithmic release — recall@10 Δ=0 confirmed analytically. See [benchmarks/METRICS_BY_VERSION.md](benchmarks/METRICS_BY_VERSION.md) for v0.5.0 rows.
 >
-> **Opt-out:** `SET pgmnemo.disable_hybrid = 'true'` restores strict v0.3.0 vector-only behaviour.
+> **Breaking changes:** 4-argument `traverse_causal_chain(start, max_depth, role, project)` removed — use 2-argument form + `WHERE` clause. `mem_edge` columns renamed: `lesson_a_id` → `source_id`, `lesson_b_id` → `target_id`. Use `pgmnemo.add_edge()` to avoid direct column references. See [docs/MIGRATION.md](docs/MIGRATION.md).
 >
-> **What's next:** v0.4.1 (target 2026-06-01) — deprecate dead graph machinery from default `recall_lessons()` path. Full plan: [ROADMAP.md](ROADMAP.md).
+> **What's next:** v0.5.1 (target 2026-06-15) — H-02 LongMemEval macOS host benchmark run, hybrid BM25 gap investigation. Full plan: [ROADMAP.md](ROADMAP.md).
 
-## Benchmarks (v0.3.0, retrieval-only)
+## Benchmarks (v0.5.0, retrieval-only)
 
 > **Read this before the numbers below:** [docs/COMPETITIVE_REALITY.md](docs/COMPETITIVE_REALITY.md)
 > explains exactly what these recall@K figures mean, what they don't, and where
@@ -62,7 +62,8 @@ Real numbers vs published academic benchmarks. **Canonical protocol:** [docs/BEN
 
 | pgmnemo | PostgreSQL | pgvector | CI status |
 |---|---|---|---|
-| **0.4.x** (current) | 14 – 17 | ≥ 0.7.0 | 17 ✅ blocking · 14/15/16 ⚠️ aspirational (see below) |
+| **0.5.x** (current) | 14 – 17 | ≥ 0.7.0 | 17 ✅ blocking · 14/15/16 ⚠️ aspirational (see below) |
+| 0.4.x | 14 – 17 | ≥ 0.7.0 | 17 ✅ blocking · 14/15/16 ⚠️ aspirational |
 | 0.3.x | 14 – 17 | ≥ 0.7.0 | 17 ✅ blocking · 14/15/16 ⚠️ aspirational |
 | 0.2.x | 14 – 17 | ≥ 0.7.0 | 17 ✅ (legacy CI) |
 | ≤ 0.1.x | end-of-life | — | — |
@@ -73,7 +74,7 @@ Real numbers vs published academic benchmarks. **Canonical protocol:** [docs/BEN
   `bench-gate` on PG 17. A failure here blocks the tag.
 - **14/15/16 ⚠️ aspirational** — every CI run also fires a `compat-matrix` job
   against PG 14/15/16 with `continue-on-error: true`. This is **visibility, not
-  enforcement** as of v0.4.1; we haven't yet validated every release on
+  enforcement** as of v0.5.0; we haven't yet validated every release on
   every PG version. If you run pgmnemo on PG < 17 and hit a bug, file an
   issue — we'll prioritise fixing or downgrading the support claim honestly.
 - **0.1.x EOL** — no security fixes, no compatibility commitment.
@@ -93,7 +94,7 @@ into a recent green run to see which PG versions the latest build passed on.
 **PGXN install (if `pgxnclient` is available):**
 
 ```bash
-pgxn install pgmnemo==0.4.0
+pgxn install pgmnemo==0.5.0
 ```
 
 **Docker (production):** pgmnemo is **pure SQL** — no compilation. Bake files
@@ -101,22 +102,22 @@ into your image with a 3-line Dockerfile:
 
 ```dockerfile
 FROM pgvector/pgvector:pg17
-ADD https://github.com/pgmnemo/pgmnemo/releases/download/v0.4.0/pgmnemo-0.4.0.zip /tmp/
+ADD https://github.com/pgmnemo/pgmnemo/releases/download/v0.5.0/pgmnemo-0.5.0.zip /tmp/
 RUN apt-get update && apt-get install -y --no-install-recommends unzip \
-    && unzip /tmp/pgmnemo-0.4.0.zip -d /tmp/ \
-    && cp /tmp/pgmnemo-0.4.0/extension/pgmnemo.control \
-          /tmp/pgmnemo-0.4.0/extension/pgmnemo--*.sql \
+    && unzip /tmp/pgmnemo-0.5.0.zip -d /tmp/ \
+    && cp /tmp/pgmnemo-0.5.0/extension/pgmnemo.control \
+          /tmp/pgmnemo-0.5.0/extension/pgmnemo--*.sql \
           /usr/share/postgresql/17/extension/ \
-    && apt-get remove -y unzip && rm -rf /tmp/pgmnemo-0.4.0* /var/lib/apt/lists/*
+    && apt-get remove -y unzip && rm -rf /tmp/pgmnemo-0.5.0* /var/lib/apt/lists/*
 ```
 
 **Dev / laptop one-liner (NOT for production — state lost on container rebuild):**
 
 ```bash
 docker run --name pgmnemo-dev -e POSTGRES_PASSWORD=pass -p 5432:5432 -d pgvector/pgvector:pg17
-curl -L https://github.com/pgmnemo/pgmnemo/releases/download/v0.4.0/pgmnemo-0.4.0.zip -o /tmp/pg.zip
+curl -L https://github.com/pgmnemo/pgmnemo/releases/download/v0.5.0/pgmnemo-0.5.0.zip -o /tmp/pg.zip
 docker cp /tmp/pg.zip pgmnemo-dev:/tmp/
-docker exec pgmnemo-dev bash -c "cd /tmp && unzip -q pg.zip && cp pgmnemo-0.4.0/extension/pgmnemo.control pgmnemo-0.4.0/extension/pgmnemo--*.sql /usr/share/postgresql/17/extension/"
+docker exec pgmnemo-dev bash -c "cd /tmp && unzip -q pg.zip && cp pgmnemo-0.5.0/extension/pgmnemo.control pgmnemo-0.5.0/extension/pgmnemo--*.sql /usr/share/postgresql/17/extension/"
 ```
 
 ```sql
