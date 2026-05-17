@@ -174,10 +174,10 @@ is preserved as a freeform annotation column.
 Four partial B-tree indexes are created automatically:
 
 ```sql
-pgmnemo_mem_edge_semantic_idx   ON mem_edge (lesson_a_id, lesson_b_id)  WHERE edge_kind = 'semantic'
-pgmnemo_mem_edge_temporal_idx   ON mem_edge (lesson_a_id, lesson_b_id)  WHERE edge_kind = 'temporal'
-pgmnemo_mem_edge_causal_idx     ON mem_edge (lesson_a_id, lesson_b_id)  WHERE edge_kind = 'causal'
-pgmnemo_mem_edge_entity_idx     ON mem_edge (lesson_a_id, lesson_b_id)  WHERE edge_kind = 'entity'
+pgmnemo_mem_edge_semantic_idx   ON mem_edge (source_id, target_id)  WHERE edge_kind = 'semantic'
+pgmnemo_mem_edge_temporal_idx   ON mem_edge (source_id, target_id)  WHERE edge_kind = 'temporal'
+pgmnemo_mem_edge_causal_idx     ON mem_edge (source_id, target_id)  WHERE edge_kind = 'causal'
+pgmnemo_mem_edge_entity_idx     ON mem_edge (source_id, target_id)  WHERE edge_kind = 'entity'
 ```
 
 Queries that filter by `edge_kind` (e.g. causal-chain traversal) benefit from index-only scans.
@@ -190,15 +190,36 @@ is transparent — the `recall_lessons()` signature is unchanged.
 
 ### Writing edges
 
+**Preferred: `pgmnemo.add_edge()` helper (v0.5.0)**
+
+`add_edge()` is idempotent, handles the `ON CONFLICT` upsert, and auto-derives `edge_kind`
+from `relation_type` — no need to know the ENUM value:
+
 ```sql
--- Add a causal edge between two lessons
-INSERT INTO pgmnemo.mem_edge (lesson_a_id, lesson_b_id, edge_kind, relation_type)
+-- Minimal (mode='replace' by default)
+SELECT pgmnemo.add_edge(1001, 1002, 'CAUSED_BY');
+
+-- With weight and metadata
+SELECT pgmnemo.add_edge(1001, 1002, 'CAUSED_BY', 0.85, '{"run_id": 7320}');
+
+-- Full control: running-max weight on conflict
+SELECT pgmnemo.add_edge(1001, 1002, 'CAUSED_BY', 0.85, '{"run_id": 7320}', 'max');
+```
+
+**Direct INSERT** (if you need to bypass the helper or bulk-load):
+
+```sql
+-- Add a causal edge between two lessons (v0.5.0 column names)
+INSERT INTO pgmnemo.mem_edge (source_id, target_id, edge_kind, relation_type)
 VALUES (1001, 1002, 'causal', 'CAUSED_BY');
 
 -- Add a temporal co-occurrence edge
-INSERT INTO pgmnemo.mem_edge (lesson_a_id, lesson_b_id, edge_kind, relation_type)
+INSERT INTO pgmnemo.mem_edge (source_id, target_id, edge_kind, relation_type)
 VALUES (1003, 1004, 'temporal', 'CO_OCCURRED');
 ```
+
+> **v0.5.0 breaking change:** columns were renamed `lesson_a_id` / `lesson_b_id` →
+> `source_id` / `target_id`. See `docs/MIGRATION.md §0.4.1→0.5.0`.
 
 ---
 
