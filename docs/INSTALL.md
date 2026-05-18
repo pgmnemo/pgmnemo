@@ -1,6 +1,6 @@
 # pgmnemo Installation Guide
 
-**Versions:** v0.4.0+
+**Versions:** v0.5.0+
 **License:** Apache-2.0
 **Prerequisites:** PostgreSQL 14+ with [pgvector](https://github.com/pgvector/pgvector) 0.7.0+
 
@@ -13,7 +13,7 @@ robustness. **Most production Docker users want path 3 (Dockerfile COPY).**
 
 ```bash
 # Requires pgxnclient (pip install pgxnclient)
-pgxn install pgmnemo==0.4.0
+pgxn install pgmnemo==0.5.0
 psql -d your_db -c "CREATE EXTENSION pgmnemo CASCADE;"
 ```
 
@@ -30,9 +30,9 @@ You can skip `make` entirely:
 
 ```bash
 # 1. Download the release zip
-curl -LO https://github.com/pgmnemo/pgmnemo/releases/download/v0.4.0/pgmnemo-0.4.0.zip
-unzip pgmnemo-0.4.0.zip
-cd pgmnemo-0.4.0/extension/
+curl -LO https://github.com/pgmnemo/pgmnemo/releases/download/v0.5.0/pgmnemo-0.5.0.zip
+unzip pgmnemo-0.5.0.zip
+cd pgmnemo-0.5.0/extension/
 
 # 2. Copy directly to PostgreSQL's extension directory
 SHAREDIR=$(pg_config --sharedir)
@@ -68,14 +68,14 @@ layer. **No compilation involved** — `COPY` is enough.
 FROM pgvector/pgvector:pg17
 
 # Download release zip (or use ADD from a local checkout)
-ADD https://github.com/pgmnemo/pgmnemo/releases/download/v0.4.0/pgmnemo-0.4.0.zip /tmp/
+ADD https://github.com/pgmnemo/pgmnemo/releases/download/v0.5.0/pgmnemo-0.5.0.zip /tmp/
 
 RUN apt-get update && apt-get install -y --no-install-recommends unzip \
-    && unzip /tmp/pgmnemo-0.4.0.zip -d /tmp/ \
-    && cp /tmp/pgmnemo-0.4.0/extension/pgmnemo.control \
-          /tmp/pgmnemo-0.4.0/extension/pgmnemo--*.sql \
+    && unzip /tmp/pgmnemo-0.5.0.zip -d /tmp/ \
+    && cp /tmp/pgmnemo-0.5.0/extension/pgmnemo.control \
+          /tmp/pgmnemo-0.5.0/extension/pgmnemo--*.sql \
           /usr/share/postgresql/17/extension/ \
-    && rm -rf /tmp/pgmnemo-0.4.0 /tmp/pgmnemo-0.4.0.zip \
+    && rm -rf /tmp/pgmnemo-0.5.0 /tmp/pgmnemo-0.5.0.zip \
     && apt-get remove -y unzip \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 ```
@@ -111,14 +111,14 @@ docker compose exec postgres psql -U bench -d bench -c "CREATE EXTENSION pgmnemo
 
 ```dockerfile
 # bump the ADD line to the new version, rebuild image:
-ADD https://github.com/pgmnemo/pgmnemo/releases/download/v0.4.1/pgmnemo-0.4.1.zip /tmp/
+ADD https://github.com/pgmnemo/pgmnemo/releases/download/v0.5.0/pgmnemo-0.5.0.zip /tmp/
 ```
 
 Then:
 ```bash
 docker compose build postgres
 docker compose up -d postgres
-docker compose exec postgres psql -U bench -d bench -c "ALTER EXTENSION pgmnemo UPDATE TO '0.4.1';"
+docker compose exec postgres psql -U bench -d bench -c "ALTER EXTENSION pgmnemo UPDATE TO '0.5.0';"
 ```
 
 Volume `pgdata` carries the schema state across image rebuilds. The extension
@@ -134,12 +134,12 @@ vendor the extension files into your repository:
 ```bash
 # One-time bootstrap (run on your dev machine with internet access)
 mkdir -p docker/postgres/pgmnemo-extension/
-curl -L https://github.com/pgmnemo/pgmnemo/releases/download/v0.4.0/pgmnemo-0.4.0.zip | \
+curl -L https://github.com/pgmnemo/pgmnemo/releases/download/v0.5.0/pgmnemo-0.5.0.zip | \
     bsdtar -xf- -C /tmp/
-cp /tmp/pgmnemo-0.4.0/extension/pgmnemo.control \
-   /tmp/pgmnemo-0.4.0/extension/pgmnemo--*.sql \
+cp /tmp/pgmnemo-0.5.0/extension/pgmnemo.control \
+   /tmp/pgmnemo-0.5.0/extension/pgmnemo--*.sql \
    docker/postgres/pgmnemo-extension/
-git add docker/postgres/pgmnemo-extension/ && git commit -m "vendor pgmnemo 0.4.0"
+git add docker/postgres/pgmnemo-extension/ && git commit -m "vendor pgmnemo 0.5.0"
 ```
 
 Dockerfile:
@@ -180,16 +180,22 @@ FROM pg_file_settings
 WHERE name LIKE 'pgmnemo.%';
 ```
 
-All 4 GUCs accept this pattern:
+All GUCs accept the same `SET` / `ALTER SYSTEM SET` / `current_setting()` pattern shown above.
 
-| GUC | Default | Range | Set per |
+| GUC | Default | Range | Category |
 |---|---|---|---|
-| `pgmnemo.recency_weight` | 0.05 | 0.0–0.3 | session / system |
-| `pgmnemo.ef_search` | 100 | 10–500 | session / system |
-| `pgmnemo.importance_weight` | 0.15 | 0.0–0.3 | session / system |
-| `pgmnemo.disable_hybrid` | FALSE | bool | session / system |
+| `pgmnemo.recency_weight` | 0.05 | 0.0–0.3 | recall scoring |
+| `pgmnemo.importance_weight` | 0.15 | 0.0–0.3 | recall scoring |
+| `pgmnemo.ef_search` | 100 | 10–500 | recall scoring |
+| `pgmnemo.disable_hybrid` | FALSE | bool | recall routing |
+| `pgmnemo.graph_proximity_weight` | 0.2 | 0.0–0.5 | recall scoring |
+| `pgmnemo.temporal_boost` | 1.0 | 0.0–20.0 | recall scoring (v0.5.0+) |
+| `pgmnemo.gate_strict` | `enforce` | `enforce`/`warn`/`off` | write/ingest |
+| `pgmnemo.include_unverified` | FALSE | bool | write/ingest |
+| `pgmnemo.max_query_text_chars` | 2000 | 0–any | write/ingest (v0.5.0+) |
+| `pgmnemo.tenant_id` | `''` | any project_id as text | multi-tenant RLS |
 
-See `docs/SQL_REFERENCE.md §3` for full GUC semantics.
+See `docs/SQL_REFERENCE.md §3` for full semantics, scoring formulas, and per-version default-change history.
 
 ---
 
@@ -199,7 +205,7 @@ After any install path:
 
 ```sql
 -- Version
-SELECT pgmnemo.version();   -- → '0.4.0'
+SELECT pgmnemo.version();   -- → '0.5.0'
 
 -- Sanity smoke
 SELECT pgmnemo.ingest('test', 1, 'hello', 'world', 3, NULL, 'abc1234');

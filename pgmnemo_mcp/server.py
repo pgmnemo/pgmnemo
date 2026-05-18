@@ -10,6 +10,7 @@ Transport note (BUG-3 resolution):
 
 from __future__ import annotations
 
+import json
 from typing import Any
 
 from mcp.server.fastmcp import FastMCP
@@ -30,12 +31,12 @@ def ingest(
     artifact_hash: str | None = None,
     metadata: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Store a lesson in pgmnemo.agent_lesson and return its id.
+    """Store a lesson via pgmnemo.ingest() SP and return its id.
 
-    BUG-1 fix: INSERT now uses RETURNING id (column is 'id', not 'lesson_id').
-    BUG-2 fix: role/topic are explicit required-with-defaults params (NOT NULL cols);
-               artifact_hash added so provenance gate can be satisfied.
-    FIX-A: project_id param added (NOT NULL col, default 1).
+    Uses the pgmnemo.ingest() stored procedure instead of raw INSERT so that:
+    - Gate enforcement (provenance checks) runs inside the SP.
+    - verified_at is stamped automatically when commit_sha/artifact_hash are present.
+    - Embedding dimension validation fires before the INSERT.
     """
     p = get_pool()
     conn = p.getconn()
@@ -43,17 +44,25 @@ def ingest(
         with conn.cursor() as cur:
             cur.execute(
                 """
-                INSERT INTO pgmnemo.agent_lesson
-                    (lesson_text, role, topic, importance, project_id,
-                     commit_sha, artifact_hash, verified_at)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, NOW())
-                RETURNING id, created_at
+                SELECT pgmnemo.ingest(
+                    %s, %s, %s, %s, %s::smallint,
+                    NULL::vector(1024), %s, %s, %s::jsonb
+                )
                 """,
-                (text, role, topic, importance, project_id, commit_sha, artifact_hash),
+                (
+                    role,
+                    project_id,
+                    topic,
+                    text,
+                    importance,
+                    commit_sha,
+                    artifact_hash,
+                    json.dumps(metadata) if metadata is not None else "{}",
+                ),
             )
-            row = cur.fetchone()
+            new_id = cur.fetchone()[0]
             conn.commit()
-        return {"id": row[0], "created_at": str(row[1])}
+        return {"id": new_id}
     finally:
         p.putconn(conn)
 

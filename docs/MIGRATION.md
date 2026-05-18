@@ -1,6 +1,76 @@
 # Migration Guide: External Memory Tables → pgmnemo
 
-This guide is for teams migrating from a `mem.*` schema (a prior mem.* schema) to
+This guide covers version-to-version upgrade paths and migration from an external
+`mem.*` schema to `pgmnemo.agent_lesson`.
+
+---
+
+## 0.4.1 → 0.5.0
+
+**Release date:** 2026-05-17 | **Commit:** 9aa8f85
+
+### Breaking changes
+
+#### (a) 4-argument `traverse_causal_chain()` removed
+
+The overload `traverse_causal_chain(start_id, max_depth, role_filter, project_id_filter)` is removed. Use the 2-argument form and filter in the caller:
+
+```sql
+-- Before (removed):
+SELECT * FROM pgmnemo.traverse_causal_chain(101, 5, 'developer', 42);
+
+-- After:
+SELECT * FROM pgmnemo.traverse_causal_chain(101, 5)
+WHERE role = 'developer' AND project_id = 42;
+```
+
+#### (b) `mem_edge` column rename: `lesson_a_id` / `lesson_b_id` → `source_id` / `target_id`
+
+The upgrade script (`pgmnemo--0.4.1--0.5.0.sql`) runs `ALTER TABLE pgmnemo.mem_edge RENAME COLUMN` automatically. Any application code that references these columns by name must be updated:
+
+```sql
+-- Before:
+INSERT INTO pgmnemo.mem_edge (lesson_a_id, lesson_b_id, edge_kind, relation_type)
+VALUES (1001, 1002, 'causal', 'CAUSED_BY');
+
+-- After (direct INSERT):
+INSERT INTO pgmnemo.mem_edge (source_id, target_id, edge_kind, relation_type)
+VALUES (1001, 1002, 'causal', 'CAUSED_BY');
+
+-- After (preferred — use add_edge() helper, column-name agnostic):
+SELECT pgmnemo.add_edge(1001, 1002, 'CAUSED_BY');
+```
+
+### New columns (non-breaking, nullable)
+
+Three bitemporality columns are added to `pgmnemo.agent_lesson` with `DEFAULT NULL`:
+
+| Column | Type | Purpose |
+|--------|------|---------|
+| `t_valid_from` | TIMESTAMPTZ | Start of the validity period for this lesson |
+| `t_valid_to` | TIMESTAMPTZ | End of the validity period (NULL = currently valid) |
+| `content_hash` | TEXT | SHA-256 of `lesson_text` — detects content drift across versions |
+
+These columns are optional. Existing rows are unaffected (all NULL). To query only currently-valid lessons:
+
+```sql
+SELECT * FROM pgmnemo.agent_lesson
+WHERE (t_valid_to IS NULL OR t_valid_to > NOW());
+```
+
+### Extension update command
+
+```sql
+ALTER EXTENSION pgmnemo UPDATE TO '0.5.0';
+```
+
+The upgrade script handles all DDL changes automatically (column renames via `ALTER TABLE`, new nullable columns, index updates). No data is lost or rewritten.
+
+---
+
+## External Memory Tables → pgmnemo
+
+This section is for teams migrating from a `mem.*` schema (a prior mem.* schema) to
 `pgmnemo.agent_lesson`. It covers field mapping, the backfill policy, and a
 worked verification example.
 

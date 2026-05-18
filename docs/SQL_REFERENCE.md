@@ -227,7 +227,11 @@ pgmnemo.recall_lessons(
     commit_sha    TEXT,
     artifact_hash TEXT,
     verified_at   TIMESTAMPTZ,
-    created_at    TIMESTAMPTZ
+    created_at    TIMESTAMPTZ,
+    -- v0.4.1+ diagnostic columns (appended; named-column callers unaffected):
+    vec_score     DOUBLE PRECISION,   -- cosine similarity component (NULL on text-only path)
+    bm25_score    DOUBLE PRECISION,   -- BM25 ts_rank_cd component (NULL on vector-only path)
+    rrf_score     DOUBLE PRECISION    -- reciprocal rank fusion score (NULL on vector-only path)
 )
 ```
 
@@ -326,6 +330,61 @@ pgmnemo.traverse_temporal_window(
 )
 ```
 
+### 2.8 `pgmnemo.stats()` (v0.4.1+)
+
+One-row diagnostic snapshot. Returns current GUC values, corpus size, embedding and
+full-text index coverage, and an orphan-function count. Safe to call from monitoring
+loops; typically < 50 ms on a N = 10 k corpus.
+
+```sql
+pgmnemo.stats()
+RETURNS TABLE (
+    version                 TEXT,            -- installed extension version
+    lesson_count            BIGINT,          -- total rows in agent_lesson
+    embedded_count          BIGINT,          -- rows with embedding IS NOT NULL
+    embedding_coverage_pct  DOUBLE PRECISION,-- embedded_count / lesson_count × 100
+    tsv_coverage_pct        DOUBLE PRECISION,-- rows with lesson_tsv IS NOT NULL × 100
+    mem_edge_count          BIGINT,          -- total rows in mem_edge
+    recency_weight          DOUBLE PRECISION,-- current pgmnemo.recency_weight GUC
+    ef_search               INT,             -- current pgmnemo.ef_search GUC
+    importance_weight       DOUBLE PRECISION,-- current pgmnemo.importance_weight GUC
+    hybrid_enabled          BOOLEAN,         -- NOT pgmnemo.disable_hybrid
+    recall_hybrid_available BOOLEAN,         -- TRUE if recall_hybrid() is installed
+    oldest_lesson_age_days  INT,             -- days since oldest created_at
+    orphan_count            BIGINT           -- functions not owned by the extension
+)
+```
+
+**Typical usage:**
+
+```sql
+-- Quick health check:
+SELECT * FROM pgmnemo.stats();
+
+-- Check embedding backfill coverage:
+SELECT embedding_coverage_pct FROM pgmnemo.stats();
+-- 0.0 → no embeddings; recall falls back to full-text only.
+
+-- Confirm GUC values active in this session:
+SELECT recency_weight, ef_search, importance_weight, hybrid_enabled
+FROM pgmnemo.stats();
+
+-- Check for orphan functions (non-zero blocks ALTER EXTENSION UPDATE):
+SELECT orphan_count FROM pgmnemo.stats();
+```
+
+**`orphan_count` column:** counts functions in the `pgmnemo` schema that PostgreSQL does
+not recognise as part of the extension — typically caused by intermediate manual SQL
+patches applied via `psql -f` outside the `ALTER EXTENSION UPDATE` mechanism. A non-zero
+value will block future upgrades with:
+
+```
+ERROR: function pgmnemo.X(...) already exists but is not a member of extension "pgmnemo"
+```
+
+See [`docs/MIGRATION.md §B.5`](MIGRATION.md#b5-recovery-from-extension-orphan-objects-v041)
+for the detection + recovery procedure.
+
 ---
 
 ## 3. GUCs
@@ -344,6 +403,7 @@ pgmnemo.traverse_temporal_window(
 | `pgmnemo.ef_search` | int | `100` (v0.2.1+) | 10 – 500 | Applied as `SET LOCAL pgvector.hnsw.ef_search` at recall entry. Higher = more accurate ANN at cost of latency. |
 | `pgmnemo.disable_hybrid` | bool | `false` (v0.4.0+) | `true` / `false` | Opt out of hybrid routing. When `true`, `recall_lessons()` always uses vector-only path regardless of `query_text`. Use for adopters who need deterministic v0.3.x behaviour. |
 | `pgmnemo.graph_proximity_weight` | float | `0.2` | 0.0 – 0.5 | Weight on `mem_edge` graph-walk proximity term in `recall_hybrid()` scoring. Set to `0.0` for pure semantic recall (Agency's bench setup). |
+| `pgmnemo.temporal_boost` | float | `1.0` (v0.5.0+) | 0.0 – 20.0 | Multiplier on the recency component. `effective_γ = recency_weight × temporal_boost`. Default `1.0` = unchanged behaviour from v0.4.1. H-06 optimal: `boost=10` with `recency_weight=0.05` → `effective_γ=0.5`. Helper: `SELECT pgmnemo.get_temporal_boost()`. |
 
 ### 3.2 Write/ingest GUCs (used by `pgmnemo.ingest()` and `recall_lessons()` filtering)
 
@@ -351,6 +411,7 @@ pgmnemo.traverse_temporal_window(
 |---|---|---|---|---|
 | `pgmnemo.gate_strict` | enum | `enforce` | `enforce` / `warn` / `off` | Provenance gate behaviour in `ingest()`. `enforce` blocks; `warn` logs and proceeds; `off` skips. |
 | `pgmnemo.include_unverified` | bool | `false` | `true` / `false` | Include ghost lessons (`verified_at IS NULL`) in `recall_lessons()` output. |
+| `pgmnemo.max_query_text_chars` | int | `2000` (v0.5.0+) | 0 – any | Maximum length of `query_text` in `recall_lessons()` and `lesson_text` in `ingest()`. Input exceeding the cap is silently truncated with a `RAISE NOTICE`. Set to `0` to disable the cap entirely. |
 
 ### 3.3 Multi-tenant scoping (v0.2.1+)
 
@@ -386,6 +447,8 @@ SELECT name, setting, sourcefile FROM pg_file_settings WHERE name LIKE 'pgmnemo.
 | v0.4.1 | `pgmnemo.recency_weight` | `0.08` → `0.05` | Agency RFC ablation (N=1081 production corpus); see RFC §R1 |
 | v0.2.1 | `pgmnemo.ef_search` | (new GUC, default 100) | HNSW recall quality at production query rate |
 | v0.4.0 | `pgmnemo.disable_hybrid` | (new GUC, default FALSE) | Hybrid retrieval became default; this is the opt-out switch |
+| v0.5.0 | `pgmnemo.temporal_boost` | (new GUC, default 1.0) | H-06: tunable recency multiplier; default 1.0 = no change from v0.4.1 behaviour |
+| v0.5.0 | `pgmnemo.max_query_text_chars` | (new GUC, default 2000) | R5: input-length guard for ingest() and recall query_text; 0 = disabled |
 
 Adopters who set GUCs via `ALTER SYSTEM` keep their values across version upgrades.
 Only the **function default fallback** changes when we ship a new default. To
