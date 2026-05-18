@@ -180,8 +180,17 @@ jobs:
           PGXN_USERNAME: ${{ secrets.PGXN_USERNAME }}
           PGXN_PASSWORD: ${{ secrets.PGXN_PASSWORD }}
         run: |
-          pip install pgxnclient
-          pgxn upload --username "$PGXN_USERNAME" --password "$PGXN_PASSWORD" "${{ steps.bundle.outputs.bundle }}"
+          HTTP_CODE=$(curl -s -o /tmp/pgxn_response.txt -w "%{http_code}" \
+            -X POST https://manager.pgxn.org/upload \
+            -u "${PGXN_USERNAME}:${PGXN_PASSWORD}" \
+            -F "archive=@${{ steps.bundle.outputs.bundle }}")
+          cat /tmp/pgxn_response.txt
+          if [ "$HTTP_CODE" -ge 200 ] && [ "$HTTP_CODE" -lt 300 ]; then
+            echo "PGXN upload succeeded (HTTP $HTTP_CODE)"
+          else
+            echo "::error::PGXN upload failed (HTTP $HTTP_CODE)"
+            exit 1
+          fi
 
   # ─── Job 4: publish pgmnemo-mcp to PyPI ────────────────────────────────────
   publish-mcp:
