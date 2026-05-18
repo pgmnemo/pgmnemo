@@ -1,0 +1,35 @@
+name: Publish pgmnemo-mcp to PyPI
+
+on:
+  push:
+    tags:
+      - 'v*.*'
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write  # for trusted publishing (OIDC)
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install build tools
+        run: pip install build twine
+
+      - name: Build package
+        working-directory: pgmnemo_mcp
+        run: python -m build
+
+      - name: Publish to PyPI (trusted publishing)
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: pgmnemo_mcp/dist/
+          # Falls back to PYPI_TOKEN secret if OIDC not configured:
+          password: ${{ secrets.PYPI_TOKEN }}
+          skip-existing: true
