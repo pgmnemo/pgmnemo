@@ -2268,7 +2268,8 @@ BEGIN
         0.05
     );
 
-    -- H-06: effective_γ = _gamma × temporal_boost (range 0.0–20.0, default 1.0).
+    -- H-06: recency decay uses linear 90d half-life (score→0 at age≥90d);
+    --       coeff = pgmnemo.recency_weight × pgmnemo.temporal_boost (range 0.0–20.0, default 1.0).
     _temporal_boost := GREATEST(0.0, LEAST(20.0, COALESCE(
         NULLIF(current_setting('pgmnemo.temporal_boost', TRUE), '')::DOUBLE PRECISION,
         1.0
@@ -2391,7 +2392,8 @@ COMMENT ON FUNCTION pgmnemo.recall_lessons(vector, INT, TEXT, INT, TEXT) IS
     'Routes to recall_hybrid() when query_text non-empty AND embedding present '
     'AND pgmnemo.disable_hybrid is FALSE/unset. '
     'R5: query_text truncated to pgmnemo.max_query_text_chars (default 2000) with RAISE NOTICE. '
-    'H-06: effective_γ = recency_weight × temporal_boost (defaults 0.05 × 1.0 = 0.05). '
+    'H-06: recency decay linear 90d half-life (score→0 at age≥90d); coeff=pgmnemo.recency_weight. '
+    'effective_γ = recency_weight × temporal_boost (defaults 0.05 × 1.0 = 0.05). '
     'Diagnostic cols: vec_score=cosine; bm25_score/rrf_score=NULL on vector-only path.';
 
 -- ─────────────────────────────────────────────────────────────────────────────

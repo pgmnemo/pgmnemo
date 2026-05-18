@@ -68,11 +68,11 @@ SET pgmnemo.gate_strict = 'warn';
 
 ```sql
 pgmnemo.recall_lessons(
-    query_embedding  vector(1024),  -- pass NULL for text-only recall
-    k                INT     DEFAULT 10,
-    role             TEXT    DEFAULT NULL,
-    project_id       INT     DEFAULT NULL,
-    query_text       TEXT    DEFAULT NULL
+    query_embedding   vector(1024),  -- pass NULL for text-only recall
+    k                 INT     DEFAULT 10,
+    role_filter       TEXT    DEFAULT NULL,
+    project_id_filter INT     DEFAULT NULL,
+    query_text        TEXT    DEFAULT NULL
 ) RETURNS TABLE (
     lesson_id     BIGINT,
     score         DOUBLE PRECISION,
@@ -85,7 +85,11 @@ pgmnemo.recall_lessons(
     commit_sha    TEXT,
     artifact_hash TEXT,
     verified_at   TIMESTAMPTZ,
-    created_at    TIMESTAMPTZ
+    created_at    TIMESTAMPTZ,
+    -- v0.4.1+ diagnostic columns (appended; named-column callers unaffected):
+    vec_score     DOUBLE PRECISION,   -- cosine component (NULL on text-only path)
+    bm25_score    DOUBLE PRECISION,   -- BM25 component (NULL on vector-only path)
+    rrf_score     DOUBLE PRECISION    -- RRF score (NULL on vector-only path)
 )
 ```
 
@@ -241,17 +245,20 @@ keyword-match queries appear alongside semantic queries (LoCoMo-style mixed corp
 
 ```sql
 pgmnemo.recall_hybrid(
-    query_embedding  vector(1024),
-    query_text       TEXT,
-    k                INT     DEFAULT 10,
-    role_filter      TEXT    DEFAULT NULL,
-    project_id_filter INT    DEFAULT NULL,
-    vec_weight       FLOAT   DEFAULT 0.4,
-    bm25_weight      FLOAT   DEFAULT 0.4
+    query_embedding   vector(1024),
+    query_text        TEXT,
+    k                 INT     DEFAULT 10,
+    role_filter       TEXT    DEFAULT NULL,
+    project_id_filter INT     DEFAULT NULL,
+    vec_weight        FLOAT   DEFAULT 0.4,
+    bm25_weight       FLOAT   DEFAULT 0.4,
+    rrf_k             INT     DEFAULT 60
 ) RETURNS TABLE (
     lesson_id     BIGINT,
-    hybrid_score  DOUBLE PRECISION,
-    rrf_score     DOUBLE PRECISION,   -- diagnostic: 1/(k+vec_rank) + 1/(k+bm25_rank)
+    score         DOUBLE PRECISION,   -- weighted hybrid combination (sort key)
+    vec_score     DOUBLE PRECISION,   -- diagnostic: cosine similarity component
+    bm25_score    DOUBLE PRECISION,   -- diagnostic: ts_rank_cd component
+    rrf_score     DOUBLE PRECISION,   -- diagnostic: 1/(rrf_k+vec_rank) + 1/(rrf_k+bm25_rank)
     role          TEXT,
     project_id    INT,
     topic         TEXT,
@@ -265,6 +272,9 @@ pgmnemo.recall_hybrid(
 )
 ```
 
+> **Note:** The sort column is `score`, not `hybrid_score`. The name `hybrid_score`
+> appeared in pre-release drafts and is incorrect — sort by `score`.
+
 Formula: `hybrid_score = vec_weight×cosine + bm25_weight×ts_rank_cd(lesson_tsv, q, 32)`  
 Union retrieval: candidates matched by **either** embedding cosine **or** BM25.
 
@@ -272,7 +282,7 @@ Union retrieval: candidates matched by **either** embedding cosine **or** BM25.
 
 ```sql
 -- Opt-in: call recall_hybrid() directly
-SELECT topic, lesson_text, hybrid_score, rrf_score
+SELECT topic, lesson_text, score, vec_score, bm25_score, rrf_score
 FROM pgmnemo.recall_hybrid(
     <your_vector_1024>,
     'JWT rotation key compromise',
