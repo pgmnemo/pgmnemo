@@ -190,6 +190,8 @@ jobs:
           cat /tmp/pgxn_response.txt
           if [ "$HTTP_CODE" -eq 303 ] || { [ "$HTTP_CODE" -ge 200 ] && [ "$HTTP_CODE" -lt 300 ]; }; then
             echo "PGXN upload succeeded (HTTP $HTTP_CODE)"
+          elif [ "$HTTP_CODE" -eq 409 ]; then
+            echo "::notice::PGXN upload skipped — this version is already published (HTTP 409)"
           else
             echo "::error::PGXN upload failed (HTTP $HTTP_CODE)"
             exit 1
