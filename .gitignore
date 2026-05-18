@@ -58,3 +58,6 @@ design/
 index-*.html.bak
 .claude/
 !spec/competitive/
+
+# Site source — lives in Agency-private (spec/v2/pgmnemo/site/), not here
+index.html
