@@ -103,6 +103,37 @@ notes include monitor watchlist for v0.4.1 follow-up:
 
 ---
 
+## [0.5.1] — 2026-05-18
+
+### Theme
+
+Correctness and provenance-gate fixes. No recall algorithm change (Δ=0 confirmed
+analytically). Safe to upgrade from v0.5.0.
+
+### Fixed
+
+- **`pgmnemo_mcp` write path** — `pgmnemo-mcp` server previously issued a raw
+  `INSERT INTO pgmnemo.agent_lesson`, bypassing the `pgmnemo.ingest()` stored
+  procedure. Writes now call `SELECT pgmnemo.ingest(...)`, which enforces the
+  provenance gate (`gate_strict`) and sets `verified_at` automatically when a
+  `commit_sha` or `artifact_hash` is present. All 16 MCP server tests updated.
+- **`recall_lessons()` `temporal_boost` comment** — inline function comment and
+  `COMMENT ON FUNCTION` incorrectly stated the formula as `γ=recency_weight²`.
+  Corrected to `linear 90d half-life, coeff=pgmnemo.recency_weight` (matching
+  the actual implementation).
+
+### Upgrade
+
+```sql
+ALTER EXTENSION pgmnemo UPDATE TO '0.5.1';
+```
+
+Also upgrade `pgmnemo-mcp` if installed:
+
+```bash
+pip install --upgrade pgmnemo-mcp==0.5.1
+```
+
 ## [0.5.0] — 2026-05-17
 
 ### Theme
