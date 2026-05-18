@@ -2,7 +2,7 @@
 -- Verifies: t_valid columns, trigger close-prior, mem_item view, as_of() function.
 -- Apply migration to get H-07 objects (extension loaded at v0.4.1 by default).
 ALTER EXTENSION pgmnemo UPDATE TO '0.5.0';
-NOTICE:  version "0.5.0" of extension "pgmnemo" is already installed
+ERROR:  extension "pgmnemo" has no update path from version "0.5.1" to version "0.5.0"
 -- ── Schema checks ────────────────────────────────────────────────────────────
 -- t_valid_from and t_valid_to columns exist on agent_lesson
 SELECT COUNT(*) AS bitemporal_cols_exist
