@@ -201,6 +201,10 @@ jobs:
   publish-mcp:
     needs: [installcheck, bench-gate]
     runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write
+      contents: read
     steps:
       - uses: actions/checkout@v4
 
@@ -210,14 +214,14 @@ jobs:
           python-version: '3.11'
 
       - name: Install build tools
-        run: pip install build twine
+        run: pip install build
 
       - name: Build package
         working-directory: pgmnemo_mcp
         run: python -m build
 
       - name: Publish to PyPI
-        if: ${{ env.PYPI_TOKEN != '' }}
-        env:
-          PYPI_TOKEN: ${{ secrets.PYPI_TOKEN }}
-        run: twine upload --username __token__ --password "$PYPI_TOKEN" pgmnemo_mcp/dist/* --skip-existing
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: pgmnemo_mcp/dist/
+          skip-existing: true
