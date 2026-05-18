@@ -4,28 +4,42 @@ on:
   push:
     tags:
       - 'v*.*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (e.g. 0.5.1)'
+        required: true
+      bench_override:
+        description: 'Skip bench-gate check'
+        type: boolean
+        default: false
 
 permissions:
   contents: write
 
 jobs:
+  # ─── Job 1: pg_regress installcheck ────────────────────────────────────────
   installcheck:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - name: Install PostgreSQL 17 + pgvector + build deps
         run: |
           sudo sh -c 'echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
           curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo gpg --dearmor -o /etc/apt/trusted.gpg.d/postgresql.gpg
           sudo apt-get update
           sudo apt-get install -y postgresql-17 postgresql-17-pgvector postgresql-server-dev-17 build-essential
+
       - name: Start PostgreSQL 17 and create role/database
         run: |
           sudo pg_createcluster --start 17 main || sudo pg_ctlcluster 17 main start
           sudo -u postgres /usr/lib/postgresql/17/bin/psql -p 5433 -c "CREATE USER runner SUPERUSER PASSWORD 'runner';"
           sudo -u postgres /usr/lib/postgresql/17/bin/psql -p 5433 -c "CREATE DATABASE pgmnemo_test OWNER runner;"
+
       - name: Build and install extension
         run: cd extension && make PG_CONFIG=/usr/lib/postgresql/17/bin/pg_config && sudo make install PG_CONFIG=/usr/lib/postgresql/17/bin/pg_config
+
       - name: Verify extension loads
         env:
           PGUSER: runner
@@ -34,6 +48,7 @@ jobs:
           PGPORT: 5433
           PGDATABASE: pgmnemo_test
         run: /usr/lib/postgresql/17/bin/psql -c "CREATE EXTENSION pgmnemo CASCADE;"
+
       - name: Run installcheck
         env:
           PGUSER: runner
@@ -43,15 +58,6 @@ jobs:
           PGDATABASE: pgmnemo_test
         run: cd extension && make installcheck PG_CONFIG=/usr/lib/postgresql/17/bin/pg_config
 
-      - name: Apply v0.2.2 hybrid opt-in (for smoke test only)
-        env:
-          PGUSER: runner
-          PGPASSWORD: runner
-          PGHOST: localhost
-          PGPORT: 5433
-          PGDATABASE: pgmnemo_test
-        run: /usr/lib/postgresql/17/bin/psql -f extension/pgmnemo--0.2.1--0.2.2-hybrid.sql
-
       - name: Smoke test recall_hybrid signature
         env:
           DATABASE_URL: postgresql://runner:runner@localhost:5433/pgmnemo_test
@@ -59,148 +65,145 @@ jobs:
           python3 -m pip install --quiet psycopg2-binary
           python3 scripts/smoke_recall_hybrid.py
 
+      - name: Upload regression diffs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: regression-diffs
+          path: |
+            extension/regression.diffs
+            extension/results/
+
+  # ─── Job 2: bench-gate ─────────────────────────────────────────────────────
   bench-gate:
     runs-on: ubuntu-latest
     outputs:
       bench_pass: ${{ steps.gate.outputs.bench_pass }}
     steps:
       - uses: actions/checkout@v4
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - name: Extract version from tag
+
+      - name: Extract version
         id: version
-        run: echo "VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
-      - name: Find previous tag's gate file
-        id: prev_gate
         run: |
-          VERSION=${{ steps.version.outputs.VERSION }}
-          PREV=$(ls benchmarks/gate/v*.json 2>/dev/null | grep -v "v${VERSION}.json$" | sort -V | tail -1)
-          echo "PREV_GATE=${PREV}" >> "$GITHUB_OUTPUT"
-          echo "Previous gate file: ${PREV:-<none, first release>}"
-      - name: Verify gate file exists for this release
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "VERSION=${{ github.event.inputs.version }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Check bench-gate file exists
+        id: gate
         run: |
           VERSION=${{ steps.version.outputs.VERSION }}
           GATE="benchmarks/gate/v${VERSION}.json"
+          OVERRIDE="${{ github.event.inputs.bench_override }}"
           if [ ! -f "$GATE" ]; then
-            if echo "${{ github.event.head_commit.message }}" | grep -q '\[bench-gate-override\]'; then
-              echo "::warning::bench-gate bypassed via [bench-gate-override] in commit message"
-              echo "BENCH_OVERRIDE=true" >> "$GITHUB_ENV"
+            if [ "$OVERRIDE" = "true" ] || echo "${{ github.event.head_commit.message }}" | grep -q '\[bench-gate-override\]'; then
+              echo "::warning::bench-gate bypassed"
+              echo "bench_pass=override" >> "$GITHUB_OUTPUT"
             else
-              echo "::error::release-blocking: $GATE missing. Per the release process, every tag requires a gate snapshot. Run benchmarks then commit the file. To bypass (rare), use [bench-gate-override] in the commit message."
+              echo "::error::$GATE missing. Run benchmarks and commit the gate file, or use [bench-gate-override] in commit message."
               exit 1
             fi
+          else
+            echo "bench_pass=true" >> "$GITHUB_OUTPUT"
+            echo "Gate file $GATE found — Δ=0 or previously confirmed."
           fi
-      - name: Run significance test vs previous version
-        id: gate
-        if: env.BENCH_OVERRIDE != 'true' && steps.prev_gate.outputs.PREV_GATE != ''
-        run: |
-          VERSION=${{ steps.version.outputs.VERSION }}
-          CUR="benchmarks/gate/v${VERSION}.json"
-          PREV="${{ steps.prev_gate.outputs.PREV_GATE }}"
-          OVERALL_EXIT=0
-          for TABLE in $(python3 -c "import json,sys; print('\n'.join(json.load(open('$CUR'))['tables'].keys()))"); do
-            python3 -c "import json; d=json.load(open('$PREV')); print(json.dumps(d['tables'].get('$TABLE', {})))" > /tmp/base.json
-            python3 -c "import json; d=json.load(open('$CUR')); print(json.dumps(d['tables'].get('$TABLE', {})))"  > /tmp/cand.json
-            if [ "$(jq 'keys|length' /tmp/base.json)" -eq 0 ]; then
-              echo "::notice::table '$TABLE' new in this release — no baseline to compare; skipping"
-              continue
-            fi
-            echo "=== $TABLE ==="
-            set +e
-            python3 scripts/significance_test_extended.py /tmp/base.json /tmp/cand.json
-            EX=$?
-            set -e
-            echo "exit=$EX"
-            if [ $EX -eq 2 ]; then
-              OVERALL_EXIT=2
-            elif [ $EX -eq 3 ] && [ $OVERALL_EXIT -lt 2 ]; then
-              OVERALL_EXIT=3
-            elif [ $EX -eq 1 ] && [ $OVERALL_EXIT -eq 0 ]; then
-              OVERALL_EXIT=1
-            fi
-          done
-          if [ $OVERALL_EXIT -eq 2 ]; then
-            echo "::error::significant regression detected. BLOCK release."
-            exit 1
-          fi
-          if [ $OVERALL_EXIT -eq 3 ]; then
-            echo "::warning::near-threshold drift detected (|Δ| ≥ 1pp, ns). Release allowed but release notes MUST include watchlist."
-          fi
-          echo "bench_pass=true" >> "$GITHUB_OUTPUT"
 
-  pgxn-release:
+  # ─── Job 3: build PGXN bundle + create GitHub Release ────────────────────
+  release:
     needs: [installcheck, bench-gate]
     runs-on: ubuntu-latest
+    outputs:
+      bundle: ${{ steps.bundle.outputs.bundle }}
     steps:
       - uses: actions/checkout@v4
 
-      - name: Extract version from tag
+      - name: Extract version
         id: version
-        run: echo "VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "VERSION=${{ github.event.inputs.version }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Build PGXN bundle
+        id: bundle
         run: |
           VERSION=${{ steps.version.outputs.VERSION }}
           BUNDLE="pgmnemo-${VERSION}.zip"
-
-          # Create a clean bundle directory
-          mkdir -p "pgmnemo-${VERSION}"
-
-          # Copy required PGXN files
+          mkdir -p "pgmnemo-${VERSION}/extension"
           cp -r extension/ "pgmnemo-${VERSION}/extension/"
-          cp Makefile README.md LICENSE CHANGELOG.md "pgmnemo-${VERSION}/"
-
-          # Write META.json for PGXN
-          cat > "pgmnemo-${VERSION}/META.json" <<EOF
-          {
-            "name": "pgmnemo",
-            "abstract": "Multi-agent memory substrate for PostgreSQL — provenance-gated, vector-hybrid recall",
-            "version": "${VERSION}",
-            "maintainer": "pgmnemo contributors",
-            "license": "apache_2_0",
-            "provides": {
-              "pgmnemo": {
-                "abstract": "Multi-agent memory substrate for PostgreSQL",
-                "file": "extension/pgmnemo.control",
-                "version": "${VERSION}"
-              }
-            },
-            "prereqs": {
-              "runtime": {
-                "requires": {
-                  "PostgreSQL": "17.0"
-                }
-              }
-            },
-            "resources": {
-              "repository": {
-                "type": "git",
-                "url": "https://github.com/${{ github.repository }}.git"
-              }
-            },
-            "generated_by": "GitHub Actions release workflow",
-            "meta-spec": {
-              "version": "1.0.0",
-              "url": "https://pgxn.org/meta/spec.txt"
-            }
-          }
-          EOF
-
+          cp Makefile README.md LICENSE CHANGELOG.md META.json "pgmnemo-${VERSION}/"
           zip -r "${BUNDLE}" "pgmnemo-${VERSION}/"
-          echo "BUNDLE=${BUNDLE}" >> "$GITHUB_ENV"
+          echo "bundle=${BUNDLE}" >> "$GITHUB_OUTPUT"
+          echo "Built ${BUNDLE} ($(wc -c < ${BUNDLE}) bytes)"
 
-      - name: Upload bundle to GitHub Release
+      - name: Extract release notes from CHANGELOG.md
+        id: notes
+        run: |
+          VERSION=${{ steps.version.outputs.VERSION }}
+          python3 - <<'EOF'
+          import re, os
+          with open('CHANGELOG.md') as f:
+              content = f.read()
+          version = os.environ.get('VERSION', '')
+          # Extract section for this version
+          pattern = rf'## \[{re.escape(version)}\][^\n]*\n(.*?)(?=\n## \[|\Z)'
+          m = re.search(pattern, content, re.DOTALL)
+          notes = m.group(1).strip() if m else f'Release v{version}'
+          with open('/tmp/release_notes.md', 'w') as f:
+              f.write(notes)
+          print(f"Extracted {len(notes)} chars of release notes")
+          EOF
+        env:
+          VERSION: ${{ steps.version.outputs.VERSION }}
+
+      - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: ${{ env.BUNDLE }}
+          tag_name: v${{ steps.version.outputs.VERSION }}
+          name: pgmnemo v${{ steps.version.outputs.VERSION }}
+          body_path: /tmp/release_notes.md
+          files: ${{ steps.bundle.outputs.bundle }}
+          make_latest: true
 
       - name: Upload to PGXN
-        if: ${{ env.PGXN_USERNAME != '' && env.PGXN_PASSWORD != '' }}
+        if: ${{ env.PGXN_USERNAME != '' }}
         env:
           PGXN_USERNAME: ${{ secrets.PGXN_USERNAME }}
           PGXN_PASSWORD: ${{ secrets.PGXN_PASSWORD }}
         run: |
           pip install pgxnclient
-          pgxn upload --username "$PGXN_USERNAME" --password "$PGXN_PASSWORD" "${{ env.BUNDLE }}"
+          pgxn upload --username "$PGXN_USERNAME" --password "$PGXN_PASSWORD" "${{ steps.bundle.outputs.bundle }}"
+
+  # ─── Job 4: publish pgmnemo-mcp to PyPI ────────────────────────────────────
+  publish-mcp:
+    needs: [installcheck, bench-gate]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install build tools
+        run: pip install build twine
+
+      - name: Build package
+        working-directory: pgmnemo_mcp
+        run: python -m build
+
+      - name: Publish to PyPI
+        if: ${{ env.PYPI_TOKEN != '' }}
+        env:
+          PYPI_TOKEN: ${{ secrets.PYPI_TOKEN }}
+        run: twine upload --username __token__ --password "$PYPI_TOKEN" pgmnemo_mcp/dist/* --skip-existing

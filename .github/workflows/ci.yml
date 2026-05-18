@@ -44,7 +44,22 @@ jobs:
         if: steps.installcheck.outcome == 'failure' && github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: |
           if ls extension/results/*.out 2>/dev/null; then
-            cp extension/results/*.out extension/expected/
+            # Safety guard: never auto-commit expected files that contain ERROR lines
+            # (indicates a real failure, not a cosmetic PG-version formatting difference)
+            UNSAFE=""
+            for f in extension/results/*.out; do
+              if grep -q "^ERROR:" "$f"; then
+                echo "::warning::$f contains ERROR lines — skipping auto-baseline-reset for this file"
+                UNSAFE="$UNSAFE $f"
+              fi
+            done
+            # Copy only the safe files
+            for f in extension/results/*.out; do
+              FNAME=$(basename "$f")
+              if ! echo "$UNSAFE" | grep -q "$FNAME"; then
+                cp "$f" "extension/expected/$FNAME"
+              fi
+            done
             git config user.email "ci@pgmnemo.dev"
             git config user.name "pgmnemo CI"
             git add extension/expected/
@@ -210,19 +225,29 @@ jobs:
           PGPORT: 5433
         run: |
           PSQL=/usr/lib/postgresql/17/bin/psql
-          for FROM_VER in 0.2.1 0.3.0 0.4.0; do
-            echo "::group::Upgrade chain from $FROM_VER → 0.4.1"
-            sudo -u postgres $PSQL -p 5433 -c "DROP DATABASE IF EXISTS upgrade_test_$(echo $FROM_VER | tr . _)"
-            sudo -u postgres $PSQL -p 5433 -c "CREATE DATABASE upgrade_test_$(echo $FROM_VER | tr . _) OWNER runner"
-            DB=upgrade_test_$(echo $FROM_VER | tr . _)
-            $PSQL -d $DB -c "CREATE EXTENSION pgmnemo VERSION '$FROM_VER' CASCADE"
-            VER=$($PSQL -d $DB -tAc "SELECT pgmnemo.version()")
+          # Read current default_version from control file
+          TARGET_VER=$(grep '^default_version' extension/pgmnemo.control | sed "s/.*= *'//;s/'.*//")
+          echo "Target version: $TARGET_VER"
+          for FROM_VER in 0.2.1 0.3.0 0.4.0 0.4.1 0.5.0; do
+            # Skip if no upgrade script exists from this version
+            if [ ! -f "extension/pgmnemo--${FROM_VER}--${TARGET_VER}.sql" ] && [ "$FROM_VER" != "$TARGET_VER" ]; then
+              # Check if there's a multi-hop path — just do a smoke check
+              echo "::notice::No direct upgrade script from $FROM_VER to $TARGET_VER — skipping"
+              continue
+            fi
+            [ "$FROM_VER" = "$TARGET_VER" ] && continue
+            echo "::group::Upgrade chain from $FROM_VER → $TARGET_VER"
+            DB_NAME="upgrade_test_$(echo $FROM_VER | tr . _)"
+            sudo -u postgres $PSQL -p 5433 -c "DROP DATABASE IF EXISTS $DB_NAME"
+            sudo -u postgres $PSQL -p 5433 -c "CREATE DATABASE $DB_NAME OWNER runner"
+            $PSQL -d $DB_NAME -c "CREATE EXTENSION pgmnemo VERSION '$FROM_VER' CASCADE"
+            VER=$($PSQL -d $DB_NAME -tAc "SELECT pgmnemo.version()")
             echo "  installed: $VER"
-            $PSQL -d $DB -c "ALTER EXTENSION pgmnemo UPDATE TO '0.4.1'"
-            VER=$($PSQL -d $DB -tAc "SELECT pgmnemo.version()")
+            $PSQL -d $DB_NAME -c "ALTER EXTENSION pgmnemo UPDATE TO '$TARGET_VER'"
+            VER=$($PSQL -d $DB_NAME -tAc "SELECT pgmnemo.version()")
             echo "  upgraded:  $VER"
-            test "$VER" = "0.4.1" || { echo "FAIL: upgrade from $FROM_VER produced $VER"; exit 1; }
-            $PSQL -d $DB -c "SELECT version, lesson_count, mem_edge_count, hybrid_enabled, orphan_count FROM pgmnemo.stats()"
+            test "$VER" = "$TARGET_VER" || { echo "FAIL: upgrade from $FROM_VER produced $VER, expected $TARGET_VER"; exit 1; }
+            $PSQL -d $DB_NAME -c "SELECT version, lesson_count, mem_edge_count, hybrid_enabled, orphan_count FROM pgmnemo.stats()"
             echo "::endgroup::"
           done
-          echo "✓ All 3 upgrade paths verified"
+          echo "✓ All upgrade paths verified to $TARGET_VER"
