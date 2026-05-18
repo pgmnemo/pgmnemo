@@ -1,16 +1,18 @@
-name: Publish pgmnemo-mcp to PyPI
+name: Publish pgmnemo-mcp to PyPI (manual)
+
+# Standalone manual publish workflow.
+# Automated publish on tag is handled by release.yml (publish-mcp job).
 
 on:
-  push:
-    tags:
-      - 'v*.*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Package version (must match pgmnemo_mcp/pyproject.toml)'
+        required: true
 
 jobs:
   publish:
     runs-on: ubuntu-latest
-    environment: pypi
-    permissions:
-      id-token: write  # for trusted publishing (OIDC)
     steps:
       - uses: actions/checkout@v4
 
@@ -26,10 +28,26 @@ jobs:
         working-directory: pgmnemo_mcp
         run: python -m build
 
-      - name: Publish to PyPI (trusted publishing)
-        uses: pypa/gh-action-pypi-publish@release/v1
-        with:
-          packages-dir: pgmnemo_mcp/dist/
-          # Falls back to PYPI_TOKEN secret if OIDC not configured:
-          password: ${{ secrets.PYPI_TOKEN }}
-          skip-existing: true
+      - name: Verify version matches input
+        run: |
+          PKG_VER=$(python3 -c "
+          import sys
+          sys.path.insert(0, 'pgmnemo_mcp')
+          try:
+              import tomllib
+          except ImportError:
+              import tomli as tomllib
+          with open('pgmnemo_mcp/pyproject.toml', 'rb') as f:
+              print(tomllib.load(f)['project']['version'])
+          ")
+          INPUT_VER="${{ github.event.inputs.version }}"
+          if [ "$PKG_VER" != "$INPUT_VER" ]; then
+            echo "::error::pyproject.toml version ($PKG_VER) != input ($INPUT_VER)"
+            exit 1
+          fi
+
+      - name: Publish to PyPI
+        if: ${{ secrets.PYPI_TOKEN != '' }}
+        env:
+          PYPI_TOKEN: ${{ secrets.PYPI_TOKEN }}
+        run: twine upload --username __token__ --password "$PYPI_TOKEN" pgmnemo_mcp/dist/* --skip-existing
