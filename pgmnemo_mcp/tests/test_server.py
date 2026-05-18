@@ -1,11 +1,12 @@
 """Unit tests for pgmnemo_mcp.server — ingest() and recall() tools.
 
 Uses unittest.mock to patch get_pool() so no live PostgreSQL is required.
-All tests verify the SQL generated and the return shape of each function.
+All tests verify the SQL / SP call generated and the return shape of each function.
 """
 from __future__ import annotations
 
 import importlib
+import json
 import sys
 import types
 import unittest
@@ -81,47 +82,82 @@ def _make_pool(rows=None, description=None):
 
 class TestIngest(unittest.TestCase):
 
-    def test_returns_id_and_created_at(self):
-        ts = datetime(2026, 5, 17, 12, 0, 0)
-        pool, conn, cur = _make_pool(rows=[(42, ts)])
+    def test_returns_id(self):
+        pool, conn, cur = _make_pool()
+        cur.fetchone.return_value = (42,)
         with patch.object(server, "get_pool", return_value=pool):
             result = server.ingest(text="hello world")
         self.assertEqual(result["id"], 42)
-        self.assertEqual(result["created_at"], str(ts))
 
-    def test_default_params_sent_to_db(self):
-        ts = datetime(2026, 5, 17)
-        pool, conn, cur = _make_pool(rows=[(1, ts)])
+    def test_calls_ingest_sp_not_raw_insert(self):
+        """Regression: must call pgmnemo.ingest() SP, not raw INSERT."""
+        pool, conn, cur = _make_pool()
+        cur.fetchone.return_value = (1,)
+        with patch.object(server, "get_pool", return_value=pool):
+            server.ingest(text="test lesson")
+        sql = cur.execute.call_args[0][0]
+        self.assertIn("pgmnemo.ingest", sql)
+        self.assertNotIn("INSERT INTO", sql)
+
+    def test_default_params_sent_to_sp(self):
+        """SP receives args in positional order: role, project_id, topic, text, importance, ..."""
+        pool, conn, cur = _make_pool()
+        cur.fetchone.return_value = (1,)
         with patch.object(server, "get_pool", return_value=pool):
             server.ingest(text="test lesson")
         args = cur.execute.call_args[0][1]
-        # args: (text, role, topic, importance, project_id, commit_sha, artifact_hash)
-        self.assertEqual(args[0], "test lesson")
-        self.assertEqual(args[1], "mcp_agent")   # default role
-        self.assertEqual(args[2], "general")     # default topic
-        self.assertEqual(args[3], 3)             # default importance
-        self.assertEqual(args[4], 1)             # default project_id (FIX-A)
+        # Positional order matches SP signature: role, project_id, topic, lesson_text, importance
+        self.assertEqual(args[0], "mcp_agent")    # role
+        self.assertEqual(args[1], 1)              # project_id
+        self.assertEqual(args[2], "general")      # topic
+        self.assertEqual(args[3], "test lesson")  # lesson_text
+        self.assertEqual(args[4], 3)              # importance
 
     def test_project_id_passed_through(self):
-        ts = datetime(2026, 5, 17)
-        pool, conn, cur = _make_pool(rows=[(7, ts)])
+        pool, conn, cur = _make_pool()
+        cur.fetchone.return_value = (7,)
         with patch.object(server, "get_pool", return_value=pool):
             server.ingest(text="x", project_id=99)
         args = cur.execute.call_args[0][1]
-        self.assertEqual(args[4], 99)
+        self.assertEqual(args[1], 99)
 
     def test_commit_sha_and_artifact_hash_forwarded(self):
-        ts = datetime(2026, 5, 17)
-        pool, conn, cur = _make_pool(rows=[(5, ts)])
+        pool, conn, cur = _make_pool()
+        cur.fetchone.return_value = (5,)
         with patch.object(server, "get_pool", return_value=pool):
             server.ingest(text="x", commit_sha="abc123", artifact_hash="def456")
         args = cur.execute.call_args[0][1]
-        self.assertEqual(args[5], "abc123")
-        self.assertEqual(args[6], "def456")
+        self.assertEqual(args[5], "abc123")   # commit_sha
+        self.assertEqual(args[6], "def456")   # artifact_hash
+
+    def test_metadata_serialized_to_json(self):
+        pool, conn, cur = _make_pool()
+        cur.fetchone.return_value = (3,)
+        with patch.object(server, "get_pool", return_value=pool):
+            server.ingest(text="x", metadata={"key": "val"})
+        args = cur.execute.call_args[0][1]
+        self.assertEqual(json.loads(args[7]), {"key": "val"})
+
+    def test_none_metadata_defaults_to_empty_json_object(self):
+        pool, conn, cur = _make_pool()
+        cur.fetchone.return_value = (3,)
+        with patch.object(server, "get_pool", return_value=pool):
+            server.ingest(text="x")
+        args = cur.execute.call_args[0][1]
+        self.assertEqual(args[7], "{}")
+
+    def test_jsonb_cast_present_in_sql(self):
+        """Ensures metadata arg is cast to ::jsonb so PostgreSQL accepts it."""
+        pool, conn, cur = _make_pool()
+        cur.fetchone.return_value = (1,)
+        with patch.object(server, "get_pool", return_value=pool):
+            server.ingest(text="x")
+        sql = cur.execute.call_args[0][0]
+        self.assertIn("::jsonb", sql)
 
     def test_conn_returned_to_pool(self):
-        ts = datetime(2026, 5, 17)
-        pool, conn, cur = _make_pool(rows=[(1, ts)])
+        pool, conn, cur = _make_pool()
+        cur.fetchone.return_value = (1,)
         with patch.object(server, "get_pool", return_value=pool):
             server.ingest(text="x")
         pool.putconn.assert_called_once_with(conn)
