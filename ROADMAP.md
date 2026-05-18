@@ -41,7 +41,8 @@ Tagline updated to: **"The write-time gate for agent memory."** (POSITIONING.md 
 | **v0.3.1** | Hygiene + documentation + bench-gate in CI | All issues closed; gate file mechanism live; no recall change | 2026-05-13 (✅ SHIPPED) |
 | **v0.4.0** | Hybrid retrieval promoted to default | LoCoMo session recall@10 +4.15pp (p<0.05); LongMemEval neutral | 2026-05-15 (✅ SHIPPED) |
 | **v0.4.1** | **Production hardening** (per Agency RFC 2026-05-16) | R1, R2 docs, R3, R4, R7 from `AGENCY_REQUIREMENTS_FOR_PGMNEMO.md`; Agency bench recall@10 ≥ 0.55 maintained | 2026-05-17 (✅ SHIPPED) |
-| **v0.5.0** | Per-category lift + graph helpers | R5, R6, R10 + H-06 temporal weight tune; previously-planned graph-deprecation cycle folded in here | 2026-06-20 |
+| **v0.5.0** | Per-category lift + graph helpers | R5, R6, R10 + H-06 temporal weight tune; previously-planned graph-deprecation cycle folded in here | 2026-05-17 (✅ SHIPPED) |
+| **v0.5.1** | Correctness fixes | MCP write path via `ingest()` SP; `temporal_boost` comment corrected | 2026-05-18 (✅ SHIPPED) |
 | **v0.6.0** | Adoption tooling + multi-tenant | R8, R9 + framework adapters + first external case study | 2026-08-15 |
 | **v0.7.0** | Optional graph eval (only if adopter pulls) | Bench that exercises `mem_edge`; +X pp gate | 2026-09 (conditional) |
 | **v1.0** | API freeze + stability commitment | ≥ 3 external adopters with public case studies; 2 consecutive non-breaking releases | 2026-Q4 |
