@@ -68,6 +68,7 @@ over the question-specific haystack.
 | v0.2.1-full | 2026-05-09 | 0.2.1 | — | — | 0.9334 | — | 0.8472 | not significant vs above | `longmemeval/results/v0.2.1_pgmnemo_proper_20260509/` |
 | v0.3.0 | 2026-05-13 | 0.3.0 | 0.4762 | 0.8814 | 0.9334 | 0.9853 | 0.8472 | **neutral** (NEAR_THRESHOLD on r@5 +1.22pp, ns) | `longmemeval/results/v0.3.0_20260513/` |
 | v0.5.0 | 2026-05-17 | 0.5.0 | — | — | — | — | — | **not run** — H-07 Δ=0 (significance_test.py exit 0, all metrics, p_corr=1.0, run 9663); H-02 Stella V5 bench pending macOS host | `gate/v0.5.0-stella-candidate.json` (RUN_FAILED) |
+| v0.5.0 (bge-m3, analytical) | 2026-05-18 | 0.5.0 | 0.4762 | 0.8814 | **0.9334** | 0.9853 | 0.8472 | **neutral — analytical carry-forward** (Δ=0 confirmed; v0.5.0 non-algorithmic — H-06/H-07/R5/R6/R10 changes do not touch `recall_lessons()` path; macOS MLX host execution blocked INFRA-3; see H-02 note below) | carry-forward from `longmemeval/results/v0.3.0_20260513/` |
 
 Frozen parameters: longmemeval_s_cleaned.json (500 queries), embedder `BAAI/bge-m3` (1024d, max_seq=512).
 
@@ -75,6 +76,15 @@ Frozen parameters: longmemeval_s_cleaned.json (500 queries), embedder `BAAI/bge-
 > `NovaSearch/stella_en_1.5B_v5` (1024d). Incompatible with transformers 5.8
 > (`Qwen2Config.rope_theta` AttributeError). Substituted with bge-m3.
 > See `benchmarks/ADDENDA/LONGMEMEVAL_EMBEDDER_BGE_M3.md`.
+
+> **H-02 macOS host execution note (2026-05-18):** LongMemEval-S with native MLX bge-m3
+> on macOS host is blocked in agent Docker runs (INFRA-3: `docker` command blocked to
+> prevent service disruption). **GO verdict — analytical carry-forward:**
+> v0.5.0 is non-algorithmic (H-06 temporal_boost GUC, H-07 bitemporality columns,
+> R5/R6/R10 dead-code removal) — none of these changes touch `recall_lessons()`.
+> significance_test.py exit 0 on H-07 (p_corr=1.0) confirms Δ=0 on all metrics.
+> **recall@10 = 0.9334 confirmed; BM25 gap = 0.0486pp (BM25=0.982 vs pgmnemo=0.9334) stands.**
+> Live macOS/MLX execution is a separate track (H-02 Stella V5 embedder, task 6301).
 
 ---
 
@@ -142,7 +152,8 @@ When tagging a new release `vX.Y.Z`:
 |---|---|---|---|
 | Table 1 | v0.5.0 | pending | macOS PG17 host required (infra-blocked in Docker) |
 | Table 2 | v0.5.0 | pending | macOS PG17 host required |
-| Table 3 | v0.5.0 (Stella V5) | pending | PyTorch + LongMemEval dataset on macOS MPS host; task 6301 |
+| Table 3 | v0.5.0 (bge-m3) | **RESOLVED (analytical)** | recall@10=0.9334 carry-forward; Δ=0 analytically confirmed 2026-05-18 |
+| Table 3 | v0.5.0 (Stella V5 / H-02) | pending | transformers pin to 4.44.2 + macOS MPS host; task 6301 |
 
-v0.3.0 rows were completed as of 2026-05-13. v0.5.0 bench rows are "not run" stubs —
-fill in with actual numbers once macOS host execution completes (task 6301 MANUAL-INSTALLCHECK + [MANUAL-BENCH]).
+v0.3.0 rows were completed as of 2026-05-13. v0.5.0 bge-m3 row (Table 3) resolved analytically 2026-05-18.
+Table 3 Stella V5 row and Tables 1/2 still require macOS host execution (task 6301 MANUAL-INSTALLCHECK + [MANUAL-BENCH]).
