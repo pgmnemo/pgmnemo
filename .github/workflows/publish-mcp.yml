@@ -2,6 +2,7 @@ name: Publish pgmnemo-mcp to PyPI (manual)
 
 # Standalone manual publish workflow.
 # Automated publish on tag is handled by release.yml (publish-mcp job).
+# Uses OIDC trusted publishing — no PYPI_TOKEN secret needed.
 
 on:
   workflow_dispatch:
@@ -10,9 +11,14 @@ on:
         description: 'Package version (must match pgmnemo_mcp/pyproject.toml)'
         required: true
 
+permissions:
+  id-token: write
+  contents: read
+
 jobs:
   publish:
     runs-on: ubuntu-latest
+    environment: pypi
     steps:
       - uses: actions/checkout@v4
 
@@ -22,7 +28,7 @@ jobs:
           python-version: '3.11'
 
       - name: Install build tools
-        run: pip install build twine
+        run: pip install build
 
       - name: Build package
         working-directory: pgmnemo_mcp
@@ -47,7 +53,7 @@ jobs:
           fi
 
       - name: Publish to PyPI
-        if: ${{ secrets.PYPI_TOKEN != '' }}
-        env:
-          PYPI_TOKEN: ${{ secrets.PYPI_TOKEN }}
-        run: twine upload --username __token__ --password "$PYPI_TOKEN" pgmnemo_mcp/dist/* --skip-existing
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: pgmnemo_mcp/dist/
+          skip-existing: true
