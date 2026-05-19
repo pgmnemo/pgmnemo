@@ -1,14 +1,10 @@
 # pgmnemo Positioning
 
-**The write-time gate for agent memory.**
+**Provenance-enforced memory for agents that must cite their sources.**
 
 *Every `ingest()` call is verified against source provenance before the row commits.*
 
 > One Postgres extension. Write-time enforcement at the RLS layer. No extra service.
-
----
-
-**Stage A verdicts applied (WGVC-260518):** Synthesis ratified 2026-05-17 by mentor + growth_lead + chief_architect + research_supervisor consensus. Tagline updated to Candidate A (write-time gate framing). ICP, moat narrative, and competitive positioning approved for public distribution and launch communications.
 
 ---
 
