@@ -1,0 +1,2 @@
+# using postmaster on Unix socket, default port
+# command failed: "/usr/lib/postgresql/17/bin/psql" -X -q -c "SET client_min_messages = warning" -c "DROP DATABASE IF EXISTS \"contrib_regression\"" "postgres"Bail out!
