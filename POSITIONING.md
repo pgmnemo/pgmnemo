@@ -6,7 +6,12 @@
 
 > One Postgres extension. Write-time enforcement at the RLS layer. No extra service.
 
-**Finalized 2026-05-18** · [WGVC-CLOSE-260518] · Approved for public launch
+**Stage A verdicts applied (WGVC-CLOSE-260518).** Mentor approval 2026-05-16 (POS-MENTOR §1 items 1–2):
+- ✅ POSITIONING.md corrected: Constructive AgenticDB (MIT/HNSW/bundled Ollama)
+- ✅ Core differentiator sharpened: write-time enforcement at RLS layer (not just Postgres-native)
+- ✅ Wedge ICP narrowed: citation-grounded agents with compliance requirements
+
+**Status:** Finalized and ready for founder review. Public launch requires founder ACK (P0).
 
 ---
 
