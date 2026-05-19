@@ -1,4 +1,5 @@
 # pgmnemo Positioning
+**FINAL — Stage A Verdicts Applied (WGVC-CLOSE-260518)**
 
 **The write-time gate for agent memory.**
 
