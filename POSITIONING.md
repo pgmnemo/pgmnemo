@@ -1,6 +1,6 @@
 # pgmnemo Positioning
 
-**Provenance-enforced memory for agents that must cite their sources.**
+**The write-time gate for agent memory.**
 
 *Every `ingest()` call is verified against source provenance before the row commits.*
 
@@ -8,7 +8,7 @@
 
 ---
 
-**Stage A verdicts applied (WGVC-260518):** Synthesis ratified 2026-05-17 by consensus across POS-VC / POS-MARKET / POS-WEDGE / POS-DEFENSE / POS-DATA. D1 tagline (POS-WEDGE primary), D2 two-track funding strategy, D3 TAM/SOM adoption. Approved for public distribution and launch communications.
+**Stage A verdicts applied (WGVC-260518):** Synthesis ratified 2026-05-17 by mentor + growth_lead + chief_architect + research_supervisor consensus. Tagline updated to Candidate A (write-time gate framing). ICP, moat narrative, and competitive positioning approved for public distribution and launch communications.
 
 ---
 
