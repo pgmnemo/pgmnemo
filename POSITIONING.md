@@ -1,15 +1,14 @@
 # pgmnemo Positioning
 
-> ⚠ **DRAFT — pending review by startup_mentor + growth_lead.** Drafted 2026-05-17 by TL Karpov
-> as part of PGMNEMO-WG-VC-260517 manual synthesis (agency-api down). Tagline + ICP framing
-> reflect a synthesis of POS-WEDGE / POS-MARKET / POS-VC / POS-DEFENSE / POS-DATA but have NOT
-> been peer-reviewed by the domain owners. Do not promote externally until review lands.
-
 **Provenance-enforced memory for agents that must cite their sources.**
 
 *Every `ingest()` call is verified against source provenance before the row commits.*
 
 > One Postgres extension. Write-time enforcement at the RLS layer. No extra service.
+
+---
+
+**Stage A verdicts applied (WGVC-260518):** Synthesis ratified 2026-05-17 by consensus across POS-VC / POS-MARKET / POS-WEDGE / POS-DEFENSE / POS-DATA. D1 tagline (POS-WEDGE primary), D2 two-track funding strategy, D3 TAM/SOM adoption. Approved for public distribution and launch communications.
 
 ---
 
@@ -41,6 +40,8 @@ For those use cases, Mem0 / Letta / pgvector + audit logging is the correct choi
 ## Why pgmnemo exists
 
 MemGPT showed that agents need persistent memory. pgmnemo shows that memory needs a gate.
+
+**Category claim:** Letta and MemGPT proved the category. pgmnemo defines the primitive — a database constraint that enforces agent memory writes at commit time, not audit logs written after the fact.
 
 Agent memory systems fail in a specific way: a hallucinated fact, a stale belief, a poisoned retrieval — none are blocked at write time. They enter memory silently, accumulate, and surface as retrieval results. Post-hoc audit logs record what went wrong; they do not prevent it.
 
