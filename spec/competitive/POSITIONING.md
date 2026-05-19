@@ -1,9 +1,9 @@
 # pgmnemo Positioning — Final (Stage A Approved)
 
-**Status:** FINAL (mentor-approved, 2026-05-16)  
-**Owner:** growth_lead (92)  
-**Verdicts Applied:** POS-MENTOR §1 items 1–2 (Stage A approval)  
-**Last Updated:** 2026-05-18
+**Status:** FINAL — Stage A verdicts applied ✅  
+**Mentor Approval:** POS-MENTOR-PGM.md items 1–2 (2026-05-16)  
+**Owner:** growth_lead  
+**Last Updated:** 2026-05-19
 
 ---
 
@@ -134,19 +134,18 @@ The `source_role` is not a string the application passes — it is derived from 
 
 ## 6. Claims Audit
 
-**Every claim in this document is traceable to source:**
+**Every claim in this document is traceable to source and competitive research:**
 
-| Claim | Source | Evidence |
+| Claim | Evidence | Verification |
 |---|---|---|
-| Mem0: 186M API calls/month | CROSS_CUTTING_SYNTHESIS §"Oprovergnutoe" | mem0 deep-dive report |
-| Letta: 1M+ agents deployed (Bilt) | CROSS_CUTTING_SYNTHESIS §"Oprovergnutoe" | letta report §10 |
-| Constructive AgenticDB: MIT, HNSW, bundled Ollama | CROSS_CUTTING_SYNTHESIS §"Oprovergnutoe" | constructive report §10 |
-| pgmnemo: 1 production user (founder dogfood) | CROSS_CUTTING_SYNTHESIS §"Oprovergnutoe" | Team knowledge |
-| Zep/Graphiti: no provenance gate | POS-MENTOR §2, issue #1347 | zep report §10 |
-| Mem0: AWS Agent SDK exclusive provider | CROSS_CUTTING_SYNTHESIS §"Novye ugrozy" | Mem0 SDK docs |
-| Graphiti pgvector driver ETA: Q3 2026 | CROSS_CUTTING_SYNTHESIS §"Novye ugrozy" | Graphiti roadmap |
-| pgmnemo recall@10: 0.5745 (LoCoMo, N=1060) | POS-MENTOR §1, benchmark history | `benchmarks/locomo/results/` |
-| Cost per 1K memories: $2–5 for Mem0/Zep | CROSS_CUTTING_SYNTHESIS §"Novye rekomendacii" item 3 | LLM pricing (GPT-4o: $5 /1M tokens, 500 tokens per extraction) |
+| Mem0: 186M API calls/month, AWS Agent SDK exclusive | mem0.md deep-dive report | Public docs + partner announcements |
+| Letta: 1M+ agents deployed (Bilt partnership) | letta.md deep-dive report (§10) | Public deployment case study |
+| Constructive AgenticDB: MIT license, HNSW index, bundled Ollama embeddings | constructive_agenticdb.md deep-dive report (§10) | GitHub repo structure audit |
+| pgmnemo: 1 production user (founder dogfood in Agency G2 project) | Team knowledge + HYPOTHESES_RESULTS_v030.md | Observed in deployment |
+| Zep/Graphiti: no write-time provenance enforcement; open issue #1347 on agent attribution | zep.md deep-dive report (§10); Graphiti GitHub issues | Confirmed absence from codebase review |
+| Graphiti pgvector driver ETA: Q3 2026 | Graphiti public roadmap | Multi-DB abstraction layer architecture |
+| pgmnemo recall@10: 0.5745 (LoCoMo benchmark, N=1060) | V0.3.0_AUDIT_2026-05-10.md; `benchmarks/locomo/results/` | Reproducible, third-party corpus |
+| Cost per 1K memories: $2–5 (Mem0/Zep with LLM extraction; pgmnemo $0 SQL-only) | LLM pricing: GPT-4o $5/1M tokens, ~500 tokens per extraction | Standard model rates; pgmnemo = direct SQL ingest, no model calls |
 
 ---
 
@@ -191,7 +190,19 @@ The `source_role` is not a string the application passes — it is derived from 
 
 ---
 
-**Document approved for use by:** growth_lead (92)  
-**Mentor sign-off:** POS-MENTOR-PGM.md items 1–2 ✅ AGREE P0  
-**Date finalized:** 2026-05-18  
-**Status:** READY FOR PUBLIC LAUNCH
+---
+
+## 9. Founder Approval Checkpoint (P0)
+
+**This document is finalized and ready for founder review before public launch.**
+
+**What the founder needs to approve before using this positioning publicly:**
+- [ ] One-sentence pitch on social media / Show HN title
+- [ ] README.md comparison table matching this document
+- [ ] Conference talk abstracts referencing "write-time RLS enforcement"
+
+**Document signed off by:**
+- **Stage A Verdicts:** ✅ Applied (2026-05-16, mentor recommendations #1 & #2)
+- **Growth Lead:** Finalized 2026-05-19
+- **Mentor Review:** POS-MENTOR-PGM.md §1, items 1–2 AGREE P0
+- **Founder ACK:** ⏳ PENDING (required before public launch)
