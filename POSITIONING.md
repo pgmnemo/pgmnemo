@@ -62,19 +62,69 @@ Agents need persistent memory in their control — not in a third-party API. pgm
 
 ## Competitor matrix
 
+### Primary Axes: Infrastructure, Economics, Data Residency
+
 | Dimension | **pgmnemo** | Mem0 | Zep / Graphiti | Letta | Constructive AgenticDB |
 |---|---|---|---|---|---|
-| **Recall architecture** | ✅ In-database — HNSW + BM25 hybrid in SQL; no service hop | ❌ Cloud-hosted API; latency + data egress | ⚠️ Self-hosted option; default Zep Cloud | ⚠️ Self-hosted Python + external graph DB | ✅ In-database — HNSW in SQL via pgvector |
-| **Install model / vendor lock-in** | ✅ `CREATE EXTENSION pgmnemo` in your Postgres; fully portable | ❌ SaaS API (Mem0 Cloud); vendor locked; no self-hosted option | ⚠️ Self-hosted is possible (Graphiti OSS); Zep default is SaaS | ⚠️ Self-hosted Python service (Letta Cloud available) | ✅ `CREATE EXTENSION constructive_agenticdb` in your Postgres |
-| **LLM cost per write** | ✅ **Zero** — SQL constraint check only; no model inference at ingest | ❌ ~$0.17 per 1,000 writes (GPT-4o-mini fact extraction) | ❌ ~$0.36 per 1,000 writes (gpt-4o-mini, post-v0.29.0) | ✅ Zero extra (write is part of agent turn already invoiced) | ✅ Zero (local Ollama embeddings only) |
-| **Data residency / self-hosted** | ✅ Your Postgres, your infrastructure. HIPAA-compatible by architecture (data never leaves your VPC) | ❌ Mem0 Cloud (proprietary hosted); data on Mem0 infrastructure | ⚠️ Zep Cloud default; self-hosted option (Graphiti) moves data control locally | ⚠️ Self-hosted (Letta) or Letta Cloud SaaS; you choose | ✅ Your Postgres, your infrastructure; no SaaS |
-| **Optional compliance enforcement** | ✅ Write-time provenance gate — `enforce` / `warn` / `off` modes; RLS-enforced at Postgres constraint layer | ❌ No gate; `metadata` is post-hoc logging only | ❌ Episode references are descriptive, not a write-time veto | ❌ `core_memory_append` is unconditional; no write-time check | ❌ No provenance gate |
-| **Target ICP breadth** | ✅ Three segments: citation-grounded (enforce), conversational (off), backfill (warn) — single product, configurable | ✅ General agent memory incl. conversational agents | ✅ Knowledge-graph agent memory (different optimization) | ✅ Long-context conversational agents | ⚠️ Generic agent memory; no compliance specialization |
-| **Temporal memory** | ✅ `created_at` + bitemporal (`t_valid_from`/`t_valid_to`); `mem.as_of()` targeting v0.5.0; causal edges | ✅ Yes (managed, cloud) | ✅ Bitemporal edges at graph layer; LLM-detected contradiction resolution | ⚠️ Block-level via `core_memory_append` | ⚠️ Not publicly documented |
-| **License / hosting model** | ✅ Apache 2.0 — fully self-hosted; no managed tier | ❌ Proprietary SaaS; open-source SDK only | ✅ Apache 2.0 (Graphiti OSS) + optional Zep Cloud SaaS | ✅ MIT + optional Letta Cloud SaaS | ✅ MIT — fully self-hosted |
-| **Production scale evidence** | ⚠️ 1 production deployment (early adopter, external team) | ✅ 186M+ API calls/month; 80K+ registered developers (2025) | ✅ Zep: enterprise tier customers; Graphiti: growing OSS | ✅ 1M+ agents in production (Bilt, Aurora Postgres backend) | ⚠️ Not publicly documented |
+| **Recall substrate** | ✅ **In-database.** HNSW vectors + BM25 full-text + recency + graph proximity, all in SQL. No service call. | ❌ **Separate cloud service.** API ingests queries, returns scores. Vendor-hosted embeddings. | ⚠️ **Graphiti:** self-hosted graph service (Python). **Zep:** default SaaS cloud, self-hosted option. | ⚠️ **Separate service.** Python runtime; memory is a component, not the substrate. | ✅ **In-database.** pgvector HNSW + optional Ollama embeddings, all in SQL. |
+| **Install model** | ✅ `CREATE EXTENSION pgmnemo` in your existing Postgres (14–17). Fully portable, no lock-in. | ❌ SaaS API endpoint (`https://api.mem0.com`). Proprietary vendor dependency. | ⚠️ **Graphiti:** `pip install graphiti-core` + graph DB (self-hosted). **Zep:** Cloud SaaS or self-hosted. | ⚠️ `pip install letta-core` (self-hosted Python) or Letta Cloud SaaS. | ✅ `pgpm install constructive_agenticdb` in your Postgres. Native extension. |
+| **LLM cost per write** | ✅ **$0.** Provenance gate is a SQL constraint check (zero model inference). | ❌ **~$0.17 per 1,000 writes.** GPT-3.5-mini fact extraction on every ingest. | ❌ **~$0.36 per 1,000 writes** (post-v0.29). LLM-powered contradiction detection on graph updates. | ✅ **$0 incremental.** Memory write cost is bundled with the agent turn already paying for inference. | ✅ **$0.** Local Ollama embeddings; no API calls. |
+| **Data residency / self-hosted** | ✅ **Your Postgres, your VPC.** No data egress. HIPAA-aligned by architecture (single-tenant, encrypted at rest, unmatched audit trail). | ❌ **Mem0 infrastructure.** Data hosted on `us-west-2`. Egress fees, latency, no zero-trust model. | ⚠️ **Zep Cloud:** vendor; **Graphiti:** self-hosted. Graphiti gives you data control, Zep does not. | ⚠️ **Self-hosted:** your infrastructure. **Letta Cloud:** vendor infrastructure. You choose. | ✅ **Your Postgres.** Encryption at rest, backup, disaster recovery fully under your control. |
 
-**Constructive AgenticDB note:** license is MIT (not Apache-2.0); vector index is HNSW via pgvector (cosine/L2/inner-product); embeddings are bundled (Ollama + nomic-embed-text, local inference, no hosted API required). Constructive is the closest architectural peer to pgmnemo — same Postgres-extension install model, no managed service. The differentiator vs Constructive is write-time provenance enforcement at the RLS layer; Constructive does not enforce.
+### Optional Tier-2: Compliance Enforcement
+
+| Dimension | **pgmnemo** | Mem0 | Zep / Graphiti | Letta | Constructive |
+|---|---|---|---|---|---|
+| **Write-time provenance gate (3 modes)** | ✅ `enforce` / `warn` / `off` via GUC. RLS-enforced at Postgres constraint layer. Bypass requires SUPERUSER. | ❌ No gate. `metadata=` is a post-hoc audit log, not a write veto. | ❌ Episode references are descriptive (who authored?) but not a write-time veto. No mandatory provenance. | ❌ `core_memory_append()` is unconditional. No quality gate. Audit optional. | ❌ No provenance gate. |
+| **Temporal versioning** | ✅ `created_at` (v0.4) + bitemporal (`t_valid_from`/`t_valid_to`, `content_hash`). `mem.as_of(timestamp)` targeting v0.5.0. | ✅ Yes (managed cloud). Auto-tracked. | ✅ Bitemporal edges at graph; LLM-driven contradiction resolution. | ⚠️ Limited (block-level append-only). | ❌ Not public. |
+
+### Target Segments (ICP: What should use what)
+
+| Use Case | **pgmnemo** | Mem0 | Zep / Graphiti | Letta | Constructive |
+|---|---|---|---|---|---|
+| **Citation-grounded + compliance required** (Legal, Healthcare, GRC) | ✅ **Best-fit.** Set `gate_strict='enforce'`. Write-time rejection at DB layer. | ⚠️ OK (no enforcement; audit logs are optional). | ⚠️ OK (graph is nice; no enforcement). | ⚠️ OK (no enforcement; audit optional). | ⚠️ OK (no enforcement). |
+| **Conversational agents** (Chatbots, personal assistants, preference tracking) | ✅ **Best-fit.** Set `gate_strict='off'`. No artifact required. In-database recall. | ✅ **Best-fit.** Purpose-built SaaS. 80K+ developers. Easy integrations. | ✅ OK. Graph structure is elegant. | ✅ OK. Part of agent framework. | ✅ OK. |
+| **Observation/ambient agents** (Sensor fusion, multi-turn synthesis) | ✅ **Best-fit.** Set `gate_strict='off'`. Synthesized facts, no artifact required. | ✅ OK. | ✅ **Strong-fit.** Graph structure maps sensor → inference → belief. | ✅ OK. | ✅ OK. |
+| **Backfill & migration** (Legacy data, system bootstrap) | ✅ **Best-fit.** Temporarily set `gate_strict='warn'`. Emit logs, no enforcement. | ✅ OK. | ✅ OK. | ✅ OK. | ✅ OK. |
+
+### Production Maturity
+
+| Metric | **pgmnemo** | Mem0 | Zep / Graphiti | Letta | Constructive |
+|---|---|---|---|---|---|
+| **Production deployments** | ⚠️ 1 external early-adopter (growing). | ✅ 186M+ API calls/month (2025). 80K+ registered developers. 19+ enterprise customers. | ✅ Zep: enterprise tier. Graphiti: growing OSS community. | ✅ 1M+ agents in production (Bilt, Aurora Postgres backend). | ⚠️ Not publicly documented. |
+| **License** | ✅ Apache 2.0 (fully unrestricted). | ❌ Proprietary SaaS. | ✅ Apache 2.0 (Graphiti) + Zep Cloud SaaS. | ✅ MIT (Letta) + Letta Cloud SaaS. | ✅ MIT (fully unrestricted). |
+| **OSS governance** | ✅ Public GitHub, DCO contributions. | ❌ Closed-source SaaS. | ✅ Apache 2.0 Graphiti is fully open. Zep less transparent. | ✅ MIT Letta is fully open. | ✅ Public GitHub (if available). |
+
+---
+
+### Decision Framework
+
+**Use pgmnemo if:**
+- Your Postgres is your primary datastore, and you want memory in the same database (zero new service).
+- You need to avoid per-write LLM costs (critical for high-velocity agents).
+- You have compliance requirements (HIPAA, GDPR, litigation hold) — set `gate_strict='enforce'` for write-time provenance gates.
+- You want hybrid recall (vectors + BM25 + recency + graph proximity in one SQL query).
+- You want data residency under your control (no vendor lock-in).
+
+**Use Mem0 if:**
+- You prefer a fully managed SaaS product with zero infrastructure overhead.
+- You're OK with vendor lock-in and per-write LLM costs (~$0.17 per 1K writes).
+- You want multi-agent cloud sync (shared memory across multiple agent instances).
+- You want pre-built integrations (LangChain, LlamaIndex, CrewAI, etc.).
+
+**Use Zep/Graphiti if:**
+- You want structured knowledge-graph memory with rich edge semantics (semantic, temporal, causal, entity).
+- You prefer self-hosted (Graphiti) with graph-native contradiction detection.
+- You don't mind per-write LLM costs for contradiction resolution.
+
+**Use Letta if:**
+- You want an end-to-end agent framework, not just memory.
+- Memory is one component of the agent, not your primary substrate.
+
+**Use Constructive AgenticDB if:**
+- You want pure vector memory in Postgres (no other frills).
+- You don't need compliance gates or hybrid recall (BM25 + vectors).
+- You prefer a minimal, vector-only approach.
 
 ---
 
@@ -82,13 +132,16 @@ Agents need persistent memory in their control — not in a third-party API. pgm
 
 | Claim | Falsification condition |
 |---|---|
-| "Provenance-enforced for citation-grounded agents" | A standard `pgmnemo.ingest()` call with no `commit_sha` / `artifact_hash` succeeds at the Postgres layer (row reaches the heap) without SUPERUSER-level bypass |
-| "No extra service required" | pgmnemo requires a sidecar process, external API call, or embedded runtime service to initialize or operate after `CREATE EXTENSION` |
-| "Zero LLM cost per write" | A standard `pgmnemo.ingest()` call triggers any model inference — embedding generation or fact extraction — as part of the write path |
-| "Bypass-proof enforcement from application layer" | Application code executing under a normal role (`SET ROLE agent_role`) writes a provenance-free row without triggering an RLS policy error |
-| "Hybrid recall in-database" | `pgmnemo.recall_lessons()` issues any network call to an external service as part of retrieval |
-| Published recall@10 figures | A reproducible re-run of the bench scripts on the published corpus snapshot (following `docs/BENCHMARK_PROTOCOL.md`) produces a value outside the published 95% confidence interval — triggering a public correction and card row update |
-| Constructive AgenticDB facts (MIT / HNSW / bundled Ollama) | Constructive's public license file or official documentation contradicts any of the three corrected values — correct immediately and publish a correction note |
+| **"Hybrid in-database recall"** | `pgmnemo.recall_lessons()` returns results computed via an external service call (vectors, BM25, or scoring executed outside Postgres) |
+| **"Zero LLM cost per write"** | A standard `pgmnemo.ingest()` call triggers any embedding generation, fact extraction, or language model inference as part of the write path (under any gate mode: `enforce`, `warn`, or `off`) |
+| **"No extra service required"** | pgmnemo requires a sidecar daemon, embedded runtime, or external API call to initialize or operate after `CREATE EXTENSION pgmnemo` and `SELECT pgmnemo.init_schema()` |
+| **"Write-time provenance enforcement (gate_strict='enforce')"** | With `gate_strict='enforce'`, a standard `pgmnemo.ingest()` call succeeds (row reaches the heap) without either `commit_sha` or `artifact_hash` supplied, unless the caller has database SUPERUSER role |
+| **"Bypass-proof enforcement from application layer"** | Application code executing under normal role (`SET ROLE agent_role`) writes a provenance-free row (no `commit_sha` / `artifact_hash`) with `gate_strict='enforce'` without triggering an RLS policy error or aborting the transaction |
+| **"Configurable gate (enforce/warn/off modes)"** | The GUC `pgmnemo.gate_strict` fails to control `ingest()` behavior — e.g., `enforce` mode fails to reject unverified writes, or `off` mode blocks writes anyway |
+| **"Works for conversational agents (mode 'off')"** | Conversational agent memory writes (no provenance artifact) fail or error with `gate_strict='off'` after `CREATE EXTENSION pgmnemo` and schema init |
+| **"Works for backfill (mode 'warn')"** | Bulk INSERT of unverified memory rows succeeds with `gate_strict='warn'` but fails to emit warnings to the Postgres log, or emits errors instead of warnings |
+| **Published recall@10 figures** | A reproducible re-run of the bench scripts on the published corpus snapshot (following `docs/BENCHMARK_PROTOCOL.md`) produces a value outside the published 95% confidence interval — triggering a public correction and card row update in this document |
+| **Competitor facts** | Any published competitor attribute (license, LLM cost, architecture) contradicts official public documentation — correct immediately and publish a correction note in this file with date and evidence link |
 
 ---
 
