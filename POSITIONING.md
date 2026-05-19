@@ -1,7 +1,7 @@
 # pgmnemo Positioning
 **FINAL — Stage A Verdicts Applied (WGVC-CLOSE-260518)**
 
-**The write-time gate for agent memory.**
+**Provenance-enforced memory for agents that must cite their sources.**
 
 *Every `ingest()` call is verified against source provenance before the row commits.*
 
