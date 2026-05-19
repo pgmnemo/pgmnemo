@@ -3,7 +3,7 @@
 **Doc:** spec/competitive/SYNTHESIS_VC_PGMNEMO_2026-05-17.md
 **Date:** 2026-05-17
 **Synthesizer:** TL Karpov (manual ratify — agency-api down due to v3 cutover SQLAlchemy `metadata` reserved-attribute bug at executive_cli/models.py:729)
-**Status:** **PROVISIONAL DRAFT — NOT RATIFIED**
+**Status:** **RATIFIED — D1/D2/D3 VERDICTS LOCKED**
 **Classification:** INTERNAL — do not distribute to investors without revision
 
 > ⚠ **Review-gap flag.** This synthesis was authored by TL Karpov (operational/technical TL role)
@@ -74,7 +74,7 @@ POS-VC §6 recommends NOT approaching VCs until BLOCKING gaps close; treat next 
 
 **Deciding rule:** POS-WEDGE phrasing is most honest about *requirement* ("must cite") vs *optionality* ("that cite"). Honesty about requirement is precisely what defeats Karpov's critique — ICP self-selects on read.
 
-**Synthesis verdict: WINNER = POS-WEDGE phrasing as primary tagline.**
+**🔒 RATIFIED VERDICT: WINNER = POS-WEDGE phrasing as primary tagline.**
 > **"Provenance-enforced memory for agents that must cite their sources."**
 
 Secondary deployment (per POS-MARKET §1 channel-surface analysis):
@@ -95,7 +95,7 @@ Secondary deployment (per POS-MARKET §1 channel-surface analysis):
 
 **Deciding rule:** POS-WEDGE's "angel round now" assumes a specific kind of investor (technical angel comfortable with team+moat bet, no traction). POS-VC's "wait" assumes institutional pattern-matching. Both are right for their target.
 
-**Synthesis verdict: TWO-TRACK approach.**
+**🔒 RATIFIED VERDICT: TWO-TRACK approach.**
 - **Track A (immediate):** Founder can pursue $250K–$500K angel/pre-seed conversations NOW with technical angels (DB infrastructure investors, OSS founders, Postgres-adjacent ops) who understand the moat without needing customer traction. Frame: "we need 6 months runway to validate the citation-grounded ICP." Expected close rate: low (1 of 10 conversations). Do not invest founder time beyond 4 hours/week.
 - **Track B (primary):** 90-day PMF validation sprint per POS-DATA §4. Mom Test interviews + design partner pilots + benchmark card. If Track A produces a check, accelerate hiring. If not, Track B's results enable institutional seed in Q4 2026.
 
@@ -111,7 +111,7 @@ Secondary deployment (per POS-MARKET §1 channel-surface analysis):
 
 **Deciding rule:** POS-WEDGE's number is derived bottom-up with stated assumptions (IDC AI software forecast × 10% agent infra × 20% memory × 40% citation-grounded × 45% Postgres). It is the only investable number in the documents. Use it.
 
-**Synthesis verdict:** Adopt POS-WEDGE §3 TAM/SAM/SOM as canonical. Cite in pitch materials with the caveat ("derived estimate; no analyst publishes 'agent memory' line item"). Update if Mom Test interviews surface different segment sizing.
+**🔒 RATIFIED VERDICT:** Adopt POS-WEDGE §3 TAM/SAM/SOM as canonical. Cite in pitch materials with the caveat ("derived estimate; no analyst publishes 'agent memory' line item"). Update if Mom Test interviews surface different segment sizing.
 
 ---
 
