@@ -6,9 +6,7 @@
 
 > One Postgres extension. Write-time enforcement at the RLS layer. No extra service.
 
----
-
-**Stage A verdicts applied (WGVC-260518):** Synthesis ratified 2026-05-17 by consensus (mentor + growth_lead + chief_architect + research_supervisor). Tagline winner: Candidate A (D1 verdict). P0 deliverables: POSITIONING.md corrected (Constructive AgenticDB: MIT/HNSW/bundled Ollama), tagline updated to write-time gate framing. P1 items: cost-per-1K-memories table (due 2026-05-30), pgpm channel parity (due 2026-08-15), benchmark card (due 2026-07-15). Approved for public distribution and launch communications.
+**Finalized 2026-05-18** · [WGVC-CLOSE-260518] · Approved for public launch
 
 ---
 
