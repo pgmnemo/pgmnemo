@@ -6,8 +6,6 @@
 
 > One Postgres extension. Write-time enforcement at the RLS layer. No extra service.
 
-*Positioning finalized 2026-05-16. Public launch requires founder ACK (P0).*
-
 ---
 
 ## Who this is for
