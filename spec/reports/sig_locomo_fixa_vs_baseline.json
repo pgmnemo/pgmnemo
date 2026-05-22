@@ -1,0 +1,78 @@
+{
+  "baseline": "/external-repos/pgmnemo/benchmarks/locomo/results/fix_a_bench/baseline_fusion/metrics.json",
+  "candidate": "/external-repos/pgmnemo/results/v060_locomo/metrics.json",
+  "regression_pp_threshold": 1.0,
+  "cells": [
+    {
+      "scope": "OVERALL",
+      "metric": "recall@1",
+      "n_base": 1982,
+      "n_cand": 1982,
+      "mean_base": 0.5847,
+      "mean_cand": 0.5614,
+      "delta": -0.023299999999999987,
+      "z": -1.4771354185441146,
+      "p_raw": 0.13963934102644304,
+      "p_corr": 0.6981967051322152,
+      "verdict": "NEAR_THRESHOLD"
+    },
+    {
+      "scope": "OVERALL",
+      "metric": "recall@5",
+      "n_base": 1982,
+      "n_cand": 1982,
+      "mean_base": 0.833,
+      "mean_cand": 0.8248,
+      "delta": -0.008199999999999985,
+      "z": -0.674898058942267,
+      "p_raw": 0.4997405338294307,
+      "p_corr": 1.0,
+      "verdict": "neutral"
+    },
+    {
+      "scope": "OVERALL",
+      "metric": "recall@10",
+      "n_base": 1982,
+      "n_cand": 1982,
+      "mean_base": 0.905,
+      "mean_cand": 0.9035,
+      "delta": -0.0015000000000000568,
+      "z": -0.16204061866708852,
+      "p_raw": 0.871273867460642,
+      "p_corr": 1.0,
+      "verdict": "neutral"
+    },
+    {
+      "scope": "OVERALL",
+      "metric": "recall@25",
+      "n_base": 1982,
+      "n_cand": 1982,
+      "mean_base": 0.9879,
+      "mean_cand": 0.9874,
+      "delta": -0.0004999999999999449,
+      "z": -0.14374836036260985,
+      "p_raw": 0.885699181689782,
+      "p_corr": 0.885699181689782,
+      "verdict": "neutral"
+    },
+    {
+      "scope": "OVERALL",
+      "metric": "mrr",
+      "n_base": 1982,
+      "n_cand": 1982,
+      "mean_base": 0.7412,
+      "mean_cand": 0.7244,
+      "delta": -0.016799999999999926,
+      "z": -1.1845672307295723,
+      "p_raw": 0.23618859980018048,
+      "p_corr": 0.9447543992007219,
+      "verdict": "NEAR_THRESHOLD"
+    }
+  ],
+  "summary": {
+    "n_cells": 5,
+    "n_regression": 0,
+    "n_improvement": 0,
+    "n_near_threshold": 2
+  }
+}
