@@ -96,7 +96,8 @@ BEGIN
     WITH
     -- Step 1: union candidates from dense ANN + BM25 sparse
     raw_candidates AS (
-        -- Dense branch
+        -- Dense branch (parenthesised to allow ORDER BY + LIMIT before UNION ALL)
+        (
         SELECT
             al.id,
             al.role, al.project_id, al.topic, al.lesson_text,
@@ -118,10 +119,12 @@ BEGIN
           AND (_as_of_ts IS NOT NULL OR al.t_valid_to = 'infinity'::TIMESTAMPTZ)
         ORDER BY al.embedding <=> query_embedding
         LIMIT GREATEST(k * 5, 50)
+        )
 
         UNION ALL
 
         -- BM25 sparse branch
+        (
         SELECT
             al.id,
             al.role, al.project_id, al.topic, al.lesson_text,
@@ -142,6 +145,7 @@ BEGIN
           )
           AND (_as_of_ts IS NOT NULL OR al.t_valid_to = 'infinity'::TIMESTAMPTZ)
         LIMIT GREATEST(k * 5, 50)
+        )
     ),
     -- Step 2: aggregate per-id, compute RRF ranks
     deduped AS (
@@ -726,3 +730,26 @@ COMMENT ON FUNCTION pgmnemo.ingest(TEXT, INT, TEXT, TEXT, SMALLINT, vector, TEXT
     'On idempotent re-run (same args): NOTICE fires again if prior row was already closed+recreated. '
     'Truncates p_lesson_text to pgmnemo.max_query_text_chars (default 2000) with RAISE NOTICE. '
     'R5 (v0.5.0).';
+
+-- ─── R9: recall hit-count metric view ────────────────────────────────────────
+-- Agency RFC R9 (deferred from v0.4.1). Requires track_functions = 'pl' or
+-- 'all' in postgresql.conf; rows only appear after the first call post-reset.
+
+CREATE OR REPLACE VIEW pgmnemo.recall_stats AS
+SELECT
+    n.nspname   AS schema,
+    p.proname   AS function_name,
+    s.calls,
+    s.total_time,
+    s.self_time,
+    NOW()       AS observed_at
+FROM pg_stat_user_functions s
+JOIN pg_proc      p ON p.oid = s.funcid
+JOIN pg_namespace n ON n.oid = p.pronamespace
+WHERE n.nspname = 'pgmnemo'
+  AND p.proname IN ('recall_lessons', 'recall_hybrid', 'ingest');
+
+COMMENT ON VIEW pgmnemo.recall_stats IS
+    'Observability view for recall/ingest call counts (R9, v0.6.0). '
+    'Requires track_functions = ''pl'' or ''all'' in postgresql.conf. '
+    'Rows appear only after first call following a pg_stat_reset().';
