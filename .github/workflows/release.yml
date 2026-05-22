@@ -198,6 +198,13 @@ jobs:
           fi
 
   # ─── Job 4: publish pgmnemo-mcp to PyPI ────────────────────────────────────
+  # Two auth paths:
+  #   Path A — OIDC Trusted Publisher (no secret needed, more secure):
+  #     Configure once at pypi.org/manage/account/publishing/ → "Add pending publisher"
+  #     Fields: project=pgmnemo-mcp, owner=pgmnemo, repo=pgmnemo,
+  #             workflow=release.yml, environment=pypi
+  #   Path B — API token (classic): add PYPI_API_TOKEN secret to this GitHub repo.
+  #     When PYPI_API_TOKEN is set it overrides OIDC automatically.
   publish-mcp:
     needs: [installcheck, bench-gate]
     runs-on: ubuntu-latest
@@ -225,3 +232,6 @@ jobs:
         with:
           packages-dir: pgmnemo_mcp/dist/
           skip-existing: true
+          # Path B: if PYPI_API_TOKEN secret exists it takes priority over OIDC.
+          # Path A: leave empty — OIDC token used automatically.
+          password: ${{ secrets.PYPI_API_TOKEN }}
