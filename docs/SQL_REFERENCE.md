@@ -1,6 +1,6 @@
 # pgmnemo SQL Reference
 
-**Version coverage:** v0.5.0 (current)  
+**Version coverage:** v0.6.0 (current)  
 **Status:** authoritative — function signatures here match `extension/pgmnemo--*.sql`.
 
 For usage patterns and worked examples see `USAGE.md`; for upgrade paths see
@@ -204,17 +204,29 @@ Provenance gate behavior set by GUC `pgmnemo.gate_strict`:
 - `warn`: succeed, emit WARNING, leave `verified_at` NULL
 - `off`: no check (development only)
 
+**Bitemporal dedup NOTICE (v0.6.0, Agency RFC Q5):** When an `INSERT` triggers
+the `trg_agent_lesson_bitemporal_close` trigger (same `content_hash` as an active
+row), `ingest()` emits:
+```
+NOTICE: pgmnemo.ingest: bitemporal close+create fired — closed N prior version(s)
+        (content_hash=<hash>). New lesson_id=<id>. Prior row(s) now have t_valid_to=NOW().
+```
+This is informational only. The trigger is the authoritative dedup mechanism;
+the `NOTICE` adds caller-visible observability.
+
 ### 2.3 `pgmnemo.recall_lessons(...)`
 
-Default retrieval path. Hybrid dense+text with paper §6.4 scoring.
+Default retrieval path. Hybrid dense+text with Fix-A RRF ranking (v0.6.0) and
+optional point-in-time temporal scoping.
 
 ```sql
 pgmnemo.recall_lessons(
     query_embedding   vector(1024),     -- pass NULL for text-only
-    k                 INT     DEFAULT 10,
-    role_filter       TEXT    DEFAULT NULL,
-    project_id_filter INT     DEFAULT NULL,
-    query_text        TEXT    DEFAULT NULL
+    k                 INT          DEFAULT 10,
+    role_filter       TEXT         DEFAULT NULL,
+    project_id_filter INT          DEFAULT NULL,
+    query_text        TEXT         DEFAULT NULL,
+    as_of_ts          TIMESTAMPTZ  DEFAULT NULL  -- v0.6.0: point-in-time scope
 ) RETURNS TABLE (
     lesson_id     BIGINT,
     score         DOUBLE PRECISION,
@@ -231,21 +243,48 @@ pgmnemo.recall_lessons(
     -- v0.4.1+ diagnostic columns (appended; named-column callers unaffected):
     vec_score     DOUBLE PRECISION,   -- cosine similarity component (NULL on text-only path)
     bm25_score    DOUBLE PRECISION,   -- BM25 ts_rank_cd component (NULL on vector-only path)
-    rrf_score     DOUBLE PRECISION    -- reciprocal rank fusion score (NULL on vector-only path)
+    rrf_score     DOUBLE PRECISION    -- RRF score (NULL on vector-only path)
 )
 ```
 
-**Scoring formula (paper §6.4, locked):**
+**Parameters:**
+
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `query_embedding` | `vector(1024)` | — | Dense query vector. Pass `NULL` for text-only recall. |
+| `k` | `INT` | `10` | Maximum results to return. |
+| `role_filter` | `TEXT` | `NULL` | Restrict to lessons with this role. NULL = all roles. |
+| `project_id_filter` | `INT` | `NULL` | Restrict to a tenant/project. NULL = all projects. |
+| `query_text` | `TEXT` | `NULL` | Text for BM25 hybrid path. Requires `query_embedding` to activate hybrid routing. |
+| `as_of_ts` | `TIMESTAMPTZ` | `NULL` | **(v0.6.0)** Point-in-time scope. When set, restricts candidates to lessons where `t_valid_from ≤ as_of_ts < t_valid_to`. NULL = current active lessons only. |
+
+**Scoring (hybrid path, Fix-A v0.6.0):**
+```
+score = (rrf_diag / norm_denom)       -- Fix-A: normalized RRF (Cormack 2009)
+      + 0.05 × (importance / 5)
+      + 0.05 × recency_decay(90 days, ref = as_of_ts or NOW())
+      + 0.05 × provenance_strength
+      + graph_weight × graph_proximity
+```
+`rrf_diag = vec_weight/(rrf_k+vec_rank) + bm25_weight/(rrf_k+bm25_rank)`.
+`norm_denom = (vec_weight + bm25_weight)/(rrf_k + 1)` (normalizes to [0,1]).
+`provenance_strength`: 1.0 (commit + verified), 0.4 (commit only), 0.0 (none).
+
+**Scoring (vector-only path):**
 ```
 score = 0.5 × cosine_similarity
       + 0.2 × (importance / 5)
-      + 0.2 × recency_decay(half-life = pgmnemo.recency_weight × 90 days)
+      + γ   × recency_decay(90 days)   -- γ = pgmnemo.recency_weight × temporal_boost
       + 0.1 × provenance_strength
+      + graph_weight × graph_proximity
 ```
-`provenance_strength`: 1.0 (commit + verified), 0.5 (commit only), 0.0 (none).
 
 By default, rows with `verified_at IS NULL` are excluded. Enable via
 `SET pgmnemo.include_unverified = 'true'`.
+
+**Connection pool safety (as_of_ts):** Sets `pgmnemo.as_of_timestamp` as a
+transaction-local GUC (`set_config(..., TRUE)`). Cleared on `COMMIT`/`ROLLBACK`.
+No session-state leaks.
 
 ### 2.4 `pgmnemo.recall_lessons_pooled(...)`
 
@@ -253,26 +292,29 @@ Session-pooled wrapper around `recall_lessons()`. Same signature, returns
 session-aggregated top-K per `metadata->>'sid'`. Used by LoCoMo session-level
 benchmark methodology.
 
-### 2.5 `pgmnemo.recall_hybrid(...)` — EXPERIMENTAL (v0.2.2+)
+### 2.5 `pgmnemo.recall_hybrid(...)` (v0.2.2+, default path since v0.4.0)
 
-Vector + BM25 weighted fusion. Opt-in only; not default.
+Vector + BM25 union recall with RRF fusion. Used by `recall_lessons()` when
+`query_text` is provided. **Fix-A (v0.6.0):** primary ranking signal is now
+normalized `rrf_diag` (Cormack 2009 RRF), replacing the previous linear
+`fusion_score`. Temporal filter via `pgmnemo.as_of_timestamp` GUC.
 
 ```sql
 pgmnemo.recall_hybrid(
     query_embedding   vector(1024),
     query_text        TEXT,
-    k                 INT     DEFAULT 10,
-    role_filter       TEXT    DEFAULT NULL,
-    project_id_filter INT     DEFAULT NULL,
-    vec_weight        FLOAT   DEFAULT 0.4,
-    bm25_weight       FLOAT   DEFAULT 0.4,
-    rrf_k             INT     DEFAULT 60
+    k                 INT              DEFAULT 10,
+    role_filter       TEXT             DEFAULT NULL,
+    project_id_filter INT              DEFAULT NULL,
+    vec_weight        DOUBLE PRECISION DEFAULT 0.4,
+    bm25_weight       DOUBLE PRECISION DEFAULT 0.4,
+    rrf_k             INT              DEFAULT 60
 ) RETURNS TABLE (
     lesson_id     BIGINT,
-    score         DOUBLE PRECISION,   -- weighted hybrid combination (sort key)
-    vec_score     DOUBLE PRECISION,   -- diagnostic: cosine similarity component
+    score         DOUBLE PRECISION,   -- Fix-A (v0.6.0): normalized rrf_diag + auxiliaries
+    vec_score     DOUBLE PRECISION,   -- diagnostic: raw cosine similarity
     bm25_score    DOUBLE PRECISION,   -- diagnostic: ts_rank_cd component
-    rrf_score     DOUBLE PRECISION,   -- diagnostic: 1/(rrf_k+vec_rank) + 1/(rrf_k+bm25_rank)
+    rrf_score     DOUBLE PRECISION,   -- rrf_diag = vec_w/(k+rank_v) + bm25_w/(k+rank_b)
     role          TEXT,
     project_id    INT,
     topic         TEXT,
@@ -286,15 +328,28 @@ pgmnemo.recall_hybrid(
 )
 ```
 
-Sort by the `score` column (NOT `hybrid_score` — that name appears in some
-draft docs and is a documented error; the actual output column is `score`).
-A signature smoke test lives at `scripts/smoke_recall_hybrid.py` and runs in
-CI on every push (job `smoke-recall-hybrid` in `.github/workflows/ci.yml`).
+Sort by the `score` column. A signature smoke test lives at
+`scripts/smoke_recall_hybrid.py` and runs in CI on every push.
 
-Formula: `score = vec_weight × cosine + bm25_weight × ts_rank_cd(lesson_tsv, q, 32)`
-plus minor importance/recency/provenance components matching the
-`recall_lessons()` §6.4 formula. Union retrieval: candidates matched by
-**either** cosine **or** BM25.
+**Fix-A formula (v0.6.0):**
+```
+norm_denom = (vec_weight + bm25_weight) / (rrf_k + 1)
+rrf_diag   = vec_weight / (rrf_k + vec_rank) + bm25_weight / (rrf_k + bm25_rank)
+score      = (rrf_diag / norm_denom)
+           + 0.05 × (importance / 5)
+           + 0.05 × recency_decay(90 days, ref = as_of_ts or NOW())
+           + 0.05 × provenance_strength
+           + graph_weight × graph_proximity
+```
+
+**Prior formula (pre-v0.6.0, for reference):**
+```
+score = vec_weight × cosine + bm25_weight × ts_rank_cd(lesson_tsv, q, 32)
+```
+
+Union retrieval: candidates matched by **either** cosine **or** BM25.
+`rrf_score` column = raw `rrf_diag` value (unchanged from pre-v0.6.0 column).
+`graph_proximity_weight` GUC (default `0.2`). Set to `0.0` for pure semantic recall.
 
 ### 2.6 `pgmnemo.traverse_causal_chain(...)` (v0.2.0+, direction added in v0.2.1)
 
@@ -330,11 +385,11 @@ pgmnemo.traverse_temporal_window(
 )
 ```
 
-### 2.8 `pgmnemo.stats()` (v0.4.1+)
+### 2.8 `pgmnemo.stats()` (v0.4.1+, updated v0.6.0)
 
 One-row diagnostic snapshot. Returns current GUC values, corpus size, embedding and
-full-text index coverage, and an orphan-function count. Safe to call from monitoring
-loops; typically < 50 ms on a N = 10 k corpus.
+full-text index coverage, orphan-function count, and (v0.6.0) ghost lesson count.
+Safe to call from monitoring loops; typically < 50 ms on a N = 10 k corpus.
 
 ```sql
 pgmnemo.stats()
@@ -351,9 +406,19 @@ RETURNS TABLE (
     hybrid_enabled          BOOLEAN,         -- NOT pgmnemo.disable_hybrid
     recall_hybrid_available BOOLEAN,         -- TRUE if recall_hybrid() is installed
     oldest_lesson_age_days  INT,             -- days since oldest created_at
-    orphan_count            BIGINT           -- functions not owned by the extension
+    orphan_count            BIGINT,          -- functions not owned by the extension
+    ghost_count             BIGINT           -- v0.6.0: active lessons with verified_at IS NULL
 )
 ```
+
+**`ghost_count` column (v0.6.0):** active lessons (`t_valid_to = 'infinity'`) where
+`verified_at IS NULL` — i.e. no `commit_sha` and no `artifact_hash`. These are
+lessons ingested with `pgmnemo.gate_strict = 'off'` or `'warn'` and represent
+provenance debt.
+
+**Recommended provenance target:** `ghost_count < 5% × lesson_count` before
+enabling `pgmnemo.include_unverified = 'off'`. Use `ghost_count` to track
+Phase 4 migration progress (Agency RFC Q4).
 
 **Typical usage:**
 
@@ -371,6 +436,12 @@ FROM pgmnemo.stats();
 
 -- Check for orphan functions (non-zero blocks ALTER EXTENSION UPDATE):
 SELECT orphan_count FROM pgmnemo.stats();
+
+-- v0.6.0: Check ghost lesson debt (Agency RFC Q4):
+SELECT ghost_count, lesson_count,
+       ROUND(100.0 * ghost_count / NULLIF(lesson_count, 0), 1) AS ghost_pct
+FROM pgmnemo.stats();
+-- Target: ghost_pct < 5% before enabling include_unverified=off
 ```
 
 **`orphan_count` column:** counts functions in the `pgmnemo` schema that PostgreSQL does

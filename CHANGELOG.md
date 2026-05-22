@@ -5,6 +5,60 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [0.6.0] — 2026-05-22
+
+### Theme
+
+RRF Fix-A (rank-based fusion replaces linear fusion) + temporal recall API
+(`as_of_ts`) + dedup observability + ghost-count metric. Answers Agency RFC
+Q4/Q5/Q6/Q7.
+
+### Bench verdict
+
+*To be completed in QA\_TEST phase. Gate: p < 0.05 AND Δrecall@10 ≥ +1pp on LME-S.*
+
+### Changed (behavior)
+
+- **`recall_hybrid()` Fix-A** — `ORDER BY` now uses `rrf_diag` normalized to
+  [0,1] (`rrf_diag / ((vec_weight + bm25_weight) / (rrf_k + 1.0))`), replacing
+  weighted linear `fusion_score`. Literature basis: Cormack et al. (SIGIR 2009).
+  Expected lift on LME-S: +1.5–2 pp recall@10 (to be confirmed by bench).
+  Output columns unchanged; `rrf_score` column value unchanged.
+- **`recall_hybrid()` temporal filter** — reads `pgmnemo.as_of_timestamp` GUC,
+  now set by `recall_lessons(as_of_ts)` parameter. Both dense and BM25 branches
+  apply the `t_valid_from ≤ as_of_ts < t_valid_to` filter.
+
+### Added
+
+- **`recall_lessons()` — `as_of_ts TIMESTAMPTZ DEFAULT NULL`** (6th param).
+  Point-in-time recall scoping. When non-NULL, restricts to lessons valid at
+  `as_of_ts`. Backward compatible: existing 5-arg calls resolve to
+  `as_of_ts = NULL` (identical behavior). Implements temporal-moat positioning
+  (R4 Final) + Agency RFC Q1 Phase 2.
+
+- **`pgmnemo.stats()` — `ghost_count BIGINT`** — active lessons without
+  provenance (`verified_at IS NULL`). Use to track Phase 4 migration progress
+  toward `include_unverified = off`. Agency RFC Q4.
+
+- **`ingest()` — bitemporal close+create NOTICE** — `RAISE NOTICE` when dedup
+  trigger fires. Message: `"bitemporal close+create fired — closed N prior
+  version(s) (content_hash=...). New lesson_id=..."`. Informational only; no
+  behavior change. Agency RFC Q5.
+
+### Upgrade
+
+```bash
+ALTER EXTENSION pgmnemo UPDATE TO '0.6.0';
+```
+
+No table rewrite. DDL-only. Duration: <1 s.
+
+### Rollback
+
+See [`docs/MIGRATION.md §0.5.1→0.6.0 §Rollback`](docs/MIGRATION.md).
+
+---
+
 ## [0.5.2.post1] — 2026-05-22
 
 ### Theme
