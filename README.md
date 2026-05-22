@@ -3,13 +3,15 @@
 **Multi-agent memory substrate for PostgreSQL — provenance-gated, vector-hybrid recall.**
 
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.5.2-green.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.5.2.post1-green.svg)](CHANGELOG.md)
 [![PGXN](https://badge.pgxn.org/stable/pgmnemo.svg)](https://pgxn.org/dist/pgmnemo/)
 [![CI](https://github.com/pgmnemo/pgmnemo/actions/workflows/ci.yml/badge.svg)](https://github.com/pgmnemo/pgmnemo/actions/workflows/ci.yml)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-17-4169E1.svg)](https://www.postgresql.org/)
 [![LoCoMo recall@10](https://img.shields.io/badge/LoCoMo_recall%4010-0.8409-success.svg)](docs/img/all_metrics_history.md)
 [![LongMemEval recall@10](https://img.shields.io/badge/LongMemEval_recall%4010-0.9334-yellow.svg)](docs/img/all_metrics_history.md)
 
+> **v0.5.2.post1 (2026-05-22):** `pgmnemo-mcp` PyPI description fix — adds `README.md` to package so PyPI page renders correctly. No code or SQL changes. See [CHANGELOG.md](CHANGELOG.md).
+>
 > **v0.5.2 (2026-05-22):** `pgmnemo-mcp` wheel fix — empty package on `pip install` ([#32](https://github.com/pgmnemo/pgmnemo/issues/32)), `packaging-smoke` CI gate, `docs/MIGRATION.md` rollback procedure (v0.5→v0.4), `docs/USAGE.md` `temporal_boost` calibration table. No SQL schema change. See [CHANGELOG.md](CHANGELOG.md).
 >
 > **v0.5.1 (2026-05-18):** MCP write path via `ingest()` SP (provenance gate honoured), `temporal_boost` comment corrected. See [CHANGELOG.md](CHANGELOG.md).
