@@ -66,6 +66,90 @@ ALTER EXTENSION pgmnemo UPDATE TO '0.5.0';
 
 The upgrade script handles all DDL changes automatically (column renames via `ALTER TABLE`, new nullable columns, index updates). No data is lost or rewritten.
 
+### Rollback (v0.5.0 → v0.4.1)
+
+pgmnemo does not ship a DOWN migration script for this release. Use the procedure below to
+reverse the v0.5.0 DDL changes manually.
+
+> ⚠ **Data-loss warning:** If any rows in `pgmnemo.agent_lesson` were inserted with
+> explicit `t_valid_from` / `t_valid_to` values (i.e., non-NULL valid windows), those
+> values will be **permanently lost** when the columns are dropped. Rows that used the
+> default (`NULL`) are unaffected in content — only the column metadata is removed.
+> **Take a full dump before proceeding.**
+
+#### Step 1 — Dump current state
+
+```bash
+pg_dump -d <db> -n pgmnemo -F custom > pre_rollback_v0.5.0_$(date +%Y%m%d).dump
+```
+
+#### Step 2 — Drop the `pgmnemo.as_of()` function
+
+`as_of()` was introduced in v0.5.0 and does not exist in v0.4.1. Drop it first to avoid
+foreign-dependency errors when the trigger is removed.
+
+```sql
+DROP FUNCTION IF EXISTS pgmnemo.as_of(TIMESTAMPTZ);
+```
+
+#### Step 3 — Drop the `temporal_closure` trigger
+
+```sql
+DROP TRIGGER IF EXISTS temporal_closure ON pgmnemo.agent_lesson;
+-- Also drop the trigger function if it was created as a standalone object:
+DROP FUNCTION IF EXISTS pgmnemo.temporal_closure_trigger();
+```
+
+#### Step 4 — Drop the bitemporal columns
+
+```sql
+ALTER TABLE pgmnemo.agent_lesson
+    DROP COLUMN IF EXISTS t_valid_from,
+    DROP COLUMN IF EXISTS t_valid_to,
+    DROP COLUMN IF EXISTS content_hash;
+```
+
+These columns were added with `DEFAULT NULL` in v0.5.0 and are safe to drop if all values
+are NULL (default install). If any rows carry non-NULL valid windows, those values are
+irrecoverably lost after this step — see the warning above.
+
+#### Step 5 — Restore the 4-argument `traverse_causal_chain()` overload
+
+v0.5.0 removed the 4-argument overload. If your application requires it, restore from
+the v0.4.1 extension files:
+
+```bash
+# On the PG server: reinstall v0.4.1 extension scripts, then:
+psql -c "ALTER EXTENSION pgmnemo UPDATE TO '0.4.1';"
+```
+
+Alternatively, apply the v0.4.1 function body from the `rollback/v0.4.1` git branch.
+
+#### Step 6 — Verify
+
+```sql
+-- Confirm bitemporal columns are gone:
+SELECT column_name FROM information_schema.columns
+WHERE table_schema = 'pgmnemo' AND table_name = 'agent_lesson'
+  AND column_name IN ('t_valid_from', 't_valid_to', 'content_hash');
+-- Expected: 0 rows
+
+-- Confirm trigger is gone:
+SELECT tgname FROM pg_trigger
+WHERE tgrelid = 'pgmnemo.agent_lesson'::regclass
+  AND tgname = 'temporal_closure';
+-- Expected: 0 rows
+
+-- Confirm as_of() is gone:
+SELECT proname FROM pg_proc p
+JOIN pg_namespace n ON n.oid = p.pronamespace
+WHERE n.nspname = 'pgmnemo' AND p.proname = 'as_of';
+-- Expected: 0 rows
+
+-- Smoke-test recall:
+SELECT lesson_id, score FROM pgmnemo.recall_lessons(NULL::vector(1024), 5);
+```
+
 ---
 
 ## External Memory Tables → pgmnemo
