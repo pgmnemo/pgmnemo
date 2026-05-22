@@ -623,7 +623,10 @@ AS $$
            AND p.proname NOT LIKE '\_%' ESCAPE '\'
            AND d.objid IS NULL)                                                    AS orphan_count,
         -- ghost_count (v0.6.0): active lessons without provenance (Agency RFC Q4)
-        -- Definition: verified_at IS NULL AND t_valid_to = 'infinity' (currently active)
+        -- Definition: t_valid_to = 'infinity' (authoritative active-row indicator) AND verified_at IS NULL.
+        -- NOTE: Agency Q4 spec says "is_active = TRUE"; implementation uses t_valid_to = 'infinity'
+        -- because _bitemporal_close_prior() trigger does NOT update is_active when closing rows.
+        -- t_valid_to = 'infinity' is the correct semantic equivalent of "currently active".
         (SELECT COUNT(*)::BIGINT
          FROM pgmnemo.agent_lesson
          WHERE verified_at IS NULL
