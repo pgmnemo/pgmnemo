@@ -466,3 +466,104 @@ FROM pgmnemo.agent_lesson
 ORDER BY created_at DESC
 LIMIT 20;
 ```
+
+---
+
+## Point-in-time recall — `as_of_ts` (v0.6.0)
+
+### Using `as_of_ts` for historical recall
+
+`recall_lessons()` v0.6.0 accepts `as_of_ts TIMESTAMPTZ` as the optional 6th
+parameter. When provided, the query returns only lessons that were **valid at
+that timestamp** (`t_valid_from ≤ as_of_ts < t_valid_to`).
+
+```sql
+-- Current state (default — as_of_ts NULL):
+SELECT topic, lesson_text, score
+FROM pgmnemo.recall_lessons($embedding, 10, 'developer', 1, 'query');
+
+-- Historical state — what did the agent know at the start of a session?
+SELECT topic, lesson_text, score
+FROM pgmnemo.recall_lessons(
+    $embedding,
+    10,
+    'developer',
+    1,
+    'query',
+    '2026-04-01 09:00:00+00'::TIMESTAMPTZ   -- as_of_ts
+);
+
+-- Pre-incident snapshot (audit trail use case):
+SELECT topic, lesson_text, score
+FROM pgmnemo.recall_lessons(
+    $embedding,
+    10,
+    NULL,    -- all roles
+    42,      -- project_id
+    NULL,    -- no text query
+    '2026-05-01 00:00:00+00'::TIMESTAMPTZ
+);
+```
+
+**Requires bitemporality (v0.5.0+).** Rows have `t_valid_from` / `t_valid_to`
+columns. Lessons ingested before v0.5.0 have `t_valid_from = created_at` and
+`t_valid_to = 'infinity'` (backfilled by the v0.5.0 migration).
+
+**Connection pool safety:** `as_of_ts` sets a transaction-local GUC internally
+(`set_config('pgmnemo.as_of_timestamp', ..., TRUE)`). The `TRUE` flag means
+"transaction-local" — the GUC is cleared on `COMMIT` or `ROLLBACK`. No
+session-state leaks between pooled connections.
+
+**Hybrid path:** When `query_text` is also provided, `as_of_ts` flows through
+`recall_lessons()` → GUC → `recall_hybrid()`. Both the dense ANN branch and the
+BM25 sparse branch apply the temporal filter.
+
+---
+
+## Tuning recency × boost (v0.6.0 reference table)
+
+### `temporal_boost` × `recency_weight` interaction
+
+Recency factor: `exp(−recency_weight × temporal_boost × age_days / 90)`
+
+| age\_days | boost=1, w=0.05 | boost=3, w=0.10 | boost=10, w=0.05 |
+|-----------|-----------------|-----------------|------------------|
+| 7         | 0.996           | 0.977           | 0.962            |
+| 90        | 0.951           | 0.741           | 0.607            |
+| 365       | 0.817           | 0.018           | 0.130            |
+| 730       | 0.668           | 0.000           | 0.017            |
+
+Score values are the multiplier applied to the recency component, rounded to 3 d.p.
+
+**Warning:** At `recency_weight=0.10` + `temporal_boost=3`, lessons >365 days old
+score ~0 on the recency component. If your corpus includes historical lessons
+(migrated from earlier systems), use `recency_weight=0.05` + `temporal_boost=10` or
+`temporal_boost=1` (effectively disables extra decay).
+
+**Guidance:**
+
+| Scenario | Recommended settings |
+|---|---|
+| Fast-moving corpus (ephemeral tasks) | `temporal_boost=10`, `recency_weight=0.05` |
+| Balanced general-purpose (default) | `temporal_boost=1`, `recency_weight=0.05` |
+| Long-lived / archival corpus | `temporal_boost=1`, `recency_weight=0.005` |
+| Historical audit / time-travel | Use `as_of_ts` instead of boost tuning |
+| Disable temporal decay entirely | `temporal_boost=0` |
+
+```sql
+-- Fast-moving: ephemeral task context
+SET pgmnemo.temporal_boost = '10';
+SET pgmnemo.recency_weight = '0.05';
+
+-- Archival: institutional knowledge base
+SET pgmnemo.temporal_boost = '1';
+SET pgmnemo.recency_weight = '0.005';
+
+-- Disable decay:
+SET pgmnemo.temporal_boost = '0';
+```
+
+**Note on Fix-A (v0.6.0):** The recency term in `recall_hybrid()` scoring uses
+`COALESCE(as_of_ts, NOW())` as the reference point. When querying a historical
+`as_of_ts`, recency decay is computed relative to that timestamp (not wall-clock
+`NOW()`), so very old `as_of_ts` queries produce historically-consistent scores.
