@@ -15,35 +15,40 @@ Q4/Q5/Q6/Q7.
 
 ### Bench verdict
 
-*To be completed in QA\_TEST phase. Gate: p < 0.05 AND Δrecall@10 ≥ +1pp on LME-S.*
+Benchmark gate (p < 0.05, Δrecall@10 ≥ +1 pp on held-out evaluation set) to be
+published in the v0.6.1 QA report. Simulated analysis from v0.5.2 spec work
+projects +1.5–2 pp recall@10 lift from Fix-A.
 
 ### Changed (behavior)
 
-- **`recall_hybrid()` Fix-A** — `ORDER BY` now uses `rrf_diag` normalized to
-  [0,1] (`rrf_diag / ((vec_weight + bm25_weight) / (rrf_k + 1.0))`), replacing
-  weighted linear `fusion_score`. Literature basis: Cormack et al. (SIGIR 2009).
-  Expected lift on LME-S: +1.5–2 pp recall@10 (to be confirmed by bench).
-  Output columns unchanged; `rrf_score` column value unchanged.
-- **`recall_hybrid()` temporal filter** — reads `pgmnemo.as_of_timestamp` GUC,
-  now set by `recall_lessons(as_of_ts)` parameter. Both dense and BM25 branches
-  apply the `t_valid_from ≤ as_of_ts < t_valid_to` filter.
+- **`recall_hybrid()` Fix-A** — `ORDER BY` now uses a rank-based fusion score
+  normalized to [0,1] (`rank_score / max_rank_score`) instead of a weighted
+  linear combination of raw similarity values. Literature basis: Cormack et al.
+  (SIGIR 2009, Reciprocal Rank Fusion). Output columns unchanged; `rrf_score`
+  column value unchanged.
+- **`recall_hybrid()` temporal filter** — reads `pgmnemo.as_of_timestamp`
+  session variable, now set by `recall_lessons(as_of_ts)` parameter. Both dense
+  vector and BM25 text branches filter to lessons valid at that timestamp
+  (`t_valid_from ≤ as_of_ts < t_valid_to`).
 
 ### Added
 
 - **`recall_lessons()` — `as_of_ts TIMESTAMPTZ DEFAULT NULL`** (6th param).
-  Point-in-time recall scoping. When non-NULL, restricts to lessons valid at
-  `as_of_ts`. Backward compatible: existing 5-arg calls resolve to
-  `as_of_ts = NULL` (identical behavior). Implements temporal-moat positioning
-  (R4 Final) + Agency RFC Q1 Phase 2.
+  Point-in-time recall scoping. When non-NULL, restricts results to lessons that
+  were active at `as_of_ts`. Backward compatible: existing calls without this
+  argument return the same results as before (current active lessons only).
 
-- **`pgmnemo.stats()` — `ghost_count BIGINT`** — active lessons without
-  provenance (`verified_at IS NULL`). Use to track Phase 4 migration progress
-  toward `include_unverified = off`. Agency RFC Q4.
+- **`pgmnemo.stats()` — `ghost_count BIGINT`** — count of currently active
+  lessons without provenance (`verified_at IS NULL`, meaning no `commit_sha` or
+  `artifact_hash`). Use to track migration progress toward enabling the
+  provenance gate (`include_unverified = off`). Target: `ghost_count < 5%` of
+  `lesson_count`.
 
-- **`ingest()` — bitemporal close+create NOTICE** — `RAISE NOTICE` when dedup
-  trigger fires. Message: `"bitemporal close+create fired — closed N prior
-  version(s) (content_hash=...). New lesson_id=..."`. Informational only; no
-  behavior change. Agency RFC Q5.
+- **`ingest()` — dedup observability NOTICE** — `RAISE NOTICE` now fires when
+  the dedup trigger closes a prior version and creates a new one. Message format:
+  `"bitemporal close+create fired — closed N prior version(s) (content_hash=…).
+  New lesson_id=…"`. Informational only; no behavior change. Capture via:
+  `psql … 2>&1 | grep "bitemporal close+create fired"`.
 
 ### Upgrade
 

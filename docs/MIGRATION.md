@@ -20,7 +20,14 @@ Estimated duration: <1s on any corpus size.
 
 ### Breaking changes
 
-**None.** All public function signatures remain backward compatible (see [PLAN §2](../spec/v060/PLAN_V060.md)).
+**None for positional callers.** All public function signatures remain backward compatible
+for code that calls functions with positional arguments (see [PLAN §2](../spec/v060/PLAN_V060.md)).
+
+> **Note on `recall_lessons()` signature:** The 5-argument overload
+> `recall_lessons(vector, INT, TEXT, INT, TEXT)` is dropped and replaced by a 6-argument
+> form (`as_of_ts TIMESTAMPTZ DEFAULT NULL`). Callers using positional arguments are
+> unaffected. Explicit `GRANT EXECUTE` statements referencing the old 5-arg type signature
+> must be re-applied to the new 6-arg form after upgrade.
 
 ### New behavior
 
