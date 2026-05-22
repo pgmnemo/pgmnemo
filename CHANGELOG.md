@@ -5,6 +5,48 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [0.5.2] — 2026-05-22
+
+### Theme
+
+Patch release: MCP wheel packaging fix (Issue #32) + documentation improvements
++ CI regression prevention. No SQL schema change. Safe to upgrade from v0.5.1.
+
+### Fixed
+
+- **`pgmnemo-mcp` wheel was empty on install (Issue #32)** — `pip install pgmnemo-mcp`
+  installed an empty package (no importable code) because `setuptools` could not
+  find the source package in the `pgmnemo_mcp/` directory. Root cause: package
+  source was at `pgmnemo_mcp/` but the `packages.find` root was set incorrectly.
+  Fixed by moving source to a proper nested package layout and explicitly setting
+  `[tool.setuptools.packages.find]` `where = ["."]` + `include = ["pgmnemo_mcp*"]`.
+  `import pgmnemo_mcp` now works correctly after install.
+
+### Added
+
+- **`packaging-smoke` CI workflow** — `.github/workflows/packaging-smoke.yml` runs on
+  every push and PR: builds the wheel, installs in a clean venv, imports `pgmnemo_mcp`,
+  and verifies the wheel contains `.py` files. Prevents Issue #32 class of regression
+  permanently.
+- **`docs/RELEASE_CHECKLIST.md`** — manual pre-release gate with packaging smoke steps.
+- **`pgmnemo_mcp/tests/test_import.py`** — pytest smoke test for importability.
+- **`docs/MIGRATION.md` rollback procedure** (RFC Q6) — step-by-step rollback from
+  v0.5.x back to v0.4.x using `ALTER EXTENSION pgmnemo UPDATE TO '0.4.1'` and
+  `pg_restore` with `--section=pre-data`.
+- **`docs/USAGE.md` temporal_boost calibration table** (RFC Q7) — concrete `temporal_boost`
+  values (0.1/0.3/0.5/0.8/1.0) mapped to decay behaviour with guidance on choosing
+  per workload type.
+
+### Upgrade
+
+```bash
+pip install --upgrade "pgmnemo-mcp==0.5.2"
+```
+
+No `ALTER EXTENSION` needed — SQL schema is unchanged from v0.5.1.
+
+---
+
 ## [0.4.0] — 2026-05-15
 
 ### Theme
