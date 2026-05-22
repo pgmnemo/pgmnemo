@@ -58,6 +58,8 @@ ALTER EXTENSION pgmnemo UPDATE TO '0.6.0';
 
 No table rewrite. DDL-only. Duration: <1 s.
 
+- Added `pgmnemo.recall_stats` view for observability (R9): surfaces call counts and cumulative timing for `recall_lessons()`, `recall_hybrid()`, and `ingest()` via `pg_stat_user_functions`. Requires `track_functions = 'pl'` or `'all'` in `postgresql.conf`.
+
 ### Rollback
 
 See [`docs/MIGRATION.md §0.5.1→0.6.0 §Rollback`](docs/MIGRATION.md).
