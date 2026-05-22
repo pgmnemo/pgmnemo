@@ -3,20 +3,22 @@
 **Multi-agent memory substrate for PostgreSQL — provenance-gated, vector-hybrid recall.**
 
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.5.0-green.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.5.2-green.svg)](CHANGELOG.md)
 [![PGXN](https://badge.pgxn.org/stable/pgmnemo.svg)](https://pgxn.org/dist/pgmnemo/)
 [![CI](https://github.com/pgmnemo/pgmnemo/actions/workflows/ci.yml/badge.svg)](https://github.com/pgmnemo/pgmnemo/actions/workflows/ci.yml)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-17-4169E1.svg)](https://www.postgresql.org/)
 [![LoCoMo recall@10](https://img.shields.io/badge/LoCoMo_recall%4010-0.8409-success.svg)](docs/img/all_metrics_history.md)
 [![LongMemEval recall@10](https://img.shields.io/badge/LongMemEval_recall%4010-0.9334-yellow.svg)](docs/img/all_metrics_history.md)
 
-> **v0.5.0 (2026-05-17):** bitemporality (`t_valid_from` / `t_valid_to` / `content_hash` columns on `agent_lesson`), `pgmnemo.add_edge()` idempotent helper, MCP server (`pgmnemo-mcp`) promoted to stable, R5/R6/R10 dead-code removal, H-06 recency-weight tuning. Non-algorithmic release — recall@10 Δ=0 confirmed analytically. See [benchmarks/METRICS_BY_VERSION.md](benchmarks/METRICS_BY_VERSION.md) for v0.5.0 rows.
+> **v0.5.2 (2026-05-22):** `pgmnemo-mcp` wheel fix — empty package on `pip install` ([#32](https://github.com/pgmnemo/pgmnemo/issues/32)), `packaging-smoke` CI gate, `docs/MIGRATION.md` rollback procedure (v0.5→v0.4), `docs/USAGE.md` `temporal_boost` calibration table. No SQL schema change. See [CHANGELOG.md](CHANGELOG.md).
 >
-> **Breaking changes:** 4-argument `traverse_causal_chain(start, max_depth, role, project)` removed — use 2-argument form + `WHERE` clause. `mem_edge` columns renamed: `lesson_a_id` → `source_id`, `lesson_b_id` → `target_id`. Use `pgmnemo.add_edge()` to avoid direct column references. See [docs/MIGRATION.md](docs/MIGRATION.md).
+> **v0.5.1 (2026-05-18):** MCP write path via `ingest()` SP (provenance gate honoured), `temporal_boost` comment corrected. See [CHANGELOG.md](CHANGELOG.md).
 >
-> **What's next:** v0.5.1 (target 2026-06-15) — H-02 LongMemEval macOS host benchmark run, hybrid BM25 gap investigation. Full plan: [ROADMAP.md](ROADMAP.md).
+> **Breaking changes (v0.5.0):** 4-argument `traverse_causal_chain(start, max_depth, role, project)` removed — use 2-argument form + `WHERE` clause. `mem_edge` columns renamed: `lesson_a_id` → `source_id`, `lesson_b_id` → `target_id`. Use `pgmnemo.add_edge()` to avoid direct column references. See [docs/MIGRATION.md](docs/MIGRATION.md).
+>
+> **What's next:** v0.6.0 — Fix-A RRF ranking correction (+1.7–2.2pp recall@10 projected), `as_of_ts` param on `recall_lessons()`. Full plan: [ROADMAP.md](ROADMAP.md).
 
-## Benchmarks (v0.5.0, retrieval-only)
+## Benchmarks (v0.5.1, retrieval-only)
 
 > **Read this before the numbers below:** [docs/COMPETITIVE_REALITY.md](docs/COMPETITIVE_REALITY.md)
 > explains exactly what these recall@K figures mean, what they don't, and where
@@ -94,7 +96,7 @@ into a recent green run to see which PG versions the latest build passed on.
 **PGXN install (if `pgxnclient` is available):**
 
 ```bash
-pgxn install pgmnemo==0.5.0
+pgxn install pgmnemo==0.5.2
 ```
 
 **Docker (production):** pgmnemo is **pure SQL** — no compilation. Bake files
@@ -102,22 +104,22 @@ into your image with a 3-line Dockerfile:
 
 ```dockerfile
 FROM pgvector/pgvector:pg17
-ADD https://github.com/pgmnemo/pgmnemo/releases/download/v0.5.0/pgmnemo-0.5.0.zip /tmp/
+ADD https://github.com/pgmnemo/pgmnemo/releases/download/v0.5.2/pgmnemo-0.5.2.zip /tmp/
 RUN apt-get update && apt-get install -y --no-install-recommends unzip \
-    && unzip /tmp/pgmnemo-0.5.0.zip -d /tmp/ \
-    && cp /tmp/pgmnemo-0.5.0/extension/pgmnemo.control \
-          /tmp/pgmnemo-0.5.0/extension/pgmnemo--*.sql \
+    && unzip /tmp/pgmnemo-0.5.2.zip -d /tmp/ \
+    && cp /tmp/pgmnemo-0.5.2/extension/pgmnemo.control \
+          /tmp/pgmnemo-0.5.2/extension/pgmnemo--*.sql \
           /usr/share/postgresql/17/extension/ \
-    && apt-get remove -y unzip && rm -rf /tmp/pgmnemo-0.5.0* /var/lib/apt/lists/*
+    && apt-get remove -y unzip && rm -rf /tmp/pgmnemo-0.5.2* /var/lib/apt/lists/*
 ```
 
 **Dev / laptop one-liner (NOT for production — state lost on container rebuild):**
 
 ```bash
 docker run --name pgmnemo-dev -e POSTGRES_PASSWORD=pass -p 5432:5432 -d pgvector/pgvector:pg17
-curl -L https://github.com/pgmnemo/pgmnemo/releases/download/v0.5.0/pgmnemo-0.5.0.zip -o /tmp/pg.zip
+curl -L https://github.com/pgmnemo/pgmnemo/releases/download/v0.5.2/pgmnemo-0.5.2.zip -o /tmp/pg.zip
 docker cp /tmp/pg.zip pgmnemo-dev:/tmp/
-docker exec pgmnemo-dev bash -c "cd /tmp && unzip -q pg.zip && cp pgmnemo-0.5.0/extension/pgmnemo.control pgmnemo-0.5.0/extension/pgmnemo--*.sql /usr/share/postgresql/17/extension/"
+docker exec pgmnemo-dev bash -c "cd /tmp && unzip -q pg.zip && cp pgmnemo-0.5.2/extension/pgmnemo.control pgmnemo-0.5.2/extension/pgmnemo--*.sql /usr/share/postgresql/17/extension/"
 ```
 
 ```sql
