@@ -5,6 +5,97 @@ This guide covers version-to-version upgrade paths and migration from an externa
 
 ---
 
+## 0.5.1 → 0.6.0
+
+**Release date:** 2026-05-22 (target) | **SQL changes:** Yes
+
+### Upgrade
+
+```bash
+ALTER EXTENSION pgmnemo UPDATE TO '0.6.0';
+```
+
+No table rewrite. DDL-only changes (`CREATE OR REPLACE` / `DROP + CREATE` functions).
+Estimated duration: <1s on any corpus size.
+
+### Breaking changes
+
+**None.** All public function signatures remain backward compatible (see [PLAN §2](../spec/v060/PLAN_V060.md)).
+
+### New behavior
+
+1. **`recall_hybrid()` ranking** — Fix-A: rank is now computed by normalized RRF
+   (`rrf_diag / max_rrf_diag`) instead of weighted linear fusion score. Ranking
+   order will change; this is the intended improvement. Output columns unchanged.
+
+2. **`recall_lessons()` — `as_of_ts` parameter** — new optional 6th parameter.
+   Existing calls with 5 args resolve to `as_of_ts = NULL` (identical behavior).
+
+3. **`stats()` — `ghost_count`** — new column at position 14. Named-column callers
+   unaffected. `SELECT *` callers receive one additional column.
+
+4. **`ingest()` — dedup NOTICE** — `RAISE NOTICE` now fires when bitemporal
+   close+create triggers. Informational only; no behavior change.
+
+### Rollback (Q6)
+
+PostgreSQL does not support `ALTER EXTENSION pgmnemo UPDATE TO '0.5.1'` (downgrade
+via extension update mechanism is not supported).
+
+**Pre-upgrade backup procedure (run BEFORE upgrade):**
+
+```bash
+# Option A — table-level backup (fastest, recommended):
+psql "$DSN" -c "COPY pgmnemo.agent_lesson TO '/tmp/pgmnemo_backup_pre060.csv' CSV HEADER;"
+psql "$DSN" -c "COPY pgmnemo.mem_edge TO '/tmp/pgmnemo_mem_edge_pre060.csv' CSV HEADER;"
+
+# Option B — pg_dump schema+data (more complete, portable):
+pg_dump -Fc \
+    -t 'pgmnemo.agent_lesson' \
+    -t 'pgmnemo.mem_edge' \
+    "$DSN" \
+    > pgmnemo_pre_060_$(date +%Y%m%d_%H%M%S).dump
+
+# Recommended: run both A and B before applying upgrade.
+```
+
+**To roll back after upgrade (if needed):**
+
+1. Restore from pre-upgrade backup:
+   ```bash
+   # From pg_dump:
+   pg_restore -d "$DSN" pgmnemo_pre_060_YYYYMMDD_HHMMSS.dump
+
+   # From CSV (only data; functions are already reverted by step 2):
+   psql "$DSN" -c "\COPY pgmnemo.agent_lesson FROM '/tmp/pgmnemo_backup_pre060.csv' CSV HEADER;"
+   ```
+
+2. OR: manual function replacement (apply v0.5.1 from source):
+   ```bash
+   # This is destructive — drops and recreates all pgmnemo functions.
+   DROP EXTENSION pgmnemo CASCADE;
+   CREATE EXTENSION pgmnemo VERSION '0.5.1';
+   ```
+
+3. Zero-downtime rollback: **not available** — extension upgrade holds
+   `ACCESS EXCLUSIVE` briefly; rollback requires restore from dump.
+
+**No-downgrade caveat:** The extension update mechanism is one-directional.
+`ALTER EXTENSION pgmnemo UPDATE TO '0.5.1'` will raise:
+```
+ERROR: version "0.5.1" of extension "pgmnemo" is already installed
+```
+or if 0.5.1 is no longer the installed version, the update path back does not exist.
+The only safe rollback is a full restore from the pre-upgrade dump.
+
+**Pre-upgrade checklist:**
+- [ ] `COPY pgmnemo.agent_lesson TO '/tmp/pgmnemo_backup_pre060.csv' CSV HEADER;`
+- [ ] `pg_dump -Fc -t 'pgmnemo.*' "$DSN" > pgmnemo_pre_060.dump`
+- [ ] Confirm no other `ALTER EXTENSION` is in flight (`SELECT * FROM pg_stat_activity`)
+- [ ] Review `SELECT ghost_count FROM pgmnemo.stats()` post-upgrade to baseline provenance debt
+
+---
+
 ## 0.4.1 → 0.5.0
 
 **Release date:** 2026-05-17 | **Commit:** 9aa8f85
