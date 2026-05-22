@@ -1,0 +1,32 @@
+name: packaging-smoke
+on: [push, pull_request]
+jobs:
+  wheel-build-and-import:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        package: [pgmnemo_mcp]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '3.11'}
+      - name: Build wheel
+        working-directory: ${{ matrix.package }}
+        run: pip install build && python -m build --wheel
+      - name: Install in clean venv
+        run: |
+          python -m venv /tmp/testenv
+          /tmp/testenv/bin/pip install ${{ matrix.package }}/dist/*.whl
+      - name: Import smoke test
+        run: /tmp/testenv/bin/python -c "import pgmnemo_mcp; print('OK:', pgmnemo_mcp.__file__)"
+      - name: Verify wheel is non-empty
+        run: |
+          WHL=$(ls ${{ matrix.package }}/dist/*.whl)
+          COUNT=$(unzip -l $WHL | grep "\.py$" | wc -l)
+          echo "Python files in wheel: $COUNT"
+          [ $COUNT -gt 0 ] || (echo 'FAIL: wheel contains no .py files' && exit 1)
+      - name: Run import test via pytest
+        working-directory: ${{ matrix.package }}
+        run: |
+          /tmp/testenv/bin/pip install pytest
+          /tmp/testenv/bin/pytest tests/test_import.py -v
