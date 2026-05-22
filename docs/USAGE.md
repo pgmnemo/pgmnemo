@@ -372,3 +372,97 @@ returned columns in a custom SQL query.
 Keep `pgmnemo.gate_strict = 'enforce'` (default) in production. Ghost lessons (unverified
 rows) dilute recall quality because they score 0 on the provenance component and may contain
 hallucinated observations.
+
+---
+
+## Temporal Ranking Calibration
+
+> **Applies to:** v0.5.0+ (`pgmnemo.temporal_boost` GUC). If `temporal_boost` is absent
+> from `pgmnemo.stats()` output, you are on v0.4.x and this section does not apply.
+
+### Decay formula
+
+`recall_lessons()` applies an exponential time-decay multiplier to each candidate's base score:
+
+```
+adjusted_score = base_score × exp(−temporal_boost × days_since_created)
+```
+
+where `days_since_created = EXTRACT(EPOCH FROM (NOW() − created_at)) / 86400.0`.
+
+`temporal_boost = 0` disables decay entirely (scores are unmodified). The GUC is a
+non-negative float; there is no upper bound, but values above `0.5` make lessons older
+than a week nearly invisible.
+
+### Half-life relationship
+
+Half-life is the age at which a lesson's temporal multiplier reaches 0.5 (i.e. the lesson
+contributes half its base score):
+
+```
+half_life_days = ln(2) / temporal_boost  ≈  0.693 / temporal_boost
+```
+
+### Calibration table
+
+| `temporal_boost` | Half-life | Score at 7 d | Score at 30 d | Score at 365 d | Typical use case |
+|-----------------|-----------|-------------|--------------|----------------|-----------------|
+| `0` (disabled)  | ∞         | 1.000       | 1.000        | 1.000          | Disable decay; treat all lessons equally regardless of age |
+| `0.001`         | ~693 days | 0.993       | 0.970        | 0.695          | Historical archive — decade-scale institutional knowledge |
+| `0.005`         | ~139 days | 0.966       | 0.861        | 0.160          | Long-lived corpus; lessons valid for months |
+| `0.01`          | ~70 days  | 0.933       | 0.741        | 0.026          | **Balanced** — general-purpose agent (recommended default) |
+| `0.05`          | ~14 days  | 0.705       | 0.223        | ~0.000         | Fast-moving domain; week-scale relevance window |
+| `0.1`           | ~7 days   | 0.497       | 0.050        | ~0.000         | Fresh-knowledge agent — today's context dominates |
+
+Score values are the multiplier `exp(−boost × age_days)` applied to base score, rounded to 3 d.p.
+
+### Recommended presets
+
+#### Fresh knowledge agent
+Ideal for agents that consume rapidly-changing information (news, incident response, live deployments).
+Lessons older than a week carry less than half their original weight.
+
+```sql
+SET pgmnemo.temporal_boost = '0.1';   -- half-life ≈ 7 days
+-- Or persist:
+ALTER SYSTEM SET pgmnemo.temporal_boost = '0.1';
+SELECT pg_reload_conf();
+```
+
+#### Balanced (recommended default)
+Suitable for most general-purpose agents. Recent lessons are preferred but lessons from the
+past two months remain competitive. Matches the Agency RFC N=1081 corpus validation.
+
+```sql
+SET pgmnemo.temporal_boost = '0.01';  -- half-life ≈ 70 days
+```
+
+#### Historical archive agent
+For agents that manage long-lived institutional knowledge (design decisions, compliance
+policies, architecture records). Temporal decay is present but slow — a year-old lesson
+still contributes ~70% of its base score.
+
+```sql
+SET pgmnemo.temporal_boost = '0.001'; -- half-life ≈ 693 days
+```
+
+### Tuning workflow
+
+1. Start with `0.01` (balanced preset).
+2. Query `SELECT created_at, score FROM pgmnemo.recall_lessons(...)` for a representative
+   set of queries and inspect whether age-appropriate lessons are surfacing.
+3. If old lessons crowd out recent ones, raise `temporal_boost` toward `0.05–0.1`.
+   If recent lessons crowd out established knowledge, lower toward `0.001–0.005`.
+4. Validate against your recall benchmark before applying `ALTER SYSTEM`.
+
+```sql
+-- Inspect effective decay for lessons in your corpus:
+SELECT lesson_id, created_at,
+       ROUND((NOW() - created_at)::numeric / 86400, 1)            AS age_days,
+       ROUND(EXP(-current_setting('pgmnemo.temporal_boost')::float
+             * EXTRACT(EPOCH FROM (NOW() - created_at)) / 86400
+             )::numeric, 4)                                        AS temporal_multiplier
+FROM pgmnemo.agent_lesson
+ORDER BY created_at DESC
+LIMIT 20;
+```
