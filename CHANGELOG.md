@@ -5,6 +5,23 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [0.5.2.post1] — 2026-05-22
+
+### Theme
+
+Post-release packaging fix: adds `README.md` to `pgmnemo-mcp` PyPI package so the
+project page renders correctly. No code changes, no SQL changes.
+
+### Fixed
+
+- **`pgmnemo-mcp` PyPI page showed no description** — `pyproject.toml` referenced
+  `readme = "README.md"` but the file was missing from `pgmnemo_mcp/`. PyPI displayed
+  "The author of this package has not provided a project description." Added
+  `pgmnemo_mcp/README.md` with install instructions, configuration table, tools
+  reference, and links.
+
+---
+
 ## [0.5.2] — 2026-05-22
 
 ### Theme

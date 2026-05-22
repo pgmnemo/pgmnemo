@@ -1,0 +1,45 @@
+{
+  "version": "v0.5.2.post1",
+  "date": "2026-05-22",
+  "granularity": "session",
+  "hypothesis": "Hypothesis A (2026-05-09): session-level granularity aligns with paper retrieval unit",
+  "dry_run": false,
+  "mode": "analytical",
+  "dataset": "snap-research/locomo (locomo10.json from github main)",
+  "dataset_sha256": "79fa87e90f04081343b8c8debecb80a9a6842b76a7aa537dc9fdf651ea698ff4",
+  "embedder": "facebook/dragon-plus (context+query) — paper canonical",
+  "embedder_dim_native": 768,
+  "embedder_dim_stored": 1024,
+  "padding": "zero-pad 768->1024 for pgmnemo schema; cosine math-identical",
+  "pgmnemo_version": "0.5.2.post1",
+  "n_corpus_segments": 272,
+  "n_questions_with_evidence": 1982,
+  "n_questions_total": 1986,
+  "overall": {
+    "recall@5": {"n": 1982, "mean": 0.7247, "ci95_lo": 0.7062, "ci95_hi": 0.7431},
+    "recall@10": {"n": 1982, "mean": 0.8409, "ci95_lo": 0.8261, "ci95_hi": 0.8557},
+    "recall@25": {"n": 1982, "mean": 0.9724, "ci95_lo": 0.9658, "ci95_hi": 0.979},
+    "recall@50": {"n": 1982, "mean": 0.9997, "ci95_lo": 0.9992, "ci95_hi": 1},
+    "mrr": {"n": 1982, "mean": 0.6365, "ci95_lo": 0.6192, "ci95_hi": 0.6538}
+  },
+  "wall_clock_sec": null,
+  "device": null,
+  "note": "PyPI README fix release: adds pgmnemo_mcp/README.md so PyPI project page shows description. No SQL schema change. No recall algorithm change. Δ=0 confirmed analytically — recall_lessons() hot-path identical to v0.5.2.",
+  "analytical_proof": {
+    "recall_lessons_body_changed": false,
+    "schema_changed": false,
+    "packaging_change_only": true,
+    "changed_files": [
+      "pgmnemo_mcp/README.md (new file)",
+      "pgmnemo_mcp/pyproject.toml (version bump 0.5.2 → 0.5.2.post1)"
+    ],
+    "sql_files_changed": false,
+    "bench_db_sql_checks": {
+      "recall_lessons_sp_unchanged": true,
+      "extension_version_bump_only": false,
+      "delta_confirmed": 0.0
+    }
+  },
+  "methodology": "analytical_proof",
+  "methodology_note": "v0.5.2.post1 is a pure packaging patch. Adds missing README.md to pgmnemo_mcp/ so PyPI project page renders correctly. SQL extension, recall_lessons() stored procedure, and benchmark infrastructure unchanged from v0.5.2. Metrics carried forward from v0.5.2 gate. Δ=0."
+}
