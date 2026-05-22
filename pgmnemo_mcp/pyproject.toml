@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pgmnemo-mcp"
-version = "0.5.1"
+version = "0.5.2"
 description = "MCP server wrapping pgmnemo ingest and recall for AI agent memory"
 readme = "README.md"
 license = { text = "Apache-2.0" }
@@ -23,4 +23,4 @@ where = ["."]
 include = ["pgmnemo_mcp*"]
 
 [tool.pytest.ini_options]
-pythonpath = [".."]
+pythonpath = ["."]
