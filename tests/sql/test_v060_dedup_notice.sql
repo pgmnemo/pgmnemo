@@ -134,6 +134,16 @@ WHERE role = 'test-notice'
   AND t_valid_to = 'infinity'::TIMESTAMPTZ;
 -- expected: t
 
+-- ─── T8: direct NOTICE verification (manual; not run by pgregress) ───────────
+-- pgregress does not capture RAISE NOTICE in .out comparison by default.
+-- To assert NOTICE fires and token matches, run manually:
+--
+--   psql "$DSN" -v ON_ERROR_STOP=1 -f tests/sql/test_v060_dedup_notice.sql 2>&1 \
+--     | grep -c "bitemporal close+create fired"
+--
+-- Expected count: ≥ 2  (fires for T2 second ingest + T5 idempotent re-run + T7 noprov).
+-- This is the parseable signal documented in Agency RFC Q5.
+
 -- ─── Cleanup ─────────────────────────────────────────────────────────────────
 
 DELETE FROM pgmnemo.agent_lesson WHERE role = 'test-notice' AND project_id = 997;
