@@ -168,6 +168,22 @@ SELECT pgmnemo.add_edge(101, 205, 'CAUSED_BY', 0.85, '{"run_id": 7320}', 'max');
 CREATE TYPE pgmnemo.edge_kind AS ENUM ('semantic', 'temporal', 'causal', 'entity');
 ```
 
+### 1.4 Views
+
+#### `pgmnemo.recall_stats` (v0.6.0, R9)
+
+Surfaces call counts and cumulative timing for `recall_lessons()`,
+`recall_hybrid()`, and `ingest()` from `pg_stat_user_functions`.
+
+```sql
+SELECT * FROM pgmnemo.recall_stats;
+-- schema | function_name  | calls | total_time | self_time | observed_at
+```
+
+**Requires** `track_functions = 'pl'` or `track_functions = 'all'` in
+`postgresql.conf` (default is `'none'`); rows appear only after the first call
+following a `SELECT pg_stat_reset()`.
+
 ---
 
 ## 2. Public functions
