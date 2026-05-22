@@ -18,9 +18,11 @@ dependencies = [
 [project.scripts]
 pgmnemo-mcp = "pgmnemo_mcp.server:run"
 
-[tool.setuptools.packages.find]
-where = ["."]
-include = ["pgmnemo_mcp*"]
+[tool.setuptools]
+packages = ["pgmnemo_mcp"]
+
+[tool.setuptools.package-dir]
+pgmnemo_mcp = "."
 
 [tool.pytest.ini_options]
 pythonpath = [".."]
