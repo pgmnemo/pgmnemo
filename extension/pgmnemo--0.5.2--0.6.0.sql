@@ -4,8 +4,8 @@
 -- This file is provided for task-spec compatibility; the canonical upgrade path
 -- is pgmnemo--0.5.1--0.6.0.sql (identical SQL content).
 -- Changes:
---   §1  recall_hybrid()   — Fix-A: rrf_diag normalized to primary ranking signal (Option A-norm)
---                           + temporal filter from pgmnemo.as_of_timestamp GUC
+--   §1  recall_hybrid()   — temporal filter from pgmnemo.as_of_timestamp GUC
+--                           (Fix-A RRF promotion deferred to v0.6.1 — see INVESTIGATION_FIX_A_REGRESSION.md)
 --   §2  recall_lessons()  — add as_of_ts TIMESTAMPTZ DEFAULT NULL (6th param)
 --   §3  pgmnemo.stats()   — add ghost_count BIGINT column
 --   §4  pgmnemo.ingest()  — RAISE NOTICE when bitemporal close+create fires (Q5 dedup obs.)
@@ -14,13 +14,12 @@
 -- Apply: ALTER EXTENSION pgmnemo UPDATE TO '0.6.0';
 
 -- ─────────────────────────────────────────────────────────────────────────────
--- §1  recall_hybrid() — Fix-A + temporal filter
+-- §1  recall_hybrid() — temporal filter
 --
--- Fix-A: replace fusion_score ORDER BY with normalized rrf_diag
---        norm_denom = (vec_weight + bm25_weight) / (rrf_k + 1)
---        Normalizes rrf_diag to [0,1] so auxiliary terms stay at comparable scale.
---        Literature basis: Cormack et al. (SIGIR 2009).
 -- Temporal: reads pgmnemo.as_of_timestamp GUC (set by recall_lessons() as_of_ts param).
+-- Ranking: ORDER BY retains v0.5.1 fusion_score formula.
+--   Fix-A (rrf_diag as primary ranking signal) deferred to v0.6.1 — failed bench gate.
+--   See spec/v060/INVESTIGATION_FIX_A_REGRESSION.md for root-cause analysis.
 -- No signature change → CREATE OR REPLACE sufficient.
 -- ─────────────────────────────────────────────────────────────────────────────
 
@@ -61,14 +60,8 @@ DECLARE
     _max_depth        CONSTANT INT := 3;
     _include_unver    BOOLEAN;
     _as_of_ts         TIMESTAMPTZ;
-    _rrf_norm_denom   DOUBLE PRECISION;  -- Fix-A: max possible rrf_diag value
 BEGIN
     _rrf_k_f := rrf_k::DOUBLE PRECISION;
-
-    -- Fix-A normalization denominator: max rrf_diag = (vec_w + bm25_w) / (rrf_k + 1)
-    -- Normalizes rrf_diag to [0, 1] so auxiliary terms stay at comparable scale.
-    -- Default params (0.4+0.4)/61 ≈ 0.01311; result is scale-invariant.
-    _rrf_norm_denom := (vec_weight + bm25_weight) / (_rrf_k_f + 1.0);
 
     -- as_of_ts: read from GUC (set by recall_lessons() or directly by caller via SET)
     _as_of_ts := NULLIF(
@@ -100,7 +93,8 @@ BEGIN
     WITH
     -- Step 1: union candidates from dense ANN + BM25 sparse
     raw_candidates AS (
-        -- Dense branch
+        -- Dense branch (parenthesised to allow ORDER BY + LIMIT before UNION ALL)
+        (
         SELECT
             al.id,
             al.role, al.project_id, al.topic, al.lesson_text,
@@ -122,10 +116,12 @@ BEGIN
           AND (_as_of_ts IS NOT NULL OR al.t_valid_to = 'infinity'::TIMESTAMPTZ)
         ORDER BY al.embedding <=> query_embedding
         LIMIT GREATEST(k * 5, 50)
+        )
 
         UNION ALL
 
         -- BM25 sparse branch
+        (
         SELECT
             al.id,
             al.role, al.project_id, al.topic, al.lesson_text,
@@ -146,6 +142,7 @@ BEGIN
           )
           AND (_as_of_ts IS NOT NULL OR al.t_valid_to = 'infinity'::TIMESTAMPTZ)
         LIMIT GREATEST(k * 5, 50)
+        )
     ),
     -- Step 2: aggregate per-id, compute RRF ranks
     deduped AS (
@@ -167,7 +164,7 @@ BEGIN
             ROW_NUMBER() OVER (ORDER BY raw_bm25_score DESC NULLS LAST) AS bm25_rank
         FROM deduped
     ),
-    -- Step 3: compute rrf_diag (primary ranking signal, v0.6.0) + fusion_score (diagnostic)
+    -- Step 3: compute fusion_score (primary ranking signal) + rrf_diag (diagnostic, returned as rrf_score)
     scored AS (
         SELECT
             r.id,
@@ -176,21 +173,21 @@ BEGIN
             r.verified_at, r.created_at,
             r.raw_vec_score  AS v_score,
             r.raw_bm25_score AS b_score,
-            -- Fix-A: rrf_diag is now the PRIMARY ranking signal (normalized to [0,1])
-            (vec_weight  / (_rrf_k_f + r.vec_rank::DOUBLE PRECISION)
-           + bm25_weight / (_rrf_k_f + r.bm25_rank::DOUBLE PRECISION))
-                AS rrf_diag,
-            -- fusion_score retained as diagnostic (was primary before v0.6.0)
+            -- fusion_score: PRIMARY ranking signal (weighted linear combination of raw scores)
             (vec_weight  * r.raw_vec_score
            + bm25_weight * r.raw_bm25_score)
-                AS fusion_score
+                AS fusion_score,
+            -- rrf_diag: diagnostic, returned as rrf_score column (Fix-A promotion deferred to v0.6.1)
+            (vec_weight  / (_rrf_k_f + r.vec_rank::DOUBLE PRECISION)
+           + bm25_weight / (_rrf_k_f + r.bm25_rank::DOUBLE PRECISION))
+                AS rrf_diag
         FROM rrf_ranked r
     ),
-    -- Step 4: anchor top-5 by rrf_diag (Fix-A: was fusion_score) for graph proximity walk
+    -- Step 4: anchor top-5 by fusion_score for graph proximity walk
     anchors AS (
         SELECT id
         FROM scored
-        ORDER BY (rrf_diag / _rrf_norm_denom) DESC   -- Fix-A: normalized rrf_diag
+        ORDER BY fusion_score DESC
         LIMIT 5
     ),
     graph_walk (anchor_id, depth, reached_id) AS (
@@ -212,9 +209,9 @@ BEGIN
     )
     SELECT
         s.id          AS lesson_id,
-        -- Final score: Fix-A normalized rrf_diag + auxiliary components
+        -- Final score: fusion_score (primary) + auxiliary components
         (
-            (s.rrf_diag / _rrf_norm_denom)               -- Fix-A: replaces s.fusion_score
+            s.fusion_score
           + 0.05 * (s.importance::DOUBLE PRECISION / 5.0)
           + 0.05 * GREATEST(0.0,
                        1.0 - LEAST(
@@ -241,7 +238,7 @@ BEGIN
     LEFT JOIN graph_proximity gp ON gp.lesson_id = s.id
     ORDER BY
         (
-            (s.rrf_diag / _rrf_norm_denom)               -- Fix-A ORDER BY matches SELECT score
+            s.fusion_score
           + 0.05 * (s.importance::DOUBLE PRECISION / 5.0)
           + 0.05 * GREATEST(0.0,
                        1.0 - LEAST(
@@ -266,11 +263,9 @@ $$;
 
 COMMENT ON FUNCTION pgmnemo.recall_hybrid(vector, TEXT, INT, TEXT, INT, DOUBLE PRECISION, DOUBLE PRECISION, INT) IS
     'Hybrid recall v0.6.0. '
-    'Fix-A: rrf_diag promoted to primary ranking signal (Cormack 2009 RRF). '
-    'Normalized via (vec_weight+bm25_weight)/(rrf_k+1) to preserve auxiliary-component balance. '
+    'PRIMARY ranking signal: fusion_score (weighted linear combination of vec + bm25 raw scores). '
+    'rrf_diag computed and returned as rrf_score column (diagnostic; Fix-A promotion deferred to v0.6.1). '
     'Temporal filter: reads pgmnemo.as_of_timestamp GUC (set by recall_lessons() as_of_ts param). '
-    'rrf_score column = raw rrf_diag (was diagnostic-only before v0.6.0). '
-    'fusion_score retained internally as diagnostic; not returned. '
     'Union retrieval: candidates from EITHER embedding cosine OR BM25 text match. '
     'graph_proximity_weight GUC (default 0.2). ef_search GUC (default 100). '
     'PARALLEL SAFE (current_setting read-only; set_config in recall_lessons not here).';
@@ -537,13 +532,13 @@ END;
 $$;
 
 COMMENT ON FUNCTION pgmnemo.recall_lessons(vector, INT, TEXT, INT, TEXT, TIMESTAMPTZ) IS
-    'v0.6.0 hybrid router with as_of_ts temporal scoping and Fix-A RRF ranking. '
+    'v0.6.0 hybrid router with as_of_ts temporal scoping. '
     'as_of_ts (default NULL = now): restricts candidates to lessons valid at ts '
     '(t_valid_from <= ts < t_valid_to). Sets pgmnemo.as_of_timestamp GUC (tx-local) '
     'consumed by recall_hybrid(). '
     'PARALLEL UNSAFE due to set_config(); not invoked inside parallel workers. '
     'Routes to recall_hybrid() when query_text + embedding present and disable_hybrid=false. '
-    'Fix-A: recall_hybrid() now ranks by normalized rrf_diag (Cormack 2009 RRF).';
+    'Ranking unchanged from v0.5.1 (fusion_score); Fix-A RRF promotion deferred to v0.6.1.';
 
 
 -- ─────────────────────────────────────────────────────────────────────────────
@@ -730,3 +725,26 @@ COMMENT ON FUNCTION pgmnemo.ingest(TEXT, INT, TEXT, TEXT, SMALLINT, vector, TEXT
     'On idempotent re-run (same args): NOTICE fires again if prior row was already closed+recreated. '
     'Truncates p_lesson_text to pgmnemo.max_query_text_chars (default 2000) with RAISE NOTICE. '
     'R5 (v0.5.0).';
+
+-- ─── R9: recall hit-count metric view ────────────────────────────────────────
+-- Agency RFC R9 (deferred from v0.4.1). Requires track_functions = 'pl' or
+-- 'all' in postgresql.conf; rows only appear after the first call post-reset.
+
+CREATE OR REPLACE VIEW pgmnemo.recall_stats AS
+SELECT
+    n.nspname   AS schema,
+    p.proname   AS function_name,
+    s.calls,
+    s.total_time,
+    s.self_time,
+    NOW()       AS observed_at
+FROM pg_stat_user_functions s
+JOIN pg_proc      p ON p.oid = s.funcid
+JOIN pg_namespace n ON n.oid = p.pronamespace
+WHERE n.nspname = 'pgmnemo'
+  AND p.proname IN ('recall_lessons', 'recall_hybrid', 'ingest');
+
+COMMENT ON VIEW pgmnemo.recall_stats IS
+    'Observability view for recall/ingest call counts (R9, v0.6.0). '
+    'Requires track_functions = ''pl'' or ''all'' in postgresql.conf. '
+    'Rows appear only after first call following a pg_stat_reset().';

@@ -9,27 +9,29 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Theme
 
-RRF Fix-A (rank-based fusion replaces linear fusion) + temporal recall API
-(`as_of_ts`) + dedup observability + ghost-count metric. Answers Agency RFC
-Q4/Q5/Q6/Q7.
+Temporal recall API (`as_of_ts`) + dedup observability + ghost-count metric.
+Answers Agency RFC Q5/Q6/Q7. RRF Fix-A (rank-based fusion promotion) deferred
+to v0.6.1 after failing the real-database benchmark gate.
 
-### Bench verdict
+### Note on RRF Fix-A
 
-Benchmark gate (p < 0.05, Δrecall@10 ≥ +1 pp on held-out evaluation set) to be
-published in the v0.6.1 QA report. Simulated analysis from v0.5.2 spec work
-projects +1.5–2 pp recall@10 lift from Fix-A.
+**RRF Fix-A is NOT included in this release.** Pre-release bench testing on
+real production data showed a −2.40 pp regression in LME-S recall@10, which
+did not pass the gate (p < 0.05, Δrecall@10 ≥ +1 pp required). Root cause:
+auxiliary term contamination from A-norm denominator scaling — see
+[`spec/v060/INVESTIGATION_FIX_A_REGRESSION.md`](spec/v060/INVESTIGATION_FIX_A_REGRESSION.md)
+for full analysis. Fix-A is targeted for v0.6.1 after real-DB validation with
+corrected normalization. The `recall_hybrid()` ranking formula is unchanged
+from v0.5.1 (`ORDER BY fusion_score`); `rrf_score` output column retained as a
+diagnostic value.
 
 ### Changed (behavior)
 
-- **`recall_hybrid()` Fix-A** — `ORDER BY` now uses a rank-based fusion score
-  normalized to [0,1] (`rank_score / max_rank_score`) instead of a weighted
-  linear combination of raw similarity values. Literature basis: Cormack et al.
-  (SIGIR 2009, Reciprocal Rank Fusion). Output columns unchanged; `rrf_score`
-  column value unchanged.
 - **`recall_hybrid()` temporal filter** — reads `pgmnemo.as_of_timestamp`
   session variable, now set by `recall_lessons(as_of_ts)` parameter. Both dense
   vector and BM25 text branches filter to lessons valid at that timestamp
-  (`t_valid_from ≤ as_of_ts < t_valid_to`).
+  (`t_valid_from ≤ as_of_ts < t_valid_to`). Ranking formula unchanged from
+  v0.5.1.
 
 ### Added
 
