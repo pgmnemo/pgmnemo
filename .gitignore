@@ -50,6 +50,7 @@ extension/regression.out
 # Internal working documents (process, WG, agent prompts, early ADRs)
 spec/*
 !spec/competitive/
+!spec/v060/
 research/
 design/
 *.zip
