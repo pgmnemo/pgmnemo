@@ -3,13 +3,15 @@
 **Multi-agent memory substrate for PostgreSQL — provenance-gated, vector-hybrid recall.**
 
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.5.2.post1-green.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.6.0-green.svg)](CHANGELOG.md)
 [![PGXN](https://badge.pgxn.org/stable/pgmnemo.svg)](https://pgxn.org/dist/pgmnemo/)
 [![CI](https://github.com/pgmnemo/pgmnemo/actions/workflows/ci.yml/badge.svg)](https://github.com/pgmnemo/pgmnemo/actions/workflows/ci.yml)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-17-4169E1.svg)](https://www.postgresql.org/)
 [![LoCoMo recall@10](https://img.shields.io/badge/LoCoMo_recall%4010-0.8409-success.svg)](docs/img/all_metrics_history.md)
 [![LongMemEval recall@10](https://img.shields.io/badge/LongMemEval_recall%4010-0.9334-yellow.svg)](docs/img/all_metrics_history.md)
 
+> **v0.6.0 (2026-05-23):** `recall_lessons(as_of_ts)` point-in-time recall + `pgmnemo.stats().ghost_count` provenance metric + `RAISE NOTICE` on content-hash dedup + `pgmnemo.recall_stats` view (R9 hit-count metric, [#26](https://github.com/pgmnemo/pgmnemo/issues/26)) + PostGIS spatial-pre-filter cookbook ([#28](https://github.com/pgmnemo/pgmnemo/issues/28)). **RRF Fix-A deferred to v0.6.1** after real-DB simulation showed −2.40pp regression — see [INVESTIGATION_FIX_A_REGRESSION.md](spec/v060/INVESTIGATION_FIX_A_REGRESSION.md). See [CHANGELOG.md](CHANGELOG.md).
+>
 > **v0.5.2.post1 (2026-05-22):** `pgmnemo-mcp` PyPI description fix — adds `README.md` to package so PyPI page renders correctly. No code or SQL changes. See [CHANGELOG.md](CHANGELOG.md).
 >
 > **v0.5.2 (2026-05-22):** `pgmnemo-mcp` wheel fix — empty package on `pip install` ([#32](https://github.com/pgmnemo/pgmnemo/issues/32)), `packaging-smoke` CI gate, `docs/MIGRATION.md` rollback procedure (v0.5→v0.4), `docs/USAGE.md` `temporal_boost` calibration table. No SQL schema change. See [CHANGELOG.md](CHANGELOG.md).
@@ -18,7 +20,7 @@
 >
 > **Breaking changes (v0.5.0):** 4-argument `traverse_causal_chain(start, max_depth, role, project)` removed — use 2-argument form + `WHERE` clause. `mem_edge` columns renamed: `lesson_a_id` → `source_id`, `lesson_b_id` → `target_id`. Use `pgmnemo.add_edge()` to avoid direct column references. See [docs/MIGRATION.md](docs/MIGRATION.md).
 >
-> **What's next:** v0.6.0 — Fix-A RRF ranking correction (+1.7–2.2pp recall@10 projected), `as_of_ts` param on `recall_lessons()`. Full plan: [ROADMAP.md](ROADMAP.md).
+> **What's next:** v0.6.1 — RRF Fix-A re-attempt with A-scale variant + real-DB CI bench. Full plan: [ROADMAP.md](ROADMAP.md).
 
 ## Benchmarks (v0.5.1, retrieval-only)
 
