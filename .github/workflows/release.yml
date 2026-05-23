@@ -16,10 +16,100 @@ on:
 
 permissions:
   contents: write
+  issues: write  # for notify-failure job
 
 jobs:
+  # ─── Job 0: pre-flight version consistency + artifact checks ──────────────
+  # Catches operator mistakes (forgot to bump a version, gate file missing,
+  # CHANGELOG entry missing) BEFORE we try to publish anything.
+  pre-flight:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.VERSION }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Extract version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "VERSION=${{ github.event.inputs.version }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Check bench-gate file present
+        run: |
+          V=${{ steps.version.outputs.VERSION }}
+          OVERRIDE="${{ github.event.inputs.bench_override }}"
+          if [ -f "benchmarks/gate/v${V}.json" ]; then
+            echo "✓ benchmarks/gate/v${V}.json present"
+          elif [ "$OVERRIDE" = "true" ] || echo "${{ github.event.head_commit.message }}" | grep -q '\[bench-gate-override\]'; then
+            echo "⚠ bench-gate bypassed via override"
+          else
+            echo "::error::benchmarks/gate/v${V}.json missing. Create with analytical or empirical proof, or use [bench-gate-override] in commit message."
+            exit 1
+          fi
+
+      - name: Check pgmnemo.control default_version matches tag
+        run: |
+          V=${{ steps.version.outputs.VERSION }}
+          CTRL=$(grep -E "^default_version" extension/pgmnemo.control | sed -E "s/.*'([^']+)'.*/\1/")
+          if [ "$CTRL" != "$V" ]; then
+            echo "::error::extension/pgmnemo.control default_version='$CTRL' does not match tag v$V. Bump default_version in pgmnemo.control before tagging."
+            exit 1
+          fi
+          echo "✓ pgmnemo.control default_version=$CTRL matches tag"
+
+      - name: Check META.json version matches tag
+        run: |
+          V=${{ steps.version.outputs.VERSION }}
+          META=$(python3 -c "import json; print(json.load(open('META.json'))['version'])")
+          if [ "$META" != "$V" ]; then
+            echo "::error::META.json version='$META' does not match tag v$V. Bump META.json version before tagging."
+            exit 1
+          fi
+          echo "✓ META.json version=$META matches tag"
+
+      - name: Check pgmnemo_mcp pyproject version matches tag
+        run: |
+          V=${{ steps.version.outputs.VERSION }}
+          PYPI_VER=$(grep -E "^version" pgmnemo_mcp/pyproject.toml | sed -E 's/version *= *"([^"]+)"/\1/')
+          # Allow .postN suffix variants (e.g. 0.6.0.post1 for re-release of metadata-only fix)
+          BASE_VER="${PYPI_VER%%.post*}"
+          if [ "$BASE_VER" != "$V" ]; then
+            echo "::error::pgmnemo_mcp/pyproject.toml version='$PYPI_VER' base does not match tag v$V. Bump pgmnemo_mcp/pyproject.toml before tagging."
+            exit 1
+          fi
+          echo "✓ pgmnemo_mcp version=$PYPI_VER matches tag (base=$BASE_VER)"
+
+      - name: Check CHANGELOG entry exists
+        run: |
+          V=${{ steps.version.outputs.VERSION }}
+          if ! grep -qE "^## \[$V\]" CHANGELOG.md; then
+            echo "::error::CHANGELOG.md is missing entry '## [$V]'. Add a CHANGELOG entry for this version before tagging."
+            exit 1
+          fi
+          # Verify entry is non-trivial (>200 chars before next ## heading)
+          ENTRY=$(awk "/^## \[$V\]/,/^## \[/" CHANGELOG.md | head -n -1 | wc -c)
+          if [ "$ENTRY" -lt 200 ]; then
+            echo "::error::CHANGELOG.md entry for [$V] is suspiciously short ($ENTRY chars). Add release notes."
+            exit 1
+          fi
+          echo "✓ CHANGELOG entry for [$V] present ($ENTRY chars)"
+
+      - name: Check README version badge matches tag
+        run: |
+          V=${{ steps.version.outputs.VERSION }}
+          if ! grep -qE "badge/version-${V//./\\.}" README.md; then
+            echo "::warning::README.md version badge does not match v$V. Consider bumping the badge URL (not blocking)."
+          else
+            echo "✓ README version badge matches v$V"
+          fi
+
   # ─── Job 1: pg_regress installcheck ────────────────────────────────────────
   installcheck:
+    needs: pre-flight
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -76,6 +166,7 @@ jobs:
 
   # ─── Job 2: bench-gate ─────────────────────────────────────────────────────
   bench-gate:
+    needs: pre-flight
     runs-on: ubuntu-latest
     outputs:
       bench_pass: ${{ steps.gate.outputs.bench_pass }}
@@ -235,3 +326,123 @@ jobs:
           # Path B: if PYPI_API_TOKEN secret exists it takes priority over OIDC.
           # Path A: leave empty — OIDC token used automatically.
           password: ${{ secrets.PYPI_API_TOKEN }}
+
+  # ─── Job 5: PyPI smoke test (catches v0.5.2-class empty-wheel bugs) ───────
+  smoke-pypi:
+    needs: [pre-flight, publish-mcp]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Wait for PyPI index propagation
+        run: sleep 45
+
+      - name: Install pgmnemo-mcp from PyPI in clean venv
+        run: |
+          V=${{ needs.pre-flight.outputs.version }}
+          python -m venv /tmp/smoke
+          /tmp/smoke/bin/pip install --quiet "pgmnemo-mcp==${V}" || {
+            echo "::error::pip install pgmnemo-mcp==${V} failed — package not on PyPI or wheel broken"
+            exit 1
+          }
+          echo "✓ pip install pgmnemo-mcp==${V} succeeded"
+
+      - name: Verify package is non-empty + entry point importable
+        run: |
+          V=${{ needs.pre-flight.outputs.version }}
+          /tmp/smoke/bin/python -c "
+          import pgmnemo_mcp
+          import pgmnemo_mcp.server
+          assert hasattr(pgmnemo_mcp.server, 'run'), 'pgmnemo_mcp.server.run entry point missing'
+          print('✓ pgmnemo_mcp importable, server.run present')
+          " || {
+            echo "::error::pgmnemo-mcp ${V} installed but import failed — wheel may be empty (recurrence of v0.5.2 bug #32)"
+            exit 1
+          }
+
+      - name: Verify console script registered
+        run: |
+          test -x /tmp/smoke/bin/pgmnemo-mcp || {
+            echo "::error::pgmnemo-mcp console script not registered in PATH"
+            exit 1
+          }
+          echo "✓ pgmnemo-mcp script available at /tmp/smoke/bin/pgmnemo-mcp"
+
+  # ─── Job 6: PGXN smoke test ────────────────────────────────────────────────
+  smoke-pgxn:
+    needs: [pre-flight, release]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Wait for PGXN propagation
+        run: sleep 60
+
+      - name: HEAD check PGXN release URL
+        run: |
+          V=${{ needs.pre-flight.outputs.version }}
+          URL="https://api.pgxn.org/dist/pgmnemo/${V}/pgmnemo-${V}.zip"
+          # PGXN can take a few minutes to propagate — retry up to 3x with backoff
+          for i in 1 2 3; do
+            CODE=$(curl -s -o /dev/null -w "%{http_code}" -I "$URL")
+            if [ "$CODE" = "200" ]; then
+              echo "✓ PGXN: $URL (HTTP 200)"
+              exit 0
+            fi
+            echo "Attempt $i: HTTP $CODE — retrying in 30s"
+            sleep 30
+          done
+          echo "::warning::PGXN release not reachable at $URL after 3 attempts. Check manager.pgxn.org for upload status."
+          # Don't fail — PGXN propagation can be slow, and 409 (already uploaded) is reported as success in release job
+
+  # ─── Job 7: notify-failure (auto-open issue on any failed release job) ────
+  notify-failure:
+    if: failure()
+    needs: [pre-flight, installcheck, bench-gate, release, publish-mcp, smoke-pypi, smoke-pgxn]
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create release-failure issue
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ needs.pre-flight.outputs.version }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          TITLE="release-failure: v${VERSION:-unknown} workflow failed"
+          BODY=$(cat <<EOF
+          **Workflow:** release.yml
+          **Tag:** v${VERSION:-unknown}
+          **Run:** ${RUN_URL}
+          **Triggered by:** ${{ github.actor }}
+          **Event:** ${{ github.event_name }}
+
+          One or more jobs in the release workflow failed. Common causes:
+
+          - **pre-flight failure** → version mismatch between \`pgmnemo.control\` / \`META.json\` / \`pgmnemo_mcp/pyproject.toml\` / \`CHANGELOG.md\`. Check the pre-flight job log for the specific assertion.
+          - **installcheck failure** → \`pg_regress\` regression diffs uploaded as artifact \`regression-diffs\` on this run.
+          - **bench-gate failure** → \`benchmarks/gate/v${VERSION}.json\` missing or invalid.
+          - **release / PGXN upload failure** → \`PGXN_USERNAME\` / \`PGXN_PASSWORD\` secrets unset, or manager.pgxn.org rejected the bundle.
+          - **publish-mcp / PyPI failure** → OIDC trusted publisher not configured (see pypi.org/manage/account/publishing/), or \`PYPI_API_TOKEN\` secret invalid.
+          - **smoke-pypi failure** → \`pip install pgmnemo-mcp==${VERSION}\` succeeded but import broke. Check for empty-wheel regression (#32 class).
+          - **smoke-pgxn failure** → typically PGXN propagation delay, treated as warning. If it persists >10 min, investigate manually.
+
+          ### Recovery steps
+
+          1. Fix the underlying issue (likely a version mismatch or missing artifact)
+          2. Delete and recreate the tag: \`git tag -d v${VERSION} && git tag -a v${VERSION} -m '...' && git push origin v${VERSION} --force\`
+          3. Re-run will trigger automatically on the new tag push.
+
+          /label release-failure
+          EOF
+          )
+          gh issue create \
+            --title "$TITLE" \
+            --body "$BODY" \
+            --label release-failure \
+            --label automated || {
+            echo "::warning::Could not auto-create issue. Check manually: $RUN_URL"
+          }
