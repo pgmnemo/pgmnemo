@@ -10,7 +10,7 @@
 [![LoCoMo recall@10](https://img.shields.io/badge/LoCoMo_recall%4010-0.8409-success.svg)](docs/img/all_metrics_history.md)
 [![LongMemEval recall@10](https://img.shields.io/badge/LongMemEval_recall%4010-0.9334-yellow.svg)](docs/img/all_metrics_history.md)
 
-> **v0.6.0 (2026-05-23):** `recall_lessons(as_of_ts)` point-in-time recall + `pgmnemo.stats().ghost_count` provenance metric + `RAISE NOTICE` on content-hash dedup + `pgmnemo.recall_stats` view (R9 hit-count metric, [#26](https://github.com/pgmnemo/pgmnemo/issues/26)) + PostGIS spatial-pre-filter cookbook ([#28](https://github.com/pgmnemo/pgmnemo/issues/28)). **RRF Fix-A deferred to v0.6.1** after real-DB simulation showed −2.40pp regression — see [INVESTIGATION_FIX_A_REGRESSION.md](spec/v060/INVESTIGATION_FIX_A_REGRESSION.md). See [CHANGELOG.md](CHANGELOG.md).
+> **v0.6.0 (2026-05-23):** `pgmnemo.stats().ghost_count` provenance metric + `RAISE NOTICE` on content-hash dedup + `pgmnemo.recall_stats` view (R9 hit-count metric, [#26](https://github.com/pgmnemo/pgmnemo/issues/26)) + PostGIS spatial-pre-filter cookbook ([#28](https://github.com/pgmnemo/pgmnemo/issues/28)) + MIGRATION rollback docs + USAGE tuning docs. **RRF Fix-A AND bitemporal `as_of_ts` deferred to v0.6.1** after real-DB and runtime regressions — see [INVESTIGATION_FIX_A_REGRESSION.md](spec/v060/INVESTIGATION_FIX_A_REGRESSION.md). `recall_hybrid()` and `recall_lessons()` are byte-identical to v0.5.1. See [CHANGELOG.md](CHANGELOG.md).
 >
 > **v0.5.2.post1 (2026-05-22):** `pgmnemo-mcp` PyPI description fix — adds `README.md` to package so PyPI page renders correctly. No code or SQL changes. See [CHANGELOG.md](CHANGELOG.md).
 >

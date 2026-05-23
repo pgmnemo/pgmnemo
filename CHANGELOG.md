@@ -33,6 +33,18 @@ diagnostic value.
   (`t_valid_from ≤ as_of_ts < t_valid_to`). Ranking formula unchanged from
   v0.5.1.
 
+### Note on bitemporal `as_of_ts` (also deferred)
+
+During development, the v0.6.0 update script also rewrote `recall_lessons()` and
+`recall_hybrid()` to support point-in-time recall via a new `as_of_ts` parameter.
+The implementation introduced a CTE refactor that caused two distinct runtime
+regressions (`AmbiguousColumn: role`, `UndefinedTable: graph_walk`), both caught
+by `scripts/smoke_recall_hybrid.py` before publish.
+
+Decision: ship v0.6.0 with `recall_lessons()` and `recall_hybrid()` **byte-identical
+to v0.5.1**. The `as_of_ts` parameter and bitemporal filter return in v0.6.1
+alongside the corrected RRF variant (A-scale) after real-DB validation.
+
 ### Added
 
 - **`recall_lessons()` — `as_of_ts TIMESTAMPTZ DEFAULT NULL`** (6th param).
