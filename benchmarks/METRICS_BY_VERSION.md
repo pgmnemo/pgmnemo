@@ -36,6 +36,7 @@ changes — isolates retrieval-layer Δ without session-pooling reranker on top.
 | v0.2.1 | 2026-05-09 | 0.2.1 | 0.3023 | 0.3660 | 0.4770 | 0.5740 | 0.2369 | — (baseline) | `locomo/results/v0.2.1_20260509/` |
 | v0.3.0 | 2026-05-10 | 0.3.0 | 0.3023 | 0.3660 | 0.4770 | 0.5740 | 0.2369 | **neutral** (Δ=0.0000, p_corr=1.0) | `locomo/results/v0.3.0_20260510/` |
 | v0.5.0 | 2026-05-17 | 0.5.0 | — | — | — | — | — | **not run** — R5/R6/R10/H-06 non-algorithmic; H-07 Δ=0 confirmed separately (Table 3 proxy); H-02 bench pending macOS host | pending |
+| v0.6.0 | 2026-05-23 | 0.6.0 | — | — | — | — | — | **not run** — `recall_lessons()` path unchanged (RRF Fix-A deferred to v0.6.1 after real-DB regression); `as_of_ts`/`ghost_count`/NOTICE additive only | carry-forward from v0.3.0 |
 
 Frozen parameters: 10 conversations, 1986 questions, embedder `facebook/dragon-plus` (768d→1024 zero-pad).
 
@@ -53,6 +54,7 @@ and the number that appears in `docs/BENCHMARKS.md` and the README.
 | v0.2.1 | 2026-05-09 | 0.2.1 | 0.6623 | 0.7951 | 0.9623 | 0.5480 | — (baseline) | `locomo/results/v0.2.1_session_20260509/` |
 | v0.3.0 | 2026-05-13 | 0.3.0 | 0.6640 | 0.7994 | 0.9641 | 0.5569 | **neutral** (Δr@10=+0.43pp, p_corr=1.0) | `locomo/results/v0.3.0_session_20260513/` |
 | v0.5.0 | 2026-05-17 | 0.5.0 | — | — | — | — | **not run** — non-algorithmic release; run pending macOS host | pending |
+| v0.6.0 | 2026-05-23 | 0.6.0 | — | — | — | — | **not run** — `recall_lessons()` path unchanged from v0.5.1 (`ORDER BY fusion_score`); RRF Fix-A deferred to v0.6.1 | carry-forward from v0.3.0 |
 
 ---
 
@@ -69,6 +71,7 @@ over the question-specific haystack.
 | v0.3.0 | 2026-05-13 | 0.3.0 | 0.4762 | 0.8814 | 0.9334 | 0.9853 | 0.8472 | **neutral** (NEAR_THRESHOLD on r@5 +1.22pp, ns) | `longmemeval/results/v0.3.0_20260513/` |
 | v0.5.0 | 2026-05-17 | 0.5.0 | — | — | — | — | — | **not run** — H-07 Δ=0 (significance_test.py exit 0, all metrics, p_corr=1.0, run 9663); H-02 Stella V5 bench pending macOS host | `gate/v0.5.0-stella-candidate.json` (RUN_FAILED) |
 | v0.5.0 (bge-m3, analytical) | 2026-05-18 | 0.5.0 | 0.4762 | 0.8814 | **0.9334** | 0.9853 | 0.8472 | **neutral — analytical carry-forward** (Δ=0 confirmed; v0.5.0 non-algorithmic — H-06/H-07/R5/R6/R10 changes do not touch `recall_lessons()` path; macOS MLX host execution blocked INFRA-3; see H-02 note below) | carry-forward from `longmemeval/results/v0.3.0_20260513/` |
+| v0.6.0 (bge-m3, analytical) | 2026-05-23 | 0.6.0 | 0.4762 | 0.8814 | **0.9334** | 0.9853 | 0.8472 | **neutral — analytical carry-forward**; RRF Fix-A withheld after real-DB simulation showed −2.40pp recall@10 regression (see `spec/v060/INVESTIGATION_FIX_A_REGRESSION.md`); `recall_lessons()` retrieval path identical to v0.5.1 | carry-forward from `longmemeval/results/v0.3.0_20260513/` |
 
 Frozen parameters: longmemeval_s_cleaned.json (500 queries), embedder `BAAI/bge-m3` (1024d, max_seq=512).
 
