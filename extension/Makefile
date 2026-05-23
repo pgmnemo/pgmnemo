@@ -31,7 +31,9 @@ DATA = pgmnemo--0.0.1.sql \
        pgmnemo--0.4.1--0.5.0.sql \
        pgmnemo--0.5.0.sql \
        pgmnemo--0.5.0--0.5.1.sql \
-       pgmnemo--0.5.1.sql
+       pgmnemo--0.5.1.sql \
+       pgmnemo--0.5.1--0.6.0.sql \
+       pgmnemo--0.6.0.sql
 REGRESS = version recency_weight_guc prov_strength_tristate recall_lessons_pooled verifier_role source_run_task_ids ttl_expires_at state_machine mem_edge traverse_causal recall_graph traverse_temporal_smoke temporal_boost_guc bitemporality_smoke
 REGRESS_OPTS = --load-extension=vector --load-extension=pgmnemo
 PG_CONFIG = pg_config
