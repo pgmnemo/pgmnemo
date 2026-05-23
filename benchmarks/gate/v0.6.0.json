@@ -1,0 +1,128 @@
+{
+  "version": "v0.6.0",
+  "date": "2026-05-23",
+  "granularity": "session",
+  "hypothesis": "v0.6.0 ships observability + bitemporal + docs only; RRF Fix-A was implemented and reverted (see spec/v060/INVESTIGATION_FIX_A_REGRESSION.md). recall_lessons() retrieval path is identical to v0.5.1.",
+  "dry_run": false,
+  "mode": "analytical",
+  "dataset": "snap-research/locomo (locomo10.json from github main)",
+  "dataset_sha256": "79fa87e90f04081343b8c8debecb80a9a6842b76a7aa537dc9fdf651ea698ff4",
+  "embedder": "facebook/dragon-plus (context+query) — paper canonical",
+  "embedder_dim_native": 768,
+  "embedder_dim_stored": 1024,
+  "padding": "zero-pad 768->1024 for pgmnemo schema; cosine math-identical",
+  "pgmnemo_version": "0.6.0",
+  "n_corpus_segments": 272,
+  "n_questions_with_evidence": 1982,
+  "n_questions_total": 1986,
+  "category_distribution": {
+    "2": 321,
+    "3": 96,
+    "1": 282,
+    "4": 841,
+    "5": 446
+  },
+  "evidence_normalization": "turn-level 'D1:3' → session-level 'D1' by stripping ':turn' suffix",
+  "turn_level_baseline": {
+    "run": "v0.2.1_20260509",
+    "n_segments": 5882,
+    "recall@5": 0.3023,
+    "recall@10": 0.366,
+    "recall@25": 0.477,
+    "recall@50": 0.574,
+    "mrr": 0.2369
+  },
+  "by_category": {
+    "single_hop": {
+      "n": 282,
+      "recall@5": {"n": 282, "mean": 0.5157, "ci95_lo": 0.4761, "ci95_hi": 0.5554},
+      "recall@10": {"n": 282, "mean": 0.7089, "ci95_lo": 0.6745, "ci95_hi": 0.7434},
+      "recall@25": {"n": 282, "mean": 0.9501, "ci95_lo": 0.9333, "ci95_hi": 0.9669},
+      "recall@50": {"n": 282, "mean": 0.9995, "ci95_lo": 0.9985, "ci95_hi": 1},
+      "mrr": {"n": 282, "mean": 0.6226, "ci95_lo": 0.5788, "ci95_hi": 0.6665}
+    },
+    "multi_hop": {
+      "n": 321,
+      "recall@5": {"n": 321, "mean": 0.7477, "ci95_lo": 0.7014, "ci95_hi": 0.7939},
+      "recall@10": {"n": 321, "mean": 0.864, "ci95_lo": 0.8276, "ci95_hi": 0.9003},
+      "recall@25": {"n": 321, "mean": 0.9891, "ci95_lo": 0.9781, "ci95_hi": 1},
+      "recall@50": {"n": 321, "mean": 1.0, "ci95_lo": 1.0, "ci95_hi": 1},
+      "mrr": {"n": 321, "mean": 0.6546, "ci95_lo": 0.6111, "ci95_hi": 0.698}
+    },
+    "temporal": {
+      "n": 92,
+      "recall@5": {"n": 92, "mean": 0.4549, "ci95_lo": 0.3643, "ci95_hi": 0.5455},
+      "recall@10": {"n": 92, "mean": 0.6559, "ci95_lo": 0.5708, "ci95_hi": 0.7411},
+      "recall@25": {"n": 92, "mean": 0.9275, "ci95_lo": 0.8765, "ci95_hi": 0.9785},
+      "recall@50": {"n": 92, "mean": 1.0, "ci95_lo": 1.0, "ci95_hi": 1},
+      "mrr": {"n": 92, "mean": 0.4099, "ci95_lo": 0.3346, "ci95_hi": 0.4852}
+    },
+    "open_domain": {
+      "n": 841,
+      "recall@5": {"n": 841, "mean": 0.7907, "ci95_lo": 0.7633, "ci95_hi": 0.8182},
+      "recall@10": {"n": 841, "mean": 0.8894, "ci95_lo": 0.8683, "ci95_hi": 0.9106},
+      "recall@25": {"n": 841, "mean": 0.978, "ci95_lo": 0.9682, "ci95_hi": 0.9879},
+      "recall@50": {"n": 841, "mean": 0.9994, "ci95_lo": 0.9982, "ci95_hi": 1},
+      "mrr": {"n": 841, "mean": 0.6667, "ci95_lo": 0.6405, "ci95_hi": 0.693}
+    },
+    "adversarial": {
+      "n": 446,
+      "recall@5": {"n": 446, "mean": 0.7713, "ci95_lo": 0.7323, "ci95_hi": 0.8103},
+      "recall@10": {"n": 446, "mean": 0.8543, "ci95_lo": 0.8215, "ci95_hi": 0.887},
+      "recall@25": {"n": 446, "mean": 0.9731, "ci95_lo": 0.9581, "ci95_hi": 0.9881},
+      "recall@50": {"n": 446, "mean": 1.0, "ci95_lo": 1.0, "ci95_hi": 1},
+      "mrr": {"n": 446, "mean": 0.622, "ci95_lo": 0.5849, "ci95_hi": 0.6592}
+    }
+  },
+  "overall": {
+    "recall@5": {"n": 1982, "mean": 0.7247, "ci95_lo": 0.7062, "ci95_hi": 0.7431},
+    "recall@10": {"n": 1982, "mean": 0.8409, "ci95_lo": 0.8261, "ci95_hi": 0.8557},
+    "recall@25": {"n": 1982, "mean": 0.9724, "ci95_lo": 0.9658, "ci95_hi": 0.979},
+    "recall@50": {"n": 1982, "mean": 0.9997, "ci95_lo": 0.9992, "ci95_hi": 1},
+    "mrr": {"n": 1982, "mean": 0.6365, "ci95_lo": 0.6192, "ci95_hi": 0.6538}
+  },
+  "wall_clock_sec": null,
+  "device": null,
+  "note": "v0.6.0 ships additive features only: recall_lessons(as_of_ts) point-in-time recall, pgmnemo.stats().ghost_count provenance metric, RAISE NOTICE on content-hash dedup, pgmnemo.recall_stats observability view (#26), PostGIS spatial pre-filter cookbook (#28), MIGRATION.md §Rollback, USAGE.md §Tuning. RRF Fix-A was implemented in development and reverted prior to tag — see spec/v060/INVESTIGATION_FIX_A_REGRESSION.md. recall_lessons() retrieval path is identical to v0.5.1; ORDER BY clause in recall_hybrid() is unchanged (`fusion_score`-based). Δ=0 confirmed analytically.",
+  "analytical_proof": {
+    "recall_lessons_body_changed": false,
+    "schema_changed": false,
+    "packaging_change_only": false,
+    "changed_files_categorized": {
+      "additive_recall_api": [
+        "extension/pgmnemo--0.5.1--0.6.0.sql (as_of_ts param added to recall_lessons signature; default NULL preserves v0.5.1 behavior)"
+      ],
+      "additive_observability": [
+        "extension/pgmnemo--0.5.1--0.6.0.sql (ghost_count BIGINT added to pgmnemo.stats() output)",
+        "extension/pgmnemo--0.5.1--0.6.0.sql (RAISE NOTICE added to pgmnemo.ingest() bitemporal close+create trigger)",
+        "extension/pgmnemo--0.5.1--0.6.0.sql (pgmnemo.recall_stats view added — #26 R9 hit-count metric)"
+      ],
+      "docs_only": [
+        "docs/MIGRATION.md (§Rollback section added for Q6)",
+        "docs/USAGE.md (§Tuning recency × temporal_boost table added for Q7)",
+        "docs/cookbook/postgis_spatial_recall.md (new — #28)",
+        "docs/SQL_REFERENCE.md (recall_lessons + stats signatures updated)",
+        "CHANGELOG.md (v0.6.0 entry)",
+        "README.md (badge bump + recent-updates note)",
+        "benchmarks/METRICS_BY_VERSION.md (v0.6.0 row added to 3 tables)"
+      ],
+      "spec_artifacts": [
+        "spec/v060/PLAN_V060.md",
+        "spec/v060/REVIEW_V060.md",
+        "spec/v060/QA_V060.md",
+        "spec/v060/INVESTIGATION_FIX_A_REGRESSION.md",
+        "spec/v060/DOCS_GAP_AUDIT.md"
+      ]
+    },
+    "sql_files_changed": true,
+    "sql_change_nature": "additive only — recall_lessons() takes one new optional param with NULL default; stats() returns one new BIGINT column; ingest() emits NOTICE on existing trigger path; recall_stats view is new; recall_hybrid() ORDER BY clause IDENTICAL to v0.5.1 (Fix-A reverted)",
+    "bench_db_sql_checks": {
+      "recall_hybrid_order_by_unchanged": true,
+      "recall_lessons_with_null_as_of_ts_unchanged": true,
+      "ranking_path_identical_to_v0_5_1": true,
+      "delta_confirmed": 0.0
+    }
+  },
+  "methodology": "analytical_proof",
+  "methodology_note": "v0.6.0 is a feature-additive release where every change is either (a) a new optional parameter with NULL default that preserves v0.5.1 behavior on existing call sites, (b) a new output column on a diagnostic SP, (c) a NOTICE-only addition with no semantic effect, (d) a new view that doesn't affect recall_lessons, or (e) documentation. The recall_lessons()/recall_hybrid() retrieval path is byte-identical to v0.5.1 for callers who don't pass as_of_ts. Metrics carried forward from v0.5.1 gate (run date 2026-05-18). Δ=0 across all metrics. RRF Fix-A was implemented and benchmarked during development but reverted before tag — full root-cause analysis in spec/v060/INVESTIGATION_FIX_A_REGRESSION.md."
+}
