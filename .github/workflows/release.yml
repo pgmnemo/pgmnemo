@@ -103,8 +103,16 @@ jobs:
             echo "::error::CHANGELOG.md is missing entry '## [$V]'. Add a CHANGELOG entry for this version before tagging."
             exit 1
           fi
-          # Verify entry is non-trivial (>200 chars before next ## heading)
-          ENTRY=$(awk "/^## \[$V\]/,/^## \[/" CHANGELOG.md | head -n -1 | wc -c)
+          # Verify entry is non-trivial: count chars between this version's heading
+          # and the next ## heading (exclusive). Use python for correct range semantics —
+          # awk's range operator is ambiguous when start and end patterns overlap.
+          ENTRY=$(python3 -c "
+          import re
+          v = '$V'
+          c = open('CHANGELOG.md').read()
+          m = re.search(rf'^## \[{re.escape(v)}\][^\n]*\n(.*?)(?=^## \[|\Z)', c, re.MULTILINE|re.DOTALL)
+          print(len(m.group(1).strip()) if m else 0)
+          ")
           if [ "$ENTRY" -lt 200 ]; then
             echo "::error::CHANGELOG.md entry for [$V] is suspiciously short ($ENTRY chars). Add release notes."
             exit 1
