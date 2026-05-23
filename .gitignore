@@ -52,6 +52,7 @@ spec/*
 !spec/competitive/
 !spec/v060/
 !spec/v061/
+!spec/v062/
 research/
 design/
 *.zip
