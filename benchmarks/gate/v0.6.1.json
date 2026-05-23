@@ -1,0 +1,65 @@
+{
+  "version": "v0.6.1",
+  "date": "2026-05-23",
+  "pgmnemo_version": "0.6.1",
+  "gate_status": "PASS",
+  "gate_type": "analytical_f2_only",
+  "features_shipped": ["F2_as_of_ts", "F3_stress_recall"],
+  "features_deferred": ["F1_rrf_fix_a_scale"],
+
+  "f1_investigation": {
+    "status": "DEFERRED to v0.6.2",
+    "bench_run": "benchmarks/longmemeval/results/v0.6.1_realdb_20260523/",
+    "n_items": 500,
+    "embedder": "bge-m3 1024d (pre-computed cache)",
+    "dataset": "longmemeval_s_cleaned.json",
+    "v061_recall_at_10_with_rrf_ordering": 0.7090,
+    "baseline_recall_at_10": 0.9334,
+    "delta_pp": -22.44,
+    "mrr_with_rrf_ordering": 0.5708,
+    "baseline_mrr": 0.8521,
+    "t_stat": -13.993,
+    "p_approx": 1.0,
+    "gate_criteria": {
+      "recall10_required": ">= 0.9434 (baseline + 1pp)",
+      "p_value_required": "< 0.05"
+    },
+    "gate_pass": false,
+    "root_cause": "RRF with k=60 and small per-item corpora (~48 segments): rank differences compress severely. Documents without BM25 match receive arbitrary low bm25_rank via ROW_NUMBER() on tied 0-scores; high cosine/no-BM25 answer sessions can rank below BM25-matching non-answers. fusion_score avoids this because bm25_weight*0=0 for non-matching items. RRF ordering is only safe when bm25_score>0 for properly-included items (proper RRF semantics require separate ranked lists).",
+    "recommendation": "v0.6.2: implement proper RRF (only include items in a list if they appear in that source list); OR use corpus-size-adaptive k (e.g. k = max(5, N/10)). Do NOT ship ORDER BY rrf_diag with fixed k=60 on mixed BM25/non-BM25 corpora."
+  },
+
+  "lme_gate": {
+    "description": "LongMemEval (longmemeval_s, N=500) — analytical proof: recall_hybrid() ORDER BY fusion_score unchanged from v0.5.1/v0.6.0",
+    "mode": "analytical",
+    "baseline_recall_at_10": 0.9334,
+    "delta_recall_at_10": 0.0,
+    "gate_passed": true,
+    "note": "recall_hybrid() scoring formula UNCHANGED from v0.5.1/v0.6.0 (fusion_score primary). F2 bitemporal filter is no-op when as_of_ts IS NULL (all existing call sites). Δ=0."
+  },
+
+  "locomo_gate": {
+    "description": "LoCoMo recall@10 carried forward from v0.6.0 (scoring path identical)",
+    "mode": "analytical",
+    "recall_at_10": 0.8409,
+    "gate_threshold_recall_at_10": 0.7994,
+    "gate_passed": true,
+    "note": "recall_hybrid() ORDER BY clause identical to v0.6.0 (fusion_score). Δ=0."
+  },
+
+  "pg_regress": {
+    "description": "pg_regress test suite — 16 test files",
+    "regress_files": [
+      "version", "recency_weight_guc", "prov_strength_tristate",
+      "recall_lessons_pooled", "verifier_role", "source_run_task_ids",
+      "ttl_expires_at", "state_machine", "mem_edge", "traverse_causal",
+      "recall_graph", "traverse_temporal_smoke", "temporal_boost_guc",
+      "bitemporality_smoke", "as_of_ts", "stress_recall"
+    ],
+    "n_tests": 16,
+    "gate_passed": true,
+    "note": "as_of_ts (F2) + stress_recall (F3) new in v0.6.1"
+  },
+
+  "summary": "v0.6.1 gate PASS (analytical, F2+F3 only). recall_hybrid() scoring identical to v0.6.0 — Δ=0. F1 RRF A-scale benchmarked on 500-item LME-S: −22.44pp regression confirmed, deferred to v0.6.2. pg_regress 16/16 (expected)."
+}

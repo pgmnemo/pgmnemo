@@ -31,9 +31,13 @@ for code that calls functions with positional arguments (see [PLAN §2](../spec/
 
 ### New behavior
 
-1. **`recall_hybrid()` ranking** — Fix-A: rank is now computed by normalized RRF
-   (`rrf_diag / max_rrf_diag`) instead of weighted linear fusion score. Ranking
-   order will change; this is the intended improvement. Output columns unchanged.
+1. **`recall_hybrid()` ranking** — **unchanged from v0.5.1**. `ORDER BY` still
+   uses `fusion_score` (weighted linear combination of raw vec + BM25 scores).
+   RRF Fix-A (normalized rrf_diag as primary signal) was deferred to v0.6.1
+   after failing the bench gate (−2.40 pp LME-S recall@10); see
+   [`spec/v060/INVESTIGATION_FIX_A_REGRESSION.md`](../spec/v060/INVESTIGATION_FIX_A_REGRESSION.md).
+   The `rrf_score` output column is retained (diagnostic value). Output columns
+   and their types are unchanged.
 
 2. **`recall_lessons()` — `as_of_ts` parameter** — new optional 6th parameter.
    Existing calls with 5 args resolve to `as_of_ts = NULL` (identical behavior).
