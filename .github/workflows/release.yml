@@ -287,11 +287,14 @@ jobs:
           make_latest: true
 
       - name: Upload to PGXN
-        if: ${{ secrets.PGXN_USERNAME != '' }}
         env:
           PGXN_USERNAME: ${{ secrets.PGXN_USERNAME }}
           PGXN_PASSWORD: ${{ secrets.PGXN_PASSWORD }}
         run: |
+          if [ -z "$PGXN_USERNAME" ]; then
+            echo "PGXN_USERNAME not set — skipping PGXN upload"
+            exit 0
+          fi
           # PGXN Manager returns HTTP 303 (See Other) on successful upload,
           # redirecting to the release page. Treat 303 as success.
           HTTP_CODE=$(curl -s -o /tmp/pgxn_response.txt -w "%{http_code}" \
@@ -425,11 +428,25 @@ jobs:
   notify-telegram:
     needs: [pre-flight, release, publish-mcp, smoke-pypi, smoke-pgxn]
     runs-on: ubuntu-latest
-    if: ${{ secrets.TG_BOT_TOKEN != '' && secrets.TG_CHAT_ID != '' }}
     steps:
-      - uses: actions/checkout@v4
+      - name: Check Telegram secrets
+        id: tg_check
+        env:
+          TG_BOT_TOKEN: ${{ secrets.TG_BOT_TOKEN }}
+          TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
+        run: |
+          if [ -n "$TG_BOT_TOKEN" ] && [ -n "$TG_CHAT_ID" ]; then
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "Telegram secrets missing — skipping notification"
+          fi
+
+      - if: steps.tg_check.outputs.configured == 'true'
+        uses: actions/checkout@v4
 
       - name: Build Telegram message from release notes file (or fallback)
+        if: steps.tg_check.outputs.configured == 'true'
         id: msg
         env:
           VERSION: ${{ needs.pre-flight.outputs.version }}
@@ -479,6 +496,7 @@ jobs:
           echo "Body length: $(wc -c < /tmp/tg_body.txt) chars"
 
       - name: Send Telegram notification
+        if: steps.tg_check.outputs.configured == 'true'
         env:
           TG_BOT_TOKEN: ${{ secrets.TG_BOT_TOKEN }}
           TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
