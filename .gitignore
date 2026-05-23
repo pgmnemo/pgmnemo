@@ -51,6 +51,7 @@ extension/regression.out
 spec/*
 !spec/competitive/
 !spec/v060/
+!spec/v061/
 research/
 design/
 *.zip
