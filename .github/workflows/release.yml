@@ -454,26 +454,20 @@ jobs:
               tm = re.search(r'### Theme\s*\n+([^\n#]+(?:\n[^\n#]+)*)', m.group(1))
               if tm:
                   theme = ' '.join(tm.group(1).split()).strip()
-          fallback = f"""🚀 <b>pgmnemo v{v} released</b>
-
-{theme if theme else 'See CHANGELOG for details.'}
-
-For maintainers: add <code>docs/release_notes/v{v}_telegram.md</code> next time to send a more detailed announcement."""
+          body_theme = theme if theme else 'See CHANGELOG for details.'
+          fallback = f"🚀 <b>pgmnemo v{v} released</b>\n\n{body_theme}\n\nFor maintainers: add <code>docs/release_notes/v{v}_telegram.md</code> next time to send a more detailed announcement."
           print(fallback, end='')
           PY
           # Append install + links (always present, machine-generated)
-          cat >> /tmp/tg_body.txt <<EOF
-
-
-<b>Install:</b>
-<code>psql -c "ALTER EXTENSION pgmnemo UPDATE TO '${VERSION}';"</code>
-
-<b>Links:</b>
-📦 <a href="https://github.com/pgmnemo/pgmnemo/releases/tag/v${VERSION}">GitHub Release</a>
-🐘 <a href="https://pgxn.org/dist/pgmnemo/${VERSION}/">PGXN</a>
-🐍 <a href="https://pypi.org/project/pgmnemo-mcp/${VERSION}/">pgmnemo-mcp on PyPI</a>
-📋 <a href="https://github.com/pgmnemo/pgmnemo/blob/v${VERSION}/CHANGELOG.md">Full CHANGELOG</a>
-EOF
+          {
+            printf '\n\n<b>Install:</b>\n'
+            printf '<code>psql -c "ALTER EXTENSION pgmnemo UPDATE TO '"'"'%s'"'"';"</code>\n\n' "$VERSION"
+            printf '<b>Links:</b>\n'
+            printf '📦 <a href="https://github.com/pgmnemo/pgmnemo/releases/tag/v%s">GitHub Release</a>\n' "$VERSION"
+            printf '🐘 <a href="https://pgxn.org/dist/pgmnemo/%s/">PGXN</a>\n' "$VERSION"
+            printf '🐍 <a href="https://pypi.org/project/pgmnemo-mcp/%s/">pgmnemo-mcp on PyPI</a>\n' "$VERSION"
+            printf '📋 <a href="https://github.com/pgmnemo/pgmnemo/blob/v%s/CHANGELOG.md">Full CHANGELOG</a>\n' "$VERSION"
+          } >> /tmp/tg_body.txt
           # Telegram has 4096-char limit; truncate if longer
           BODY_SIZE=$(wc -c < /tmp/tg_body.txt)
           if [ "$BODY_SIZE" -gt 4000 ]; then
