@@ -143,16 +143,16 @@ BEGIN
     -- Step 2: aggregate per-id, compute RRF ranks
     deduped AS (
         SELECT
-            id,
-            role, project_id, topic, lesson_text,
-            importance, metadata, commit_sha, artifact_hash,
-            verified_at, created_at,
-            MAX(raw_vec_score)  AS raw_vec_score,
-            MAX(raw_bm25_score) AS raw_bm25_score
-        FROM raw_candidates
-        GROUP BY id, role, project_id, topic, lesson_text,
-                 importance, metadata, commit_sha, artifact_hash,
-                 verified_at, created_at
+            rc.id,
+            rc.role, rc.project_id, rc.topic, rc.lesson_text,
+            rc.importance, rc.metadata, rc.commit_sha, rc.artifact_hash,
+            rc.verified_at, rc.created_at,
+            MAX(rc.raw_vec_score)  AS raw_vec_score,
+            MAX(rc.raw_bm25_score) AS raw_bm25_score
+        FROM raw_candidates rc
+        GROUP BY rc.id, rc.role, rc.project_id, rc.topic, rc.lesson_text,
+                 rc.importance, rc.metadata, rc.commit_sha, rc.artifact_hash,
+                 rc.verified_at, rc.created_at
     ),
     rrf_ranked AS (
         SELECT *,
