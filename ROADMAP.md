@@ -44,7 +44,8 @@ Tagline updated to: **"The write-time gate for agent memory."** (POSITIONING.md 
 | **v0.5.0** | Per-category lift + graph helpers | R5, R6, R10 + H-06 temporal weight tune; previously-planned graph-deprecation cycle folded in here | 2026-05-17 (✅ SHIPPED) |
 | **v0.5.1** | Correctness fixes | MCP write path via `ingest()` SP; `temporal_boost` comment corrected | 2026-05-18 (✅ SHIPPED) |
 | **v0.5.2** | MCP wheel fix + CI gate | `pgmnemo-mcp` empty wheel fix ([#32](https://github.com/pgmnemo/pgmnemo/issues/32)), `packaging-smoke` CI, docs rollback/calibration | 2026-05-22 (✅ SHIPPED) |
-| **v0.6.0** | RRF ranking fix + `as_of_ts` param | Fix-A: `rrf_diag` replaces `fusion_score` (+1.7–2.2pp recall@10 projected); `as_of_ts TIMESTAMPTZ` param on `recall_lessons()` | 2026-06 |
+| **v0.6.0** | Adoption tooling (Mem0/AWS, MCP wrapper) | 2026-05-23 (✅ SHIPPED) — RRF Fix-A reverted + `as_of_ts` reverted (broken CTE); both deferred to v0.6.1 |
+| **v0.6.1** | RRF Fix-A (A-scale) + `as_of_ts` retry + stress test #29 | Fix-A A-scale (aux coeffs ×0.01726); `as_of_ts TIMESTAMPTZ` clean impl (no `recall_hybrid` body rewrite); stress test 100K/1M/10M ([#29](https://github.com/pgmnemo/pgmnemo/issues/29)); **real-DB bench on LongMemEval w/ bge-m3 is mandatory gate** | 2026-06 |
 | **v0.7.0** | Optional graph eval (only if adopter pulls) | Bench that exercises `mem_edge`; +X pp gate | 2026-09 (conditional) |
 | **v1.0** | API freeze + stability commitment | ≥ 3 external adopters with public case studies; 2 consecutive non-breaking releases | 2026-Q4 |
 

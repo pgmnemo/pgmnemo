@@ -5,6 +5,78 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [0.6.1] — 2026-05-23
+
+### Theme
+
+`as_of_ts` point-in-time recall (F2) + stress test benchmarks (F3, issue #29).
+RRF Fix-A (F1) benchmarked and deferred to v0.6.2 after real-DB regression confirmed.
+
+### Note on RRF Fix-A (F1) — DEFERRED to v0.6.2
+
+**RRF Fix-A (ORDER BY `rrf_diag`) is NOT included in this release.**
+Real-database benchmark on LongMemEval-S (N=500, bge-m3 1024d) confirmed a
+**−22.44 pp regression** in recall@10 (0.9334 → 0.7090) when `rrf_diag` replaces
+`fusion_score` as the primary sort key. Root cause: with RRF parameter k=60 and
+small per-item corpora (~48 segments), rank differences compress severely —
+documents without BM25 match receive arbitrary low `bm25_rank`, corrupting ordering
+relative to pure vector matches. Benchmark artefacts:
+`benchmarks/longmemeval/results/v0.6.1_realdb_20260523/`.
+
+Fix-A targeted for v0.6.2 with corpus-size-adaptive k and additional validation.
+`recall_hybrid()` ranking formula in v0.6.1 is **unchanged** from v0.5.1/v0.6.0
+(`ORDER BY fusion_score`). The `rrf_score` output column retains `rrf_diag` as a
+diagnostic value.
+
+### Changed (behavior)
+
+- **`recall_lessons()` — `as_of_ts TIMESTAMPTZ DEFAULT NULL` (6th param, F2)**
+  Point-in-time recall for temporal agents and DAG bitemporal consistency.
+  When `as_of_ts` is not NULL, only lessons where
+  `t_valid_from ≤ as_of_ts < t_valid_to` are returned.
+  Propagates to `recall_hybrid()` via transaction-local
+  `pgmnemo.as_of_timestamp` GUC. Vector-only path applies filter directly
+  in the `candidates` CTE WHERE clause.
+  Backward compatible: `as_of_ts DEFAULT NULL` preserves all v0.5.1 and
+  v0.6.0 call sites unchanged.
+
+### Added
+
+- **`as_of_ts` GUC propagation** — `set_config('pgmnemo.as_of_timestamp', ts, TRUE)`
+  (transaction-local) lets `recall_hybrid()` read the bitemporal filter
+  without signature changes. Callers can also set the GUC directly via
+  `SET LOCAL pgmnemo.as_of_timestamp = '…'`.
+
+- **pg_regress fixtures** — `as_of_ts.sql` (F2 predicate logic, GUC propagation)
+  and `stress_recall.sql` (latency targets, HNSW index presence, scale bounds).
+  Both are in the `REGRESS` target in `extension/Makefile`. Issue #29.
+
+- **Stress benchmark script** — `benchmarks/scripts/stress_recall_large.py`.
+  Tests `recall_lessons()` at 100K / 1M / 10M rows on a synthetic corpus.
+  Targets: P99 ≤ 500ms (100K), ≤ 2000ms (1M), ≤ 8000ms (10M).
+  Issue #29.
+
+### Upgrade
+
+```bash
+ALTER EXTENSION pgmnemo UPDATE TO '0.6.1';
+```
+
+No table rewrite. DDL-only. Duration: <1 s.
+
+```bash
+-- Verify F2 (as_of_ts parameter):
+SELECT pg_get_function_arguments('pgmnemo.recall_lessons'::regproc);
+-- Should show 6th argument: "as_of_ts timestamp with time zone DEFAULT NULL"
+```
+
+### Rollback
+
+See [`docs/MIGRATION.md`](docs/MIGRATION.md). No data migration; restore previous
+extension version from backup if needed.
+
+---
+
 ## [0.6.0] — 2026-05-22
 
 ### Theme
