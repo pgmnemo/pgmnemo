@@ -417,10 +417,106 @@ jobs:
           echo "::warning::PGXN release not reachable at $URL after 3 attempts. Check manager.pgxn.org for upload status."
           # Don't fail — PGXN propagation can be slow, and 409 (already uploaded) is reported as success in release job
 
-  # ─── Job 7: notify-failure (auto-open issue on any failed release job) ────
+  # ─── Job 7: notify-telegram (announce release to community group) ────────
+  # Sends short HTML-formatted message to pgmnemo Telegram group on full success.
+  # Requires repo secrets: TG_BOT_TOKEN, TG_CHAT_ID.
+  # Fail-open: if secrets missing, step is skipped (does NOT fail the workflow).
+  # Bot must be added to the target group with permission to post.
+  notify-telegram:
+    needs: [pre-flight, release, publish-mcp, smoke-pypi, smoke-pgxn]
+    runs-on: ubuntu-latest
+    if: ${{ secrets.TG_BOT_TOKEN != '' && secrets.TG_CHAT_ID != '' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Extract release summary from CHANGELOG
+        id: summary
+        env:
+          VERSION: ${{ needs.pre-flight.outputs.version }}
+        run: |
+          python3 - <<'PY'
+          import os, re
+          v = os.environ['VERSION']
+          c = open('CHANGELOG.md').read()
+          m = re.search(rf'^## \[{re.escape(v)}\][^\n]*\n(.*?)(?=^## \[|\Z)', c, re.M | re.S)
+          body = m.group(1).strip() if m else ''
+          # Extract Theme line (the first non-empty paragraph after ### Theme)
+          theme = ''
+          tm = re.search(r'### Theme\s*\n+([^\n#]+(?:\n[^\n#]+)*)', body)
+          if tm:
+              theme = ' '.join(tm.group(1).split()).strip()
+          # Collect Added bullet headlines (first 4)
+          added = []
+          am = re.search(r'### Added\s*\n+(.*?)(?=^### |\Z)', body, re.M | re.S)
+          if am:
+              for line in am.group(1).splitlines():
+                  m2 = re.match(r'^\s*-\s+\*\*([^*]+)\*\*', line)
+                  if m2:
+                      added.append(m2.group(1).strip().rstrip('.'))
+                  if len(added) >= 4:
+                      break
+          with open('/tmp/tg_theme.txt', 'w') as f:
+              f.write(theme[:300])
+          with open('/tmp/tg_added.txt', 'w') as f:
+              f.write('\n'.join(added))
+          PY
+          echo "theme<<EOF" >> "$GITHUB_OUTPUT"
+          cat /tmp/tg_theme.txt >> "$GITHUB_OUTPUT"
+          echo "" >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
+
+      - name: Build Telegram message
+        id: msg
+        env:
+          VERSION: ${{ needs.pre-flight.outputs.version }}
+          THEME: ${{ steps.summary.outputs.theme }}
+        run: |
+          BULLETS=""
+          while IFS= read -r line; do
+            [ -n "$line" ] && BULLETS="${BULLETS}• ${line}%0A"
+          done < /tmp/tg_added.txt
+          if [ -z "$BULLETS" ]; then
+            BULLETS="• See CHANGELOG for details%0A"
+          fi
+          MSG="🚀 <b>pgmnemo v${VERSION} released</b>%0A%0A"
+          if [ -n "$THEME" ]; then
+            MSG="${MSG}<i>${THEME}</i>%0A%0A"
+          fi
+          MSG="${MSG}<b>What's new:</b>%0A${BULLETS}%0A"
+          MSG="${MSG}<b>Install:</b>%0A"
+          MSG="${MSG}<code>psql -c \"ALTER EXTENSION pgmnemo UPDATE TO '${VERSION}';\"</code>%0A%0A"
+          MSG="${MSG}<b>Links:</b>%0A"
+          MSG="${MSG}📦 <a href=\"https://github.com/pgmnemo/pgmnemo/releases/tag/v${VERSION}\">GitHub Release</a>%0A"
+          MSG="${MSG}🐘 <a href=\"https://pgxn.org/dist/pgmnemo/${VERSION}/\">PGXN</a>%0A"
+          MSG="${MSG}🐍 <a href=\"https://pypi.org/project/pgmnemo-mcp/${VERSION}/\">pgmnemo-mcp on PyPI</a>%0A"
+          MSG="${MSG}📋 <a href=\"https://github.com/pgmnemo/pgmnemo/blob/v${VERSION}/CHANGELOG.md\">Full CHANGELOG</a>"
+          echo "msg=$MSG" >> "$GITHUB_OUTPUT"
+
+      - name: Send Telegram notification
+        env:
+          TG_BOT_TOKEN: ${{ secrets.TG_BOT_TOKEN }}
+          TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
+          MSG: ${{ steps.msg.outputs.msg }}
+        run: |
+          RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
+            "https://api.telegram.org/bot${TG_BOT_TOKEN}/sendMessage" \
+            -d "chat_id=${TG_CHAT_ID}" \
+            -d "parse_mode=HTML" \
+            -d "disable_web_page_preview=true" \
+            --data-urlencode "text=${MSG}")
+          HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+          BODY=$(echo "$RESPONSE" | head -n -1)
+          if [ "$HTTP_CODE" = "200" ]; then
+            echo "✓ Telegram notification sent"
+          else
+            echo "::warning::Telegram notification failed (HTTP $HTTP_CODE): $BODY"
+            # Non-blocking — release already succeeded
+          fi
+
+  # ─── Job 8: notify-failure (auto-open issue on any failed release job) ────
   notify-failure:
     if: failure()
-    needs: [pre-flight, installcheck, bench-gate, release, publish-mcp, smoke-pypi, smoke-pgxn]
+    needs: [pre-flight, installcheck, bench-gate, release, publish-mcp, smoke-pypi, smoke-pgxn, notify-telegram]
     runs-on: ubuntu-latest
     permissions:
       issues: write
