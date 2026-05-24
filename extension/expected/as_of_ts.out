@@ -3,7 +3,7 @@
 -- No live table required — avoids embedding dependency in pg_regress.
 -- Apply the v0.6.1 migration.
 ALTER EXTENSION pgmnemo UPDATE TO '0.6.3';
-NOTICE:  version "0.6.2" of extension "pgmnemo" is already installed
+NOTICE:  version "0.6.3" of extension "pgmnemo" is already installed
 -- ── Signature checks ─────────────────────────────────────────────────────────
 -- recall_lessons() now has 6 parameters (was 5 in v0.6.0)
 SELECT pronargs AS recall_lessons_arg_count
