@@ -35,8 +35,10 @@ DATA = pgmnemo--0.0.1.sql \
        pgmnemo--0.5.1--0.6.0.sql \
        pgmnemo--0.6.0.sql \
        pgmnemo--0.6.0--0.6.1.sql \
-       pgmnemo--0.6.1.sql
-REGRESS = version recency_weight_guc prov_strength_tristate recall_lessons_pooled verifier_role source_run_task_ids ttl_expires_at state_machine mem_edge traverse_causal recall_graph traverse_temporal_smoke temporal_boost_guc bitemporality_smoke as_of_ts stress_recall
+       pgmnemo--0.6.1.sql \
+       pgmnemo--0.6.1--0.6.2.sql \
+       pgmnemo--0.6.2.sql
+REGRESS = version recency_weight_guc prov_strength_tristate recall_lessons_pooled verifier_role source_run_task_ids ttl_expires_at state_machine mem_edge traverse_causal recall_graph traverse_temporal_smoke temporal_boost_guc bitemporality_smoke as_of_ts stress_recall rrf_sparse
 REGRESS_OPTS = --load-extension=vector --load-extension=pgmnemo
 PG_CONFIG = pg_config
 PGXS := $(shell $(PG_CONFIG) --pgxs)
