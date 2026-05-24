@@ -1,0 +1,43 @@
+{
+    "version": "v0.6.3",
+    "date": "2026-05-24",
+    "pgmnemo_version": "0.6.3",
+    "gate_status": "PASS",
+    "gate_type": "bug_fix_smoke",
+    "note": "Bug-fix + docs release. No scoring model changes. recall@10 metrics carried forward analytically from v0.6.2 real-DB bench (benchmarks/gate/v0.6.2.json). Carry-forward is valid: #variable_conflict is a PL/pgSQL compile-time directive that resolves name binding only — it does not alter query execution, index selection, ranking formula, or output values.",
+    "r1_fix": {
+        "description": "#variable_conflict use_column added to recall_lessons() and recall_hybrid() function bodies",
+        "affected_files": [
+            "extension/pgmnemo--0.6.2--0.6.3.sql",
+            "extension/pgmnemo--0.6.3.sql"
+        ],
+        "scoring_impact": "none",
+        "signature_impact": "none",
+        "backward_compatible": true
+    },
+    "carry_forward_from": "v0.6.2",
+    "carry_forward_rationale": "v0.6.3 contains no changes to scoring formula, retrieval candidates, ranking logic, or index configuration. The #variable_conflict directive is resolved at PL/pgSQL compile time and has no effect on the query plan or result ordering.",
+    "recall_at_10_carry_forward": 0.9604,
+    "baseline_recall_at_10": 0.9491,
+    "delta_recall_at_10_pp": 1.13,
+    "smoke_gate": {
+        "status": "PASS",
+        "tests": [
+            "smoke_recall_hybrid.py::recall_hybrid (existing)",
+            "smoke_recall_hybrid.py::recall_lessons (v0.6.3 addition — R1 AmbiguousColumn regression guard)"
+        ],
+        "pg_regress_tests_before": 17,
+        "pg_regress_tests_after": 18,
+        "new_test": "role_no_ambiguity — verifies role column value returned by recall_lessons() and recall_hybrid()"
+    },
+    "features_shipped": [
+        "R1_ambiguous_column_fix_variable_conflict",
+        "R2_include_unverified_guc_docs",
+        "R3_bm25_corpus_threshold_docs",
+        "R4_psycopg2_calling_convention_docs"
+    ],
+    "features_deferred": [
+        "R5_usage_count_last_used_at_avg_similarity_columns (v0.7.0)"
+    ],
+    "previous_gate": "benchmarks/gate/v0.6.2.json"
+}
