@@ -1,0 +1,83 @@
+{
+  "version": "v0.6.2",
+  "run_label": "v062_sparse_safe_rrf",
+  "date": "2026-05-23",
+  "mode": "cached_embeddings",
+  "simulation": false,
+  "embedder": "bge-m3 (1024d, pre-computed cache, same as v0.6.1 bench)",
+  "dataset": "longmemeval_s_cleaned.json",
+  "dataset_sha256_partial": "676f1c94053aa627",
+  "n_instances": 500,
+  "wall_clock_sec": 11.8,
+  "vec_weight": 0.4,
+  "bm25_weight": 0.4,
+  "rrf_k": 60.0,
+  "fix_a_description": "sparse-safe RRF (Cormack 2009): PARTITION BY (bm25>0), sentinel=n+1",
+  "baseline": {
+    "order_by": "fusion_score = vec_w*cosine + bm25_w*bm25_score",
+    "metrics": {
+      "recall@1": {
+        "n": 500,
+        "mean": 0.5468,
+        "ci95_lo": 0.5174,
+        "ci95_hi": 0.5763
+      },
+      "recall@5": {
+        "n": 500,
+        "mean": 0.9058,
+        "ci95_lo": 0.8852,
+        "ci95_hi": 0.9264
+      },
+      "recall@10": {
+        "n": 500,
+        "mean": 0.9491,
+        "ci95_lo": 0.9342,
+        "ci95_hi": 0.964
+      },
+      "recall@20": {
+        "n": 500,
+        "mean": 0.9811,
+        "ci95_lo": 0.9725,
+        "ci95_hi": 0.9898
+      }
+    },
+    "recall@10": 0.9491
+  },
+  "fix_a": {
+    "order_by": "rrf_sparse = vec_w/(k+vec_rank) + bm25_w/(k+bm25_rank_sparse_or_sentinel)",
+    "metrics": {
+      "recall@1": {
+        "n": 500,
+        "mean": 0.5349,
+        "ci95_lo": 0.5055,
+        "ci95_hi": 0.5643
+      },
+      "recall@5": {
+        "n": 500,
+        "mean": 0.9141,
+        "ci95_lo": 0.8944,
+        "ci95_hi": 0.9338
+      },
+      "recall@10": {
+        "n": 500,
+        "mean": 0.9604,
+        "ci95_lo": 0.9471,
+        "ci95_hi": 0.9737
+      },
+      "recall@20": {
+        "n": 500,
+        "mean": 0.9913,
+        "ci95_lo": 0.986,
+        "ci95_hi": 0.9966
+      }
+    },
+    "recall@10": 0.9604
+  },
+  "delta_recall@10": 0.0113,
+  "p_value_paired_t": 0.016643,
+  "gate": {
+    "delta_ge_1pp": true,
+    "pval_lt_005": true,
+    "passed": true
+  }
+}
