@@ -53,6 +53,7 @@ spec/*
 !spec/v060/
 !spec/v061/
 !spec/v062/
+!spec/v063/
 research/
 design/
 *.zip
