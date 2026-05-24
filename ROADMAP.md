@@ -44,9 +44,10 @@ Tagline updated to: **"The write-time gate for agent memory."** (POSITIONING.md 
 | **v0.5.0** | Per-category lift + graph helpers | R5, R6, R10 + H-06 temporal weight tune; previously-planned graph-deprecation cycle folded in here | 2026-05-17 (✅ SHIPPED) |
 | **v0.5.1** | Correctness fixes | MCP write path via `ingest()` SP; `temporal_boost` comment corrected | 2026-05-18 (✅ SHIPPED) |
 | **v0.5.2** | MCP wheel fix + CI gate | `pgmnemo-mcp` empty wheel fix ([#32](https://github.com/pgmnemo/pgmnemo/issues/32)), `packaging-smoke` CI, docs rollback/calibration | 2026-05-22 (✅ SHIPPED) |
-| **v0.6.0** | Adoption tooling (Mem0/AWS, MCP wrapper) | 2026-05-23 (✅ SHIPPED) — RRF Fix-A reverted + `as_of_ts` reverted (broken CTE); both deferred to v0.6.1 |
-| **v0.6.1** | RRF Fix-A (A-scale) + `as_of_ts` retry + stress test #29 | **DEFERRED to v0.6.2** (2026-05-23) — DAG `SWDEV-260523-1` killed by death-loop in IMPLEMENT (v3-next API container crashed under load, $21 burned across 5 failed runs); TL Karpov watchdog stopped the loop. RESEARCH/PLAN artifacts kept (commits `111cfca`, `fb56181`) as foundation for v0.6.2. Pre-conditions for next attempt: (1) fix DBOS event-loop in `apps/v3-next/orchestration/dbos_native.py`, (2) stand up real-DB bench infra (pgvector:pg17 + host MLX:9200 reachability) before DAG spawn. | — |
-| **v0.6.2** | Retry of v0.6.1 scope with stable infra | Same scope as v0.6.1 (Fix-A A-scale + `as_of_ts` clean impl + stress test #29) gated on real-DB bench. Starts from v0.6.1 RESEARCH/PLAN artifacts. | 2026-06 |
+| **v0.6.0** | Adoption tooling (Mem0/AWS, MCP wrapper) | 2026-05-23 (✅ SHIPPED) — RRF Fix-A attempt rolled back (`-22.44 pp` regression confirmed); `as_of_ts` deferred together |
+| **v0.6.1** | `as_of_ts` (F2) + stress test fixtures (F3) | 2026-05-23 (✅ SHIPPED) — F1 RRF Fix-A A-scale variant benchmarked, regressed; F1 deferred to v0.6.2 with real-DB evidence in `benchmarks/longmemeval/results/v0.6.1_realdb_20260523/` |
+| **v0.6.2** | RRF Fix-A — sparse-safe (Cormack 2009) | 2026-05-24 (✅ SHIPPED) — `recall@10: 0.9491 → 0.9604 (+1.13 pp, p=0.017)` on LongMemEval-S N=500 bge-m3 1024d; resolves v0.6.0/v0.6.1 RRF deferral |
+| **v0.6.3** | `recall_lessons` / `recall_hybrid` AmbiguousColumn hotfix (R1) + R2-R4 USAGE.md docs | 2026-05-24 (✅ SHIPPED) — unblocks Agency production recall (was failing at 0 % hit rate per `BENCH_V060_AGENCY_2026-05-23.md`); `#variable_conflict use_column` directive, no signature change |
 | **v0.7.0** | Optional graph eval (only if adopter pulls) | Bench that exercises `mem_edge`; +X pp gate | 2026-09 (conditional) |
 | **v1.0** | API freeze + stability commitment | ≥ 3 external adopters with public case studies; 2 consecutive non-breaking releases | 2026-Q4 |
 

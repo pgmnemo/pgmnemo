@@ -128,6 +128,31 @@ jobs:
             echo "✓ README version badge matches v$V"
           fi
 
+      - name: Check pg_regress fixtures use current default_version
+        # Catches the recurring pitfall (v0.6.0, v0.6.2, v0.6.3 all hit it):
+        # tests have hardcoded `ALTER EXTENSION pgmnemo UPDATE TO 'X.Y.Z'` or
+        # `NOTICE: version "X.Y.Z"` that drift behind the current tag and
+        # produce "no update path" or NOTICE-mismatch installcheck failures.
+        run: |
+          V=${{ steps.version.outputs.VERSION }}
+          BAD=$(grep -rE "UPDATE TO '[^']+'" extension/sql/ extension/expected/ 2>/dev/null \
+            | grep -vE "UPDATE TO '${V//./\\.}'" || true)
+          if [ -n "$BAD" ]; then
+            echo "::error::pg_regress fixtures have stale UPDATE TO references (must all be v$V):"
+            echo "$BAD"
+            echo "Fix: sed -i \"s/UPDATE TO '[^']*'/UPDATE TO '$V'/g\" extension/sql/*.sql extension/expected/*.out"
+            exit 1
+          fi
+          BAD_NOTICE=$(grep -rE 'NOTICE:[^"]*version "[0-9.]+" of extension' extension/expected/ 2>/dev/null \
+            | grep -vE "version \"${V//./\\.}\" of extension" || true)
+          if [ -n "$BAD_NOTICE" ]; then
+            echo "::error::pg_regress expected outputs have stale NOTICE version refs (must all be \"$V\"):"
+            echo "$BAD_NOTICE"
+            echo "Fix: sed -i 's/version \"[0-9.]*\" of extension/version \"$V\" of extension/g' extension/expected/*.out"
+            exit 1
+          fi
+          echo "✓ pg_regress fixtures all reference v$V"
+
   # ─── Job 1: pg_regress installcheck ────────────────────────────────────────
   installcheck:
     needs: pre-flight
@@ -437,9 +462,20 @@ jobs:
         run: |
           if [ -n "$TG_BOT_TOKEN" ] && [ -n "$TG_CHAT_ID" ]; then
             echo "configured=true" >> "$GITHUB_OUTPUT"
+            echo "✓ Telegram secrets present"
+          elif [ "${{ github.event_name }}" = "push" ] && [ "${GITHUB_REF_NAME:0:1}" = "v" ]; then
+            # Hard fail on tag pushes (real releases) — silent skip on v0.6.1+v0.6.2
+            # cost the founder trust. Use [tg-skip] in commit message OR delete
+            # the failed run AND send manually via scripts/tg_publish_pgmnemo.py.
+            echo "::error::TG_BOT_TOKEN / TG_CHAT_ID secrets missing on a TAG push — release notification would be silently skipped. Set them in repo Secrets, OR send manually via scripts/tg_publish_pgmnemo.py and add [tg-skip] to the tagging commit message to suppress this gate."
+            if ! echo "${{ github.event.head_commit.message }}" | grep -q '\[tg-skip\]'; then
+              exit 1
+            fi
+            echo "::warning::[tg-skip] override present — proceeding without TG notification"
+            echo "configured=false" >> "$GITHUB_OUTPUT"
           else
             echo "configured=false" >> "$GITHUB_OUTPUT"
-            echo "Telegram secrets missing — skipping notification"
+            echo "Telegram secrets missing — skipping notification (non-tag push)"
           fi
 
       - if: steps.tg_check.outputs.configured == 'true'
