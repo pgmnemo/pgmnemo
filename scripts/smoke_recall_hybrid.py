@@ -168,7 +168,104 @@ def main():
     # Cleanup
     cur.execute("DELETE FROM pgmnemo.agent_lesson WHERE role = 'smoke_recall_hybrid'")
     print("[smoke] ALL PASS — recall_hybrid signature is stable")
+
+    # ── v0.6.3 R1 regression guard: smoke recall_lessons() ──────────────────
+    smoke_recall_lessons(cur)
+
     return 0
+
+
+def smoke_recall_lessons(cur) -> None:
+    """v0.6.3 R1 regression guard: verify recall_lessons() callable + role column correct.
+
+    Catches AmbiguousColumn regression (psycopg2.errors.AmbiguousColumn on 'role').
+    Both recall_lessons and recall_hybrid must complete without exception.
+    """
+    real_vec = "[" + ",".join([f"{0.001 + i * 0.0001:.6f}" for i in range(1024)]) + "]"
+    zero_vec = "[" + ",".join(["0.001"] * 1024) + "]"
+
+    # Verify function exists
+    cur.execute("""
+        SELECT 1 FROM pg_proc p
+        JOIN pg_namespace n ON n.oid = p.pronamespace
+        WHERE n.nspname = 'pgmnemo' AND p.proname = 'recall_lessons'
+    """)
+    if not cur.fetchone():
+        print("FAIL: pgmnemo.recall_lessons does not exist")
+        import sys
+        sys.exit(1)
+    print("[smoke] ✓ pgmnemo.recall_lessons exists")
+
+    # Verify output columns match expected schema (AmbiguousColumn would surface here)
+    cur.execute(
+        f"SELECT * FROM pgmnemo.recall_lessons('{zero_vec}'::vector, 10, 'smoke_recall_lessons', 1) LIMIT 1"
+    )
+    actual_cols = {desc[0] for desc in cur.description}
+    expected_cols = {
+        "lesson_id", "score", "role", "project_id", "topic", "lesson_text",
+        "importance", "metadata", "commit_sha", "artifact_hash",
+        "verified_at", "created_at", "vec_score", "bm25_score", "rrf_score",
+    }
+    missing = expected_cols - actual_cols
+    if missing:
+        print(f"FAIL: recall_lessons missing columns: {sorted(missing)}")
+        import sys
+        sys.exit(1)
+    print(f"[smoke] ✓ recall_lessons output columns match ({len(actual_cols)} cols)")
+
+    # Seed lessons with role = 'smoke_recall_lessons'
+    cur.execute("DELETE FROM pgmnemo.agent_lesson WHERE role = 'smoke_recall_lessons'")
+    for i, (topic, text) in enumerate([
+        ("smoke/r1fix", "R1 AmbiguousColumn fix: role column must be returned correctly."),
+        ("smoke/auth", "JWT rotation policy: rotate within 24h of compromise indicator."),
+    ]):
+        cur.execute(
+            """INSERT INTO pgmnemo.agent_lesson
+               (role, project_id, topic, lesson_text, importance, embedding,
+                commit_sha, verified_at)
+               VALUES ('smoke_recall_lessons', 1, %s, %s, 3, %s::vector,
+                       'smoke_rl_r1fix', NOW())""",
+            (topic, text, real_vec),
+        )
+
+    # Call recall_lessons and verify role column value (R1 regression: no AmbiguousColumn)
+    cur.execute(
+        f"""SELECT role FROM pgmnemo.recall_lessons(
+                '{real_vec}'::vector, 1, 'smoke_recall_lessons', 1
+            ) LIMIT 1"""
+    )
+    row = cur.fetchone()
+    if row is None:
+        print("FAIL: recall_lessons returned 0 rows from seeded corpus")
+        import sys
+        sys.exit(1)
+    if row[0] != "smoke_recall_lessons":
+        print(f"FAIL: recall_lessons role column mismatch: expected 'smoke_recall_lessons', got {row[0]!r}")
+        import sys
+        sys.exit(1)
+    print(f"[smoke] ✓ recall_lessons role={row[0]!r} (R1 AmbiguousColumn fix verified)")
+
+    # Test hybrid path via recall_lessons (query_text present → routes to recall_hybrid)
+    cur.execute(
+        f"""SELECT role FROM pgmnemo.recall_lessons(
+                '{real_vec}'::vector, 1, 'smoke_recall_lessons', 1,
+                'JWT rotation policy'
+            ) LIMIT 1"""
+    )
+    row_hybrid = cur.fetchone()
+    if row_hybrid is None:
+        print("FAIL: recall_lessons hybrid path returned 0 rows")
+        import sys
+        sys.exit(1)
+    if row_hybrid[0] != "smoke_recall_lessons":
+        print(f"FAIL: recall_lessons hybrid path role mismatch: got {row_hybrid[0]!r}")
+        import sys
+        sys.exit(1)
+    print(f"[smoke] ✓ recall_lessons hybrid path role={row_hybrid[0]!r} (AmbiguousColumn fix in hybrid route)")
+
+    # Cleanup
+    cur.execute("DELETE FROM pgmnemo.agent_lesson WHERE role = 'smoke_recall_lessons'")
+    print("[smoke] ALL PASS — recall_lessons R1 AmbiguousColumn fix verified")
 
 
 if __name__ == "__main__":

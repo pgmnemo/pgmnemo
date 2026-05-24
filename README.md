@@ -3,13 +3,15 @@
 **Multi-agent memory substrate for PostgreSQL — provenance-gated, vector-hybrid recall.**
 
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.6.1-green.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.6.3-green.svg)](CHANGELOG.md)
 [![PGXN](https://badge.pgxn.org/stable/pgmnemo.svg)](https://pgxn.org/dist/pgmnemo/)
 [![CI](https://github.com/pgmnemo/pgmnemo/actions/workflows/ci.yml/badge.svg)](https://github.com/pgmnemo/pgmnemo/actions/workflows/ci.yml)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-17-4169E1.svg)](https://www.postgresql.org/)
 [![LoCoMo recall@10](https://img.shields.io/badge/LoCoMo_recall%4010-0.8409-success.svg)](docs/img/all_metrics_history.md)
 [![LongMemEval recall@10](https://img.shields.io/badge/LongMemEval_recall%4010-0.9334-brightgreen.svg)](docs/img/all_metrics_history.md)
 
+> **v0.6.3 (2026-05-24):** **`recall_lessons()` and `recall_hybrid()` now callable without `psycopg2.errors.AmbiguousColumn`.** Added `#variable_conflict use_column` to both function bodies (compile-time only — no scoring change, no signature change). New pg_regress test `role_no_ambiguity` (18 total). `pgmnemo.include_unverified` GUC semantics, hybrid-mode activation conditions, and psycopg2 calling convention documented in `docs/USAGE.md`. Gate: [`benchmarks/gate/v0.6.3.json`](benchmarks/gate/v0.6.3.json). See [CHANGELOG.md](CHANGELOG.md).
+>
 > **v0.6.1 (2026-05-23):** **`recall_lessons(as_of_ts)`** — 6th param for point-in-time bitemporal recall (F2), propagates to `recall_hybrid()` via GUC. **`as_of_ts` + `stress_recall` pg_regress fixtures** (16/16 PASS, F3). RRF Fix-A (F1) benchmarked on N=500 LME-S with bge-m3: −22.44pp regression with `rrf_diag` ordering; **`recall_hybrid()` scoring unchanged** (`fusion_score` primary); F1 deferred to v0.6.2. Gate: [`benchmarks/gate/v0.6.1.json`](benchmarks/gate/v0.6.1.json). See [CHANGELOG.md](CHANGELOG.md).
 >
 > **v0.6.0 (2026-05-23):** `pgmnemo.stats().ghost_count` provenance metric + `RAISE NOTICE` on content-hash dedup + `pgmnemo.recall_stats` view ([#26](https://github.com/pgmnemo/pgmnemo/issues/26)) + PostGIS cookbook ([#28](https://github.com/pgmnemo/pgmnemo/issues/28)) + docs. See [CHANGELOG.md](CHANGELOG.md).

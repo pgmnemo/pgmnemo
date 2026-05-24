@@ -110,6 +110,32 @@ By default, rows with `verified_at IS NULL` (ghost lessons) are excluded. Enable
 SET pgmnemo.include_unverified = 'true';
 ```
 
+#### `pgmnemo.include_unverified` — read filter, not INSERT gate
+
+`pgmnemo.include_unverified` controls whether ghost lessons (`verified_at IS NULL`) appear in recall
+results. Setting it to `on` makes ghost lessons eligible candidates in vector search and BM25
+matching. However, their score is lower: `provenance_strength = 0.0` contributes nothing to the
+0.1× provenance component in the scoring formula, so verified lessons rank above ghost lessons of
+equal semantic similarity.
+
+**This GUC does not disable the INSERT-time provenance gate.** The INSERT gate — which rejects or
+warns when both `commit_sha` and `artifact_hash` are NULL — is controlled separately by
+`pgmnemo.gate_strict` (`enforce` / `warn` / `off`). These two GUCs operate on different lifecycle
+events: `gate_strict` fires on write; `include_unverified` applies on read. You can insert ghost
+lessons via `gate_strict='warn'` and still exclude them from recall (default), or include them
+selectively for diagnostics and bulk-import workflows.
+
+```sql
+-- Include ghost lessons in this session's recall queries (debugging / bulk import)
+SET pgmnemo.include_unverified = 'on';
+SELECT topic, lesson_text, score, verified_at
+FROM pgmnemo.recall_lessons(<embedding>, 10);
+-- Ghost lessons appear with lower scores than verified rows
+
+-- Restore default for production queries
+SET pgmnemo.include_unverified = 'off';
+```
+
 ### Examples
 
 ```sql
@@ -297,6 +323,90 @@ FROM pgmnemo.recall_hybrid(
 - Task requires ranking the correct result higher in top-K (MRR-sensitive)
 - Your memory corpus has both keyword-matchable and semantic queries (LoCoMo profile)
 - You have confirmed the recall@10 signal on your own data before relying on it
+
+### When does hybrid mode activate?
+
+Hybrid routing in `recall_lessons()` fires **per-query** when all three conditions hold:
+
+1. `pgmnemo.disable_hybrid` is `off` (default) — the opt-out GUC is not set
+2. The `query_text` argument passed to `recall_lessons()` is non-NULL and non-empty
+3. The `query_embedding` argument is non-NULL
+
+**There is no corpus-size threshold.** Hybrid does not auto-enable or auto-disable based on how
+many rows have `lesson_tsv` populated. If rows have `lesson_tsv IS NULL`, they score 0 on BM25
+and may not appear in BM25 candidates — but this does not flip hybrid mode off.
+
+Use this probe to check hybrid-readiness of your corpus:
+
+```sql
+SELECT
+    COUNT(*)                                                  AS total_lessons,
+    COUNT(*) FILTER (WHERE lesson_tsv IS NOT NULL)            AS bm25_ready,
+    COUNT(*) FILTER (WHERE embedding  IS NOT NULL)            AS vec_ready,
+    COUNT(*) FILTER (WHERE lesson_tsv IS NOT NULL
+                       AND embedding  IS NOT NULL)            AS hybrid_ready,
+    ROUND(
+        100.0 * COUNT(*) FILTER (WHERE lesson_tsv IS NOT NULL)
+        / NULLIF(COUNT(*), 0), 1
+    )                                                         AS bm25_coverage_pct,
+    NOT COALESCE(
+        current_setting('pgmnemo.disable_hybrid', TRUE)::BOOLEAN,
+        FALSE
+    )                                                         AS hybrid_enabled_guc
+FROM pgmnemo.agent_lesson
+WHERE is_active;
+```
+
+If `bm25_coverage_pct` is low, run a backfill to populate `lesson_tsv` for existing rows:
+
+```sql
+UPDATE pgmnemo.agent_lesson
+SET lesson_tsv = to_tsvector('english', lesson_text)
+WHERE lesson_tsv IS NULL AND lesson_text IS NOT NULL;
+```
+
+### psycopg2 calling convention
+
+Named argument syntax (`=>`, PostgreSQL 14+) is the recommended style for production Python code.
+It is order-independent, allows omitting optional parameters, and is self-documenting.
+
+```python
+import os
+import psycopg2
+
+def format_vector(arr) -> str:
+    """Convert a list or numpy array to pgvector literal."""
+    return "[" + ",".join(f"{v:.6f}" for v in arr) + "]"
+
+conn = psycopg2.connect(os.environ["DATABASE_URL"])
+cur = conn.cursor()
+
+embedding_str = format_vector(your_embedding_array)  # list or np.ndarray, length 1024
+
+# Named argument style — recommended for production (omit optional params freely)
+cur.execute(
+    """SELECT lesson_id, score, role, topic, lesson_text
+       FROM pgmnemo.recall_lessons(
+           query_embedding => %s::vector,
+           query_text      => %s,
+           k               => %s,
+           role_filter     => %s
+       )
+       ORDER BY score DESC""",
+    (embedding_str, "JWT rotation policy", 10, "developer")
+)
+rows = cur.fetchall()
+
+# Positional style — acceptable for scripts and tests
+cur.execute(
+    "SELECT * FROM pgmnemo.recall_lessons(%s::vector, %s, %s, %s, %s) ORDER BY score DESC",
+    (embedding_str, 10, "developer", None, "JWT rotation policy")
+)
+```
+
+> **Note:** psycopg2 has no native `vector` type. Always pass embeddings as Python strings with
+> an explicit `::vector` cast in the SQL. Format: `"[" + ",".join(f"{v:.6f}" for v in arr) + "]"`.
+> For point-in-time recall pass `as_of_ts => %s::timestamptz` (v0.6.1+).
 
 ### Install
 

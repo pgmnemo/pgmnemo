@@ -5,6 +5,87 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [0.6.3] — 2026-05-24
+
+### Theme
+
+**Hotfix: `recall_lessons()` and `recall_hybrid()` are now callable without
+`psycopg2.errors.AmbiguousColumn`.** This unblocks Agency production — the error
+surfaced on every pgmnemo dispatch since v0.6.2 was installed. Root cause: PL/pgSQL
+resolved `role` as the `RETURNS TABLE` OUT variable rather than the CTE column, even
+when table-qualified (`al.role`, `r.role`). Fix: `#variable_conflict use_column`
+directive added as the first line of both function bodies (compile-time only — no
+execution change, no signature change, no scoring change).
+
+Also ships: `pgmnemo.include_unverified` GUC semantics documentation (R2),
+hybrid-mode activation conditions and SQL corpus probe (R3), and psycopg2
+calling convention reference with working named-parameter example (R4).
+
+Recall@10 metrics carry forward from v0.6.2 (0.9604 on LongMemEval-S).
+
+### Fixed
+
+- **R1 — `AmbiguousColumn` regression in `recall_lessons()` and `recall_hybrid()`**
+  Added `#variable_conflict use_column` as the first statement in both function
+  bodies (after `AS $`, before `DECLARE`). PL/pgSQL compile-time directive that
+  instructs the name resolver to prefer column references over identically named
+  OUT variables. No change to function signatures, query plans, index selection,
+  scoring formulas, or output values. Affects both fresh-install
+  (`pgmnemo--0.6.3.sql`) and incremental upgrade
+  (`pgmnemo--0.6.2--0.6.3.sql`).
+
+### Added
+
+- **pg_regress: `role_no_ambiguity.sql`** + `extension/expected/role_no_ambiguity.out`
+  Seeds one lesson with `role = 'role_v063_test'`, then asserts that both
+  `recall_lessons()` and `recall_hybrid()` return `role = 'role_v063_test'` (boolean
+  column checks). Catches any future re-introduction of the AmbiguousColumn regression.
+  pg_regress test count: 17 → 18.
+
+- **`scripts/smoke_recall_hybrid.py` — `smoke_recall_lessons()` function**
+  New function appended to the existing smoke test, called from `main()`. Verifies:
+  (1) `pgmnemo.recall_lessons` exists in `pg_proc`, (2) output columns match expected
+  schema (catches AmbiguousColumn at column introspection stage), (3) role column
+  returns correct value on vector-only path, (4) role column returns correct value
+  on hybrid path (query_text provided). Both paths seed and clean up their own test
+  data.
+
+### Documentation
+
+- **`docs/USAGE.md` — R2: `pgmnemo.include_unverified` semantics**
+  New subsection clarifies the GUC is a **read-path filter only**: it widens
+  `recall_lessons()`/`recall_hybrid()` to include lessons where `verified_at IS NULL`.
+  It has no effect on the INSERT provenance gate — unverified lessons are still written
+  and subject to `gate_strict` on insert. The separate `pgmnemo.gate_strict` GUC
+  controls the write lifecycle.
+
+- **`docs/USAGE.md` — R3: hybrid mode activation conditions**
+  New subsection documents the three conditions required for hybrid mode:
+  `pgmnemo.disable_hybrid` off, `query_text` non-null/non-empty,
+  `query_embedding` non-null. Explicitly states there is **no corpus-size threshold**:
+  hybrid fires for corpora of any size when the three conditions are met. Includes
+  SQL probe query for checking lesson_tsv coverage and a backfill command.
+
+- **`docs/USAGE.md` — R4: psycopg2 calling convention**
+  New subsection with working code example using the recommended named-parameter
+  `=>` syntax. Documents why psycopg2 has no native `vector` type and must receive
+  embeddings as formatted strings with an explicit `::vector` cast. Includes a
+  `format_vector(embedding)` helper function.
+
+### Benchmark gate
+
+```
+gate_status:  PASS (bug_fix_smoke)
+gate_type:    bug_fix_smoke (carry-forward from v0.6.2 real-DB bench)
+recall@10:    0.9604 (carry-forward; no scoring change)
+rationale:    #variable_conflict is a PL/pgSQL compile-time directive — no effect on
+              query plan, index selection, ranking formula, or output values.
+```
+
+See [`benchmarks/gate/v0.6.3.json`](benchmarks/gate/v0.6.3.json).
+
+---
+
 ## [0.6.2] — 2026-05-24
 
 ### Theme
