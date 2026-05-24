@@ -130,15 +130,21 @@
 
 ## Deployment Plan
 
-### Operator Action Required
+### Status: READY FOR OPERATOR PUSH
 
-1. **Push to GitHub:**
+**Blocker:** Network/auth unavailable in agent sandbox. Push must be completed by operator.
+
+### Operator Action Required (BLOCKING)
+
+1. **Push to GitHub (operator with GitHub credentials):**
    ```bash
    cd /external-repos/pgmnemo
    git push origin main && git push origin v0.6.3
    ```
+   - Current tag points to: `ad7ccdf` (includes FINAL_DELIVERY_REPORT)
    - Triggers GitHub Actions `release.yml` automatically
    - Verify: `gh run list --workflow=release.yml`
+   - **Expected output:** Run status ✅ PASS within 5-10 minutes
 
 2. **Agency Production DB (post-CI):**
    ```sql
