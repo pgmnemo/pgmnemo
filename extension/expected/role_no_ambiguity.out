@@ -1,0 +1,11 @@
+ role_matches_recall_lessons
+-----------------------------
+ t
+(1 row)
+
+ role_matches_recall_hybrid
+----------------------------
+ t
+(1 row)
+
+DELETE 1
