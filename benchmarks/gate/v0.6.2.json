@@ -1,0 +1,43 @@
+{
+    "version": "v0.6.2",
+    "date": "2026-05-24",
+    "pgmnemo_version": "0.6.2",
+    "gate_status": "PASS",
+    "gate_type": "real_db_bench_significance",
+    "features_shipped": [
+        "F1_sparse_safe_rrf"
+    ],
+    "features_deferred": [
+        "R1_ambiguous_column_recall_lessons"
+    ],
+    "f1_evidence": {
+        "status": "PASSED gate (delta >= +1pp recall@10 AND p_corr < 0.05)",
+        "bench_run": "benchmarks/longmemeval/results/v062_sparse_safe/",
+        "n_items": 500,
+        "embedder": "bge-m3 1024d (pre-computed cache, same as v0.6.1 bench)",
+        "dataset": "longmemeval_s_cleaned.json",
+        "baseline_order_by": "fusion_score = vec_w*cosine + bm25_w*bm25_score (v0.5.1/v0.6.0/v0.6.1)",
+        "fix_a_order_by": "rrf_sparse = vec_w/(k+vec_rank) + bm25_w/(k+bm25_rank_sparse_or_sentinel)",
+        "fix_a_description": "sparse-safe RRF (Cormack 2009): items with bm25_score>0 get RANK() over BM25-matching items; items with bm25_score=0 get sentinel=n+1 (excluded from BM25 list).",
+        "baseline_recall_at_10": 0.9491,
+        "fix_a_recall_at_10": 0.9604,
+        "delta_recall_at_10_pp": 1.13,
+        "p_value_paired_t": 0.016643,
+        "gate_thresholds": {
+            "delta_ge_1pp": true,
+            "p_value_lt_005": true
+        },
+        "v061_attempt_a_scale_regression": "ORDER BY rrf_diag with ROW_NUMBER() tie-break caused -22.44pp regression on same corpus. v0.6.2 sparse-safe RRF fixes the root cause: high-cosine items without BM25 match no longer rank below BM25-matching non-answers."
+    },
+    "r1_deferred": {
+        "issue": "AmbiguousColumn 'role' in recall_lessons / recall_hybrid (Agency production blocker)",
+        "source": "projects/pgmnemo/BENCH_V060_AGENCY_2026-05-23.md section 8 R1",
+        "target_version": "v0.6.3",
+        "reason": "All bare 'role' references already qualified as 'al.role'; bug is PL/pgSQL variable_conflict with RETURNS TABLE OUT variable. Fix requires either '#variable_conflict use_column' directive or renaming OUT column (backward-incompat). Needs proper investigation, not shipped halfway in v0.6.2."
+    },
+    "regression_tests": {
+        "pg_regress_count": 17,
+        "new_tests": ["rrf_sparse"]
+    },
+    "carry_forward_locomo": "v0.6.1 LoCoMo recall@10=0.7994 baseline (carried forward; not re-run for v0.6.2 since change is recall_hybrid internal scoring, not LoCoMo-affecting)"
+}

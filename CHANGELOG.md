@@ -5,6 +5,82 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [0.6.2] — 2026-05-24
+
+### Theme
+
+RRF Fix-A landed as **sparse-safe RRF** (Cormack et al. 2009 proper RRF semantics).
+Real-database benchmark on LongMemEval-S (N=500, bge-m3 1024d) shows **+1.13 pp recall@10**
+(0.9491 → 0.9604) over the v0.5.1/v0.6.0/v0.6.1 `fusion_score` baseline,
+with paired-t p-value **0.0166** (significant at α=0.05).
+
+This resolves the v0.6.1 RRF deferral. The earlier "A-scale" variant
+(ORDER BY `rrf_diag` with ROW_NUMBER tie-break) regressed by −22.44 pp on the
+same corpus — root cause was arbitrary `bm25_rank` assigned to zero-BM25 items,
+causing high-cosine answers without BM25 match to rank below BM25-matching non-answers.
+
+### Changed (behavior)
+
+- **`recall_hybrid()` ranking — sparse-safe RRF (F1)**
+  CTE `rrf_ranked` now computes `bm25_rank_sparse` as `CASE WHEN bm25_score > 0
+  THEN RANK() OVER (PARTITION BY (bm25_score > 0) ORDER BY bm25_score DESC) END`.
+  Items with no BM25 match get a sentinel rank `n_candidates + 1` rather than
+  arbitrary ROW_NUMBER positions, eliminating ordering corruption on small
+  per-item corpora (~48 segments in LongMemEval session contexts).
+  `rrf_score` output column now returns `rrf_sparse` (was `rrf_diag` diagnostic).
+  Final `score` and `ORDER BY` use `rrf_sparse + _aux_scale*aux` (replacing
+  `fusion_score`).
+
+  Function signature unchanged (8 params). `_aux_scale = 0.01726` retained
+  for tie-breaker; max(aux) ≈ 0.0026 stays well below adjacent RRF rank deltas.
+
+### Added
+
+- **pg_regress: `rrf_sparse.sql`** + `extension/expected/rrf_sparse.out`.
+  Validates: PARTITION-BY-sparse rank assignment, sentinel handling for
+  zero-BM25 candidates, `rrf_score` output column equals computed `rrf_sparse`.
+  pg_regress test count: 16 → 17.
+
+- **`benchmarks/scripts/run_v062_sparse_safe_bench.py`** — LongMemEval bench
+  comparing baseline `fusion_score` vs `rrf_sparse` ordering. Reuses
+  bge-m3 1024d cached embeddings from v0.6.1 (no model re-load).
+  Outputs paired recall@1/5/10/20 + 95% CI + paired t p-value.
+
+- **Migration script: `extension/pgmnemo--0.6.1--0.6.2.sql`** — incremental
+  upgrade (CREATE OR REPLACE on `recall_hybrid`, no DROP needed; signature unchanged).
+
+- **Fresh-install script: `extension/pgmnemo--0.6.2.sql`** — squashes
+  0.0.1 → 0.6.2 chain. `default_version = '0.6.2'` in `pgmnemo.control`.
+
+### Gate evidence
+
+- `benchmarks/gate/v0.6.2.json` — `gate_status: PASS, gate_type: real_db_bench_significance`
+- `benchmarks/longmemeval/results/v062_sparse_safe/metrics.json` — raw bench output
+
+### Note on R1 (AmbiguousColumn in `recall_lessons` / `recall_hybrid`) — DEFERRED to v0.6.3
+
+Agency production benchmark (`projects/pgmnemo/BENCH_V060_AGENCY_2026-05-23.md` §8 R1)
+reported `psycopg2.errors.AmbiguousColumn: column reference "role" is ambiguous`
+on every production call. Investigation: all bare `role` references inside
+function bodies are already qualified as `al.role`. Root cause is PL/pgSQL
+`variable_conflict` between the `RETURNS TABLE (... role TEXT, ...)` OUT
+variable and the column — not a simple bare-reference issue. Fix requires
+either a `#variable_conflict use_column` directive or renaming the OUT
+column (backward-incompat). Deferred to v0.6.3 to investigate properly
+rather than ship halfway.
+
+Production workaround until v0.6.3: `pgmnemo_recall.py` already catches the
+exception fail-open; calls return empty list (no recall context, but no crash).
+
+### Compatibility
+
+`recall_hybrid()` signature unchanged (8 params). Existing callers continue
+to work; output column `rrf_score` now contains `rrf_sparse` instead of
+`rrf_diag` — semantic change for callers that read this column for ranking.
+Final ordering improves recall@10 by +1.13 pp on LongMemEval-S.
+
+---
+
 ## [0.6.1] — 2026-05-23
 
 ### Theme
