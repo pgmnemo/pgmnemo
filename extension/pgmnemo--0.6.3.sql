@@ -1306,7 +1306,8 @@ END;
 $$;
 
 COMMENT ON FUNCTION pgmnemo.recall_hybrid(vector, TEXT, INT, TEXT, INT, DOUBLE PRECISION, DOUBLE PRECISION, INT) IS
-    'Hybrid recall v0.6.2 — F1 sparse-safe RRF (Cormack 2009) + F2 as_of_ts bitemporal filter. '
+    'Hybrid recall v0.6.3 — R1 AmbiguousColumn fix (#variable_conflict use_column). '
+    'v0.6.2 — F1 sparse-safe RRF (Cormack 2009) + F2 as_of_ts bitemporal filter. '
     'Primary rank signal: rrf_sparse = vec_w/(k+vec_rank) + bm25_w/(k+bm25_rank_sparse_or_sentinel). '
     'bm25_rank_sparse: only BM25-matching items (bm25_score > 0) get a rank; others get sentinel = n_candidates+1. '
     'Fixes v0.6.1 regression: ROW_NUMBER() over all candidates assigned arbitrary rank to zero-BM25 items '
@@ -2432,6 +2433,7 @@ END;
 $$;
 
 COMMENT ON FUNCTION pgmnemo.recall_lessons(vector, INT, TEXT, INT, TEXT, TIMESTAMPTZ) IS
+    'v0.6.3 — R1 AmbiguousColumn fix (#variable_conflict use_column). '
     'v0.6.2 hybrid router with as_of_ts point-in-time parameter (F2). '
     'as_of_ts DEFAULT NULL preserves v0.5.1/v0.6.0 behavior at existing call sites. '
     'When as_of_ts IS NOT NULL: propagates to recall_hybrid() via pgmnemo.as_of_timestamp GUC '
