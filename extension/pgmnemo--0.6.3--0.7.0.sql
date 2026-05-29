@@ -15,7 +15,8 @@
 -- Backward compatibility:
 --   Named-column callers of recall_lessons/recall_hybrid: unaffected.
 --   Positional callers: re-audit for 3 new trailing cols (confidence, match_confidence, path_used).
---   ingest() signature unchanged.
+--   ingest() gains optional 10th param p_confidence REAL DEFAULT 0.5.
+--     Existing 9-arg call sites continue to work unchanged.
 --   stats() gains 5 columns — named-column callers unaffected.
 --
 -- SPDX-License-Identifier: Apache-2.0
@@ -133,6 +134,11 @@ COMMENT ON FUNCTION pgmnemo.reinforce(BIGINT, TEXT) IS
 -- 3 new trailing columns: confidence REAL, match_confidence FLOAT8, path_used TEXT
 -- ─────────────────────────────────────────────────────────────────────────────
 
+-- Unregister from extension then drop (return-type change requires DROP+CREATE).
+-- ALTER EXTENSION DROP de-registers the object so plain DROP succeeds.
+ALTER EXTENSION pgmnemo DROP FUNCTION pgmnemo.recall_hybrid(
+    vector, TEXT, INT, TEXT, INT, DOUBLE PRECISION, DOUBLE PRECISION, INT
+);
 DROP FUNCTION IF EXISTS pgmnemo.recall_hybrid(
     vector, TEXT, INT, TEXT, INT, DOUBLE PRECISION, DOUBLE PRECISION, INT
 );
@@ -387,6 +393,9 @@ COMMENT ON FUNCTION pgmnemo.recall_hybrid(vector, TEXT, INT, TEXT, INT, DOUBLE P
 -- C + D + E) recall_lessons() v0.7.0
 -- ─────────────────────────────────────────────────────────────────────────────
 
+ALTER EXTENSION pgmnemo DROP FUNCTION pgmnemo.recall_lessons(
+    vector, INT, TEXT, INT, TEXT, TIMESTAMPTZ
+);
 DROP FUNCTION IF EXISTS pgmnemo.recall_lessons(
     vector, INT, TEXT, INT, TEXT, TIMESTAMPTZ
 );
@@ -831,6 +840,7 @@ COMMENT ON FUNCTION pgmnemo.ingest(TEXT, INT, TEXT, TEXT, SMALLINT, vector, TEXT
 -- Return-type change requires DROP + CREATE.
 -- ─────────────────────────────────────────────────────────────────────────────
 
+ALTER EXTENSION pgmnemo DROP FUNCTION pgmnemo.stats();
 DROP FUNCTION IF EXISTS pgmnemo.stats();
 
 CREATE OR REPLACE FUNCTION pgmnemo.stats()
