@@ -342,13 +342,13 @@ BEGIN
     )
     SELECT
         s.id                AS lesson_id,
-        -- v0.7.0 C: confidence-weighted blend replaces old 0.2×(importance/5).
-        -- Old: 0.2×(importance/5). New: 0.15×(importance/5) + 0.15×confidence.
-        -- Net importance-family weight stays 0.3 total.
+        -- v0.7.0 C: confidence added as aux tiebreaker (0.05 weight, same scale as importance/recency/prov).
+        -- In hybrid path, rrf_sparse dominates; confidence nudges ties in favour of higher-confidence lessons.
         (
             s.rrf_sparse
           + _aux_scale * (
                 0.05 * (s.importance::DOUBLE PRECISION / 5.0)
+              + 0.05 * s.confidence::DOUBLE PRECISION                    -- C: confidence aux term
               + 0.05 * GREATEST(0.0,
                            1.0 - LEAST(
                                EXTRACT(EPOCH FROM (NOW() - s.created_at)) / (90.0 * 86400.0),
@@ -384,6 +384,7 @@ BEGIN
             s.rrf_sparse
           + _aux_scale * (
                 0.05 * (s.importance::DOUBLE PRECISION / 5.0)
+              + 0.05 * s.confidence::DOUBLE PRECISION
               + 0.05 * GREATEST(0.0,
                            1.0 - LEAST(
                                EXTRACT(EPOCH FROM (NOW() - s.created_at)) / (90.0 * 86400.0),
@@ -409,7 +410,7 @@ COMMENT ON FUNCTION pgmnemo.recall_hybrid(vector, TEXT, INT, TEXT, INT, DOUBLE P
     'v0.6.2: F1 sparse-safe RRF (Cormack 2009) + F2 as_of_ts bitemporal filter. '
     'Primary rank signal: rrf_sparse = vec_w/(k+vec_rank) + bm25_w/(k+bm25_rank_sparse_or_sentinel). '
     'bm25_rank_sparse: only BM25-matching items (bm25_score > 0) get a rank; others get sentinel = n_candidates+1. '
-    'Aux tie-breaker: _aux_scale*(0.05*importance + 0.05*recency + 0.05*provenance) + graph_proximity. '
+    'Aux tie-breaker: _aux_scale*(0.05*importance + 0.05*confidence + 0.05*recency + 0.05*provenance) + graph_proximity. '
     'BREAKING (positional callers): match_confidence REAL added as last output column. '
     'Named-column callers: unaffected.';
 
