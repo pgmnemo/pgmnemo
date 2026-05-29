@@ -33,15 +33,19 @@ expires_at` + bitemporality columns `t_valid_from, t_valid_to, content_hash` (ad
 ```sql
 -- In pgmnemo--0.6.3--0.7.0.sql:
 ALTER TABLE pgmnemo.agent_lesson
-    ADD COLUMN IF NOT EXISTS confidence REAL NOT NULL DEFAULT 1.0
+    ADD COLUMN IF NOT EXISTS confidence REAL NOT NULL DEFAULT 0.5
     CONSTRAINT ck_agent_lesson_confidence CHECK (confidence BETWEEN 0.0 AND 1.0);
 ```
 
 **Why safe:**
 - `ADD COLUMN … DEFAULT` on PG17 is a metadata-only operation (no table rewrite since PG11).
-- Duration estimate: < 1 s on 5 894-row corpus.
+- Duration estimate: < 1 s on 5 642-row execas corpus (2026-05-29 baseline).
 - `ADD COLUMN IF NOT EXISTS` makes the migration idempotent.
-- Existing `ingest()` signature unchanged: new column defaults to 1.0.
+- Existing `ingest()` signature unchanged: new column defaults to 0.5 (cold-start neutral).
+- **Default MUST be 0.5 (not 1.0)** — gate criterion in `spec/v070/POSITIONING_REFRESH_PGMREL-070.md §3.2`:
+  "bench regression test: confidence=0.5 flat must reproduce v0.6.3 LongMemEval recall@10
+  within ±0.001". Starting at 1.0 would bias recall toward all lessons equally and invalidate
+  the flat-default regression test.
 - No index required for correctness at v0.7 launch; a partial index on `confidence < 1.0`
   can be added separately for monitoring.
 
@@ -84,17 +88,19 @@ If `confidence` is appended to `recall_lessons()` RETURNS TABLE:
 | imp=4 | 2 679 (45.4%) |
 | imp=5 | 1 088 (18.4%) |
 
-### prod_corpus DB (3 682 active rows)
+### prod_corpus DB (3 901 active rows — live query 2026-05-29)
 
 | Metric | Value |
 |--------|-------|
-| Mean importance | 3.957 |
-| Std importance | **0.815** |
+| Mean importance | 3.935 |
+| Std importance | **0.812** |
 | imp=1 | 0 (0.0%) |
-| imp=2 | 188 (5.1%) |
-| imp=3 | 741 (20.1%) |
-| imp=4 | 1 794 (48.7%) |
-| imp=5 | 959 (26.1%) |
+| imp=2 | 208 (5.3%) |
+| imp=3 | 796 (20.4%) |
+| imp=4 | 1 938 (49.7%) |
+| imp=5 | 959 (24.6%) |
+| Distinct values | 4 (value 1 absent in both DBs) |
+| Embedding coverage | 100% (3 900 / 3 900) |
 
 ### Verdict: NOT a dead signal — but floor-anchored
 
@@ -206,10 +212,12 @@ without embeddings**, even when `query_text` is provided.
 | Call pattern | Hybrid fires? | Embedding-less rows included? | Notes |
 |---|---|---|---|
 | `recall_lessons(embedding, k, …, query_text)` | ✅ YES | ❌ NO (hybrid filters) | Standard usage — full scoring |
-| `recall_lessons(NULL, k, …, query_text)` | ❌ NO | ✅ YES (text-only path) | Text-only, vec=0.0; metadata-ranked only |
-| `recall_lessons(embedding, k, …, NULL)` | ❌ NO | ❌ NO (vector-only, `_has_text=FALSE`) | Pure vector recall; embedding-less excluded |
+| `recall_lessons(NULL, k, …, query_text)` | ❌ NO | ❌ NO | **FOOTGUN**: hybrid skipped (embedding=NULL); vector-only path requires `al.embedding IS NOT NULL`; `ORDER BY al.embedding <=> NULL` = undefined sort; `query_text` IGNORED; returns k arbitrary rows with NULL scores |
+| `recall_lessons(embedding, k, …, NULL)` | ❌ NO | ❌ NO (vector-only, `_has_text=FALSE`) | Pure vector recall; embedding-less excluded; correct behavior |
 | `recall_hybrid(embedding, text, …)` | n/a (IS the hybrid) | ❌ NO (hard `IS NOT NULL` filter) | Direct hybrid; embedding required |
-| `recall_lessons(NULL, k, …, NULL)` | ❌ NO | ❌ NO | Returns 0 rows; embedding AND text both absent |
+| `recall_hybrid(NULL, text, …)` | n/a | ❌ NO | BM25-only path; `_has_vec=FALSE`; `raw_vec_score=0.0`; works correctly for text-only recall |
+| `recall_hybrid(NULL, NULL, …)` | n/a | — | RAISES EXCEPTION: 'at least one retrieval signal is required' ✅ guarded |
+| `recall_lessons(NULL, k, …, NULL)` | ❌ NO | ❌ NO | **FOOTGUN**: same as NULL/query_text case above but query_text is also absent; returns k arbitrary-ordered rows from embedding-carrying lessons with NULL scores; no exception raised |
 
 ### Footgun: text-only fallback (ADR candidate A5)
 
@@ -246,7 +254,7 @@ When MLX embedding service is unavailable, Agency's `pgmnemo_recall.py` sends
 
 | Pre-condition | Status | Action |
 |---|---|---|
-| confidence column upgrade path validated | ✅ CLEAR | Safe via `ADD COLUMN IF NOT EXISTS … DEFAULT 1.0` |
+| confidence column upgrade path validated | ✅ CLEAR | Safe via `ADD COLUMN IF NOT EXISTS … DEFAULT 0.5` |
 | importance signal not dead | ✅ CLEAR | std≈1.0 on execas; floor-missing but not dead |
 | R1/R2/R3/R4/R7 all closed | ✅ CLEAR | All shipped in v0.4.1–v0.6.3 |
 | Hybrid recall without embeddings understood | ✅ CLEAR | Text-only fallback confirmed; A5 footgun documented |
