@@ -1,11 +1,11 @@
 EXTENSION    = pgmnemo
-EXTVERSION   = 0.2.1
+EXTVERSION   = 0.7.0
 
 DATA         = $(wildcard extension/*--*.sql)
 DOCS         = $(wildcard doc/*.md)
-TESTS        = $(wildcard test/sql/*.sql)
-REGRESS      = $(patsubst test/sql/%.sql,%,$(TESTS))
-REGRESS_OPTS = --inputdir=test --load-extension=$(EXTENSION)
+TESTS        = $(wildcard tests/sql/*.sql)
+REGRESS      = $(patsubst tests/sql/%.sql,%,$(TESTS))
+REGRESS_OPTS = --inputdir=tests --load-extension=$(EXTENSION)
 
 PG_CONFIG    = pg_config
 PGXS        := $(shell $(PG_CONFIG) --pgxs)
