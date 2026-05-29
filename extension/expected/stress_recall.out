@@ -3,7 +3,7 @@
 -- Actual 100K/1M/10M stress run: benchmarks/scripts/stress_recall_large.py
 -- Apply the v0.6.1 migration.
 ALTER EXTENSION pgmnemo UPDATE TO '0.6.3';
-NOTICE:  version "0.6.3" of extension "pgmnemo" is already installed
+NOTICE:  version "0.7.0" of extension "pgmnemo" is already installed
 -- ── Function exists with correct signature ────────────────────────────────────
 SELECT COUNT(*) AS recall_lessons_v061_exists
 FROM   pg_proc p
