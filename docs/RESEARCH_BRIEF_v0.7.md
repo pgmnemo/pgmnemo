@@ -3,17 +3,21 @@ date: 2026-05-29
 agent: research_supervisor (id=85)
 task_id: pgmnemo-0.7-research
 status: complete
+revision: 2  # fixed DEFAULT 0.5/1.0 contradiction; added ROADMAP conditional alignment; SQL-verified recall behavior
 ---
 
 # RESEARCH BRIEF — pgmnemo v0.7.0 Scope Validation
 
 ## Summary
 
-All R1/R2/R3/R4/R7 from the Agency RFC are already CLOSED (shipped v0.4.1–v0.6.3).
-`confidence REAL` column is safely addable via `ADD COLUMN IF NOT EXISTS` with no upgrade path
-break. `importance` is NOT a dead signal (std≈1.0 on execas) but has no imp=1 rows — floor anchor
-is missing. Hybrid recall silently falls back to text-only scoring when `query_embedding IS NULL`;
-`recall_hybrid()` called directly filters out all embedding-less rows.
+`confidence REAL` column safely addable via `ADD COLUMN IF NOT EXISTS … DEFAULT 0.5`
+(PG17 metadata-only op; cold-start neutral). R1/R2/R3/R4/R7 (both Agency RFC and v0.6.3 hotfix
+sets) ALL CLOSED — none go into v0.7. `importance` is NOT a dead signal (std≈1.005 execas;
+imp=1 absent in both DBs — floor-anchored, not constant). Hybrid recall silently falls back
+to undefined-order scan when `query_embedding IS NULL`; no NOTICE emitted (footgun, ADR A5).
+`recall_hybrid()` direct-call excludes embedding-less rows via hard `IS NOT NULL` filter.
+ROADMAP v0.7 graph-eval conditional pre-conditions NOT met; theme replacement to
+outcome-learning loop supported by ROADMAP §v0.7 fallback clause.
 
 ---
 
@@ -238,7 +242,47 @@ When MLX embedding service is unavailable, Agency's `pgmnemo_recall.py` sends
 
 ---
 
-## 5. ADR Candidates for v0.7.0
+## 5. ROADMAP v0.7.0 Conditional Alignment
+
+### ROADMAP current state (verified — `ROADMAP.md` lines 309–329)
+
+v0.7.0 is defined as **conditional on external adopter evidence**:
+
+```
+Pre-condition (must ALL be true to start this release):
+  1. External adopter has populated mem_edge in a real workload
+  2. Their bench shows graph-proximity mixin improves recall@10 significantly (p < 0.05)
+  3. Reproducible methodology submitted as PR
+```
+
+ROADMAP line 324–325 explicitly states fallback behavior:
+> "If pre-conditions not met by 2026-09: v0.7 skipped; advance to v0.7 =
+> embeddings configurability (DIM-FLEX) or whatever bench-validated H-N is next on ICE"
+
+### Current pre-condition status
+
+| Pre-condition | Status |
+|---|---|
+| External adopter with `mem_edge` in production | ❌ NOT MET (Agency is the only adopter; `mem.mem_edge` exists but `pgmnemo.mem_edge` unpopulated in production) |
+| Graph-proximity bench improvement (p < 0.05) | ❌ NOT MET (no evidence submitted) |
+| Reproducible methodology PR | ❌ NOT MET |
+
+### v0.7.0 theme recommendation
+
+ROADMAP's own fallback clause applies. Recommended theme: **production maturity +
+outcome-learning loop** (`confidence` column + `reinforce()` SP). Rationale:
+- Directly improves recall quality without unsatisfied graph pre-conditions
+- Closes the feedback loop missing from all v0.6.x releases
+- `confidence=0.5` flat default is a clean bench regression gate
+- DIM-FLEX (configurable vector dim) deferred: no adopter request; `vector(1024)` works
+
+**ROADMAP update required** before v0.7 scoping is final: current ROADMAP table shows
+`v0.7.0 | Optional graph eval | 2026-09 (conditional)` — needs update to reflect
+outcome-learning theme. This is an Agency-internal coordination point.
+
+---
+
+## 6. ADR Candidates for v0.7.0
 
 | # | Title | Decision needed |
 |---|-------|----------------|
@@ -250,7 +294,7 @@ When MLX embedding service is unavailable, Agency's `pgmnemo_recall.py` sends
 
 ---
 
-## 6. Pre-conditions Summary for v0.7.0 Ship Decision
+## 7. Pre-conditions Summary for v0.7.0 Ship Decision
 
 | Pre-condition | Status | Action |
 |---|---|---|
@@ -260,7 +304,8 @@ When MLX embedding service is unavailable, Agency's `pgmnemo_recall.py` sends
 | Hybrid recall without embeddings understood | ✅ CLEAR | Text-only fallback confirmed; A5 footgun documented |
 | confidence scoring formula bench-validated | ❌ REQUIRED | A1 bench (LoCoMo session, N≥500) before promoting to default |
 | `reinforce()` concurrent-update stress test | ❌ REQUIRED | pg_regress test: 1k concurrent UPDATE on same row |
-| Graph eval pre-conditions (external adopter + bench) | ❌ NOT MET | Defer hypergraph to v0.8 or skip per ROADMAP.md conditional |
+| Graph eval pre-conditions (external adopter + bench) | ❌ NOT MET | ROADMAP.md conditional clause redirects theme to outcome-learning loop |
+| imp=1 caller-clamp investigation | ⚠️ OPEN | Verify `pgmnemo_recall.py` / `ingest()` wrappers for silent floor clamp at 2 |
 
 ---
 

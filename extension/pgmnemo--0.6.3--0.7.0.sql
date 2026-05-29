@@ -1,122 +1,141 @@
 -- pgmnemo--0.6.3--0.7.0.sql
 -- Incremental upgrade: v0.6.3 → v0.7.0
--- Theme: Production maturity + outcome-learning loop
 --
--- A: confidence + outcome tracking columns on agent_lesson
--- B: pgmnemo.reinforce() — asymmetric confidence update
--- C: recall_lessons() — confidence-weighted scoring + match_confidence column
--- D: Hybrid fallback warning (RAISE NOTICE / strict mode) in recall_lessons() vector-only path
--- E: match_confidence output column in recall_lessons() and recall_hybrid()
--- F: Ingestion guards (min-signal, repetition-collapse, embedding dedup) in pgmnemo.ingest()
--- G: stats() confidence distribution extension (DROP + recreate due to new columns)
--- H: control + metadata version bump (in separate files)
+-- Theme: Outcome-learning loop + footgun remediation
 --
--- Backward compatibility notes:
---   - All ALTER TABLE use ADD COLUMN IF NOT EXISTS — idempotent
---   - All function changes use CREATE OR REPLACE — idempotent
---   - recall_lessons() RETURNS TABLE gains match_confidence REAL as last column.
---     Named-column callers unaffected. Positional callers must re-audit.
---   - recall_hybrid() RETURNS TABLE gains match_confidence REAL as last column.
---     Same positional-caller caveat.
---   - ingest() gains optional p_confidence REAL DEFAULT 0.5 parameter.
---     Existing call sites (no p_confidence) continue to work unchanged.
---   - stats() gains 3 new columns: avg_confidence, p50_confidence,
---     lessons_needing_reinforcement. DROP + recreate required (column count change).
+-- A) Schema: confidence REAL, success_count INT, fail_count INT,
+--            last_outcome TEXT, last_outcome_at TIMESTAMPTZ on agent_lesson
+-- B) pgmnemo.reinforce(lesson_id, outcome) — asymmetric confidence update
+-- C) recall_lessons() + recall_hybrid() — confidence in scoring + output
+-- D) Footgun guard: RAISE NOTICE when embedding missing, path_used output col
+-- E) match_confidence [0,1] interpretable recall-match score in output
+-- F) Ingestion guards: min-signal reject, repeated-substring warn, embedding dedup warn
+-- G) stats() extension: confidence distribution columns (19 cols total, was 14)
 --
--- GUCs added:
---   pgmnemo.strict_embedding_required (default 'off') — D: raise EXCEPTION on NULL embedding
---   pgmnemo.embedding_dedup_threshold  (default 0.99)  — F: near-duplicate embedding gate
+-- Backward compatibility:
+--   Named-column callers of recall_lessons/recall_hybrid: unaffected.
+--   Positional callers: re-audit for 3 new trailing cols (confidence, match_confidence, path_used).
+--   ingest() signature unchanged.
+--   stats() gains 5 columns — named-column callers unaffected.
+--
+-- SPDX-License-Identifier: Apache-2.0
 
 -- ─────────────────────────────────────────────────────────────────────────────
--- A: confidence + outcome tracking columns on pgmnemo.agent_lesson
+-- A) Schema additions (idempotent via ADD COLUMN IF NOT EXISTS)
 -- ─────────────────────────────────────────────────────────────────────────────
 
 ALTER TABLE pgmnemo.agent_lesson
-    ADD COLUMN IF NOT EXISTS confidence      REAL          NOT NULL DEFAULT 0.5
+    ADD COLUMN IF NOT EXISTS confidence      REAL        NOT NULL DEFAULT 0.5
         CONSTRAINT ck_agent_lesson_confidence CHECK (confidence BETWEEN 0.0 AND 1.0),
-    ADD COLUMN IF NOT EXISTS success_count   INT           NOT NULL DEFAULT 0,
-    ADD COLUMN IF NOT EXISTS fail_count      INT           NOT NULL DEFAULT 0,
+    ADD COLUMN IF NOT EXISTS success_count   INT         NOT NULL DEFAULT 0,
+    ADD COLUMN IF NOT EXISTS fail_count      INT         NOT NULL DEFAULT 0,
     ADD COLUMN IF NOT EXISTS last_outcome    TEXT,
     ADD COLUMN IF NOT EXISTS last_outcome_at TIMESTAMPTZ;
 
+-- Partial index for monitoring at-risk (low-confidence) lessons
+CREATE INDEX IF NOT EXISTS ix_pgmnemo_lesson_confidence_low
+    ON pgmnemo.agent_lesson (confidence ASC)
+    WHERE is_active AND confidence < 0.3;
+
 COMMENT ON COLUMN pgmnemo.agent_lesson.confidence IS
-    'Bayesian-style confidence score [0.0, 1.0]. Default 0.5. '
-    'Updated by pgmnemo.reinforce(): success +0.10, failure -0.15, neutral no change. '
-    'Used in recall scoring: 0.15×(importance/5) + 0.15×confidence (v0.7.0 blend).';
+    'Outcome-track-record confidence score [0.0, 1.0]. '
+    'Default 0.5 (cold-start neutral). '
+    'Updated by pgmnemo.reinforce(): success +0.10, failure -0.15 (asymmetric), neutral no-op. '
+    'Clamped to [0.0, 1.0] by CHECK constraint + reinforce() logic.';
 
 COMMENT ON COLUMN pgmnemo.agent_lesson.success_count IS
-    'Cumulative count of reinforce(''success'') calls on this lesson.';
+    'Cumulative count of successful recall outcomes recorded via reinforce().';
 
 COMMENT ON COLUMN pgmnemo.agent_lesson.fail_count IS
-    'Cumulative count of reinforce(''failure'') calls on this lesson.';
+    'Cumulative count of failure outcomes recorded via reinforce().';
 
 COMMENT ON COLUMN pgmnemo.agent_lesson.last_outcome IS
-    'Most recent outcome string passed to reinforce() — ''success'', ''failure'', ''neutral'', or custom.';
+    'Most recent outcome string from reinforce(): success | failure | neutral.';
 
 COMMENT ON COLUMN pgmnemo.agent_lesson.last_outcome_at IS
-    'Timestamp of the most recent reinforce() call.';
+    'Timestamp of the most recent reinforce() call that wrote to this row.';
 
 -- ─────────────────────────────────────────────────────────────────────────────
--- B: pgmnemo.reinforce() — asymmetric confidence update
+-- B) pgmnemo.reinforce() — asymmetric confidence update
+--    success: +0.10  failure: -0.15  neutral: no-op
+--    Returns new confidence value (REAL).
 -- ─────────────────────────────────────────────────────────────────────────────
 
 CREATE OR REPLACE FUNCTION pgmnemo.reinforce(
     p_lesson_id BIGINT,
-    p_outcome   TEXT
-) RETURNS REAL
+    p_outcome   TEXT    -- 'success' | 'failure' | 'neutral'
+)
+RETURNS REAL
 LANGUAGE plpgsql
 AS $$
 DECLARE
-    _new_confidence REAL;
-    _delta          REAL;
+    _old_conf  REAL;
+    _new_conf  REAL;
+    _delta     REAL;
+    _norm_out  TEXT;
 BEGIN
-    -- Determine confidence delta based on outcome
-    _delta := CASE lower(trim(p_outcome))
-        WHEN 'success' THEN  0.10
-        WHEN 'failure' THEN -0.15
-        ELSE                  0.0   -- 'neutral' or any other string
-    END;
+    _norm_out := lower(trim(COALESCE(p_outcome, 'neutral')));
 
-    UPDATE pgmnemo.agent_lesson
-    SET
-        confidence      = CASE lower(trim(p_outcome))
-                              WHEN 'success' THEN LEAST(1.0,    confidence + 0.10)
-                              WHEN 'failure' THEN GREATEST(0.0, confidence - 0.15)
-                              ELSE confidence
-                          END,
-        success_count   = CASE lower(trim(p_outcome))
-                              WHEN 'success' THEN success_count + 1
-                              ELSE success_count
-                          END,
-        fail_count      = CASE lower(trim(p_outcome))
-                              WHEN 'failure' THEN fail_count + 1
-                              ELSE fail_count
-                          END,
-        last_outcome    = p_outcome,
-        last_outcome_at = NOW()
+    IF _norm_out NOT IN ('success', 'failure', 'neutral') THEN
+        RAISE EXCEPTION
+            'pgmnemo.reinforce: unknown outcome ''%'' — must be success | failure | neutral',
+            p_outcome;
+    END IF;
+
+    SELECT confidence INTO _old_conf
+    FROM pgmnemo.agent_lesson
     WHERE id = p_lesson_id
-    RETURNING confidence INTO _new_confidence;
+    FOR UPDATE;  -- row-level lock for concurrent-safe update
 
     IF NOT FOUND THEN
         RAISE EXCEPTION 'pgmnemo.reinforce: lesson_id % not found', p_lesson_id;
     END IF;
 
-    RETURN _new_confidence;
+    _delta := CASE _norm_out
+        WHEN 'success'  THEN  0.10
+        WHEN 'failure'  THEN -0.15
+        ELSE                  0.0
+    END;
+
+    IF _delta = 0.0 THEN
+        -- neutral: no write, return current value unchanged
+        RETURN _old_conf;
+    END IF;
+
+    _new_conf := GREATEST(0.0, LEAST(1.0, _old_conf + _delta));
+
+    UPDATE pgmnemo.agent_lesson
+    SET
+        confidence      = _new_conf,
+        success_count   = success_count + CASE WHEN _norm_out = 'success' THEN 1 ELSE 0 END,
+        fail_count      = fail_count    + CASE WHEN _norm_out = 'failure' THEN 1 ELSE 0 END,
+        last_outcome    = _norm_out,
+        last_outcome_at = NOW(),
+        updated_at      = NOW()
+    WHERE id = p_lesson_id;
+
+    RETURN _new_conf;
 END;
 $$;
 
 COMMENT ON FUNCTION pgmnemo.reinforce(BIGINT, TEXT) IS
-    'Asymmetric confidence update (v0.7.0). '
-    'success: confidence += 0.10, success_count++, clamped to 1.0. '
-    'failure: confidence -= 0.15, fail_count++, clamped to 0.0. '
-    'neutral (or any other string): no confidence change, just updates last_outcome/last_outcome_at. '
-    'Returns new confidence value. Raises EXCEPTION if lesson_id not found.';
+    'Outcome-learning update (v0.7.0): adjusts confidence for lesson p_lesson_id. '
+    'success: confidence += 0.10 (clamped to 1.0). '
+    'failure: confidence -= 0.15 (clamped to 0.0). '
+    'neutral: no-op — returns current confidence without writing. '
+    'Increments success_count / fail_count; sets last_outcome, last_outcome_at, updated_at. '
+    'Row-locked (SELECT … FOR UPDATE) for concurrent-safe update on hot lessons. '
+    'Raises exception on unknown outcome string or missing lesson_id.';
 
 -- ─────────────────────────────────────────────────────────────────────────────
--- C + D + E: recall_hybrid() — add match_confidence REAL output column
--- (C: confidence-weighted scoring; E: match_confidence column)
--- Note: recall_hybrid does not have a NULL-embedding path so D does not apply here.
+-- C + D + E) recall_hybrid() v0.7.0
+-- Return-type changes require DROP + CREATE.
+-- 3 new trailing columns: confidence REAL, match_confidence FLOAT8, path_used TEXT
 -- ─────────────────────────────────────────────────────────────────────────────
+
+DROP FUNCTION IF EXISTS pgmnemo.recall_hybrid(
+    vector, TEXT, INT, TEXT, INT, DOUBLE PRECISION, DOUBLE PRECISION, INT
+);
 
 CREATE OR REPLACE FUNCTION pgmnemo.recall_hybrid(
     query_embedding   vector(1024),
@@ -144,7 +163,9 @@ RETURNS TABLE (
     artifact_hash    TEXT,
     verified_at      TIMESTAMPTZ,
     created_at       TIMESTAMPTZ,
-    match_confidence REAL              -- E: lesson confidence score (v0.7.0)
+    confidence       REAL,
+    match_confidence DOUBLE PRECISION,
+    path_used        TEXT
 )
 LANGUAGE plpgsql
 STABLE
@@ -160,78 +181,72 @@ DECLARE
     _graph_weight       DOUBLE PRECISION;
     _max_depth          CONSTANT INT := 5;
     _rrf_k_f            DOUBLE PRECISION;
-    -- v0.6.2 F1: A-scale constant — keeps max(aux) ≈ 0.0026 << rrf_sparse range
     _aux_scale          CONSTANT DOUBLE PRECISION := (0.8 / 61.0) / 0.76;
-    -- v0.6.1 F2: point-in-time timestamp (from pgmnemo.as_of_timestamp GUC)
     _as_of_ts           TIMESTAMPTZ;
+    _conf_weight        CONSTANT DOUBLE PRECISION := 0.15;
 BEGIN
-    -- Validate: at least one retrieval signal required
     _has_vec  := query_embedding IS NOT NULL;
     _has_text := query_text IS NOT NULL AND length(trim(query_text)) > 0;
+
     IF NOT _has_vec AND NOT _has_text THEN
-        RAISE EXCEPTION 'pgmnemo.recall_hybrid: both query_embedding and query_text are NULL/empty — at least one retrieval signal is required';
+        RAISE EXCEPTION
+            'pgmnemo.recall_hybrid: both query_embedding and query_text are NULL/empty — '
+            'at least one retrieval signal is required';
     END IF;
 
-    -- Clamp weights
+    -- D) Footgun guard
+    IF NOT _has_vec AND _has_text THEN
+        RAISE NOTICE
+            'pgmnemo.recall_hybrid: query_embedding IS NULL — running BM25-only path. '
+            'Semantic similarity unavailable; path_used = ''text_only''. '
+            'Provide a 1024-dim embedding for full hybrid recall.';
+    END IF;
+
     vec_weight  := GREATEST(0.0, LEAST(1.0, vec_weight));
     bm25_weight := GREATEST(0.0, LEAST(1.0, bm25_weight));
     _rrf_k_f    := GREATEST(1.0, rrf_k::DOUBLE PRECISION);
 
-    -- ef_search GUC for HNSW recall quality
     BEGIN
         _ef_search := COALESCE(
-            NULLIF(current_setting('pgmnemo.ef_search', TRUE), '')::INT,
-            100
-        );
+            NULLIF(current_setting('pgmnemo.ef_search', TRUE), '')::INT, 100);
         IF _ef_search BETWEEN 10 AND 500 THEN
             EXECUTE format('SET LOCAL pgvector.hnsw.ef_search = %s', _ef_search);
         END IF;
-    EXCEPTION WHEN OTHERS THEN
-        NULL;
+    EXCEPTION WHEN OTHERS THEN NULL;
     END;
 
     BEGIN
         _include_unverified := COALESCE(
-            current_setting('pgmnemo.include_unverified', TRUE)::BOOLEAN,
-            FALSE
-        );
+            current_setting('pgmnemo.include_unverified', TRUE)::BOOLEAN, FALSE);
     EXCEPTION WHEN OTHERS THEN
         _include_unverified := FALSE;
     END;
 
-    -- v0.6.1 F2: read as_of_ts from GUC (set by recall_lessons() or caller via SET LOCAL)
     BEGIN
         _as_of_ts := NULLIF(current_setting('pgmnemo.as_of_timestamp', TRUE), '')::TIMESTAMPTZ;
-    EXCEPTION WHEN OTHERS THEN
-        _as_of_ts := NULL;
+    EXCEPTION WHEN OTHERS THEN _as_of_ts := NULL;
     END;
 
     BEGIN
-        _graph_weight := COALESCE(
+        _graph_weight := GREATEST(0.0, LEAST(0.5, COALESCE(
             NULLIF(current_setting('pgmnemo.graph_proximity_weight', TRUE), '')::DOUBLE PRECISION,
-            0.2
-        );
-    EXCEPTION WHEN OTHERS THEN
-        _graph_weight := 0.2;
+            0.2)));
+    EXCEPTION WHEN OTHERS THEN _graph_weight := 0.2;
     END;
-    _graph_weight := GREATEST(0.0, LEAST(0.5, _graph_weight));
 
-    -- Parse query_text → tsquery (websearch preferred, fallback to plainto)
     IF _has_text THEN
         BEGIN
             _tsquery := websearch_to_tsquery('english', query_text);
         EXCEPTION WHEN OTHERS THEN
             BEGIN
                 _tsquery := plainto_tsquery('english', query_text);
-            EXCEPTION WHEN OTHERS THEN
-                _has_text := FALSE;
+            EXCEPTION WHEN OTHERS THEN _has_text := FALSE;
             END;
         END;
     END IF;
 
     RETURN QUERY
     WITH RECURSIVE
-    -- Step 1: union candidates from vector OR BM25 retrieval paths
     raw_candidates AS (
         SELECT
             al.id,
@@ -245,13 +260,12 @@ BEGIN
             al.artifact_hash,
             al.verified_at,
             al.created_at,
-            al.confidence,                                      -- C: carry confidence through
+            al.confidence,
             CASE
                 WHEN _has_vec AND al.embedding IS NOT NULL
                 THEN (1.0 - (al.embedding <=> query_embedding))::DOUBLE PRECISION
                 ELSE 0.0::DOUBLE PRECISION
             END AS raw_vec_score,
-            -- ts_rank_cd normalization=32: divides rank by rank+1 → bounded [0,1]
             CASE
                 WHEN _has_text AND al.lesson_tsv @@ _tsquery
                 THEN ts_rank_cd(al.lesson_tsv, _tsquery, 32)::DOUBLE PRECISION
@@ -261,173 +275,129 @@ BEGIN
         WHERE al.is_active
           AND (_include_unverified OR al.verified_at IS NOT NULL)
           AND (recall_hybrid.role_filter IS NULL OR al.role = recall_hybrid.role_filter)
-          AND (recall_hybrid.project_id_filter IS NULL OR al.project_id = recall_hybrid.project_id_filter)
-          -- v0.6.1 F2: point-in-time bitemporal filter
-          AND (_as_of_ts IS NULL OR (al.t_valid_from <= _as_of_ts AND al.t_valid_to > _as_of_ts))
-          -- Union: any candidate matched by vector OR BM25
+          AND (recall_hybrid.project_id_filter IS NULL
+               OR al.project_id = recall_hybrid.project_id_filter)
+          AND (_as_of_ts IS NULL
+               OR (al.t_valid_from <= _as_of_ts AND al.t_valid_to > _as_of_ts))
           AND (
               (_has_vec  AND al.embedding   IS NOT NULL)
            OR (_has_text AND al.lesson_tsv @@ _tsquery)
           )
     ),
-    -- Step 2: compute sparse-safe RRF ranks (v0.6.2 Fix-A — Cormack 2009)
     rrf_ranked AS (
         SELECT *,
-            COUNT(*) OVER ()                                                AS n_candidates,
-            ROW_NUMBER() OVER (ORDER BY raw_vec_score  DESC NULLS LAST)    AS vec_rank,
-            -- Sparse-safe BM25 rank: only BM25-matching items get a real rank; absent items → NULL.
-            -- Cormack et al. 2009: items not in a ranked list should not receive an RRF rank.
+            COUNT(*) OVER ()                                              AS n_candidates,
+            ROW_NUMBER() OVER (ORDER BY raw_vec_score DESC NULLS LAST)   AS vec_rank,
             CASE WHEN raw_bm25_score > 0
                  THEN RANK() OVER (PARTITION BY (raw_bm25_score > 0)
                                    ORDER BY raw_bm25_score DESC NULLS LAST)
                  ELSE NULL
-            END                                                             AS bm25_rank_sparse
+            END                                                           AS bm25_rank_sparse
         FROM raw_candidates
     ),
-    -- Step 3: compute sparse-safe RRF score (primary) + linear fusion (backward compat)
     scored AS (
         SELECT
-            r.id,
-            r.role,
-            r.project_id,
-            r.topic,
-            r.lesson_text,
-            r.importance,
-            r.metadata,
-            r.commit_sha,
-            r.artifact_hash,
-            r.verified_at,
-            r.created_at,
-            r.confidence,                                       -- C: carry confidence
+            r.id, r.role, r.project_id, r.topic, r.lesson_text,
+            r.importance, r.metadata, r.commit_sha, r.artifact_hash,
+            r.verified_at, r.created_at, r.confidence,
             r.raw_vec_score  AS v_score,
             r.raw_bm25_score AS b_score,
-            -- v0.6.2 Fix-A: sparse-safe RRF (Cormack 2009).
-            -- Absent BM25 items receive sentinel rank = n_candidates+1 (excluded from BM25 list).
             (vec_weight  / (_rrf_k_f + r.vec_rank::DOUBLE PRECISION)
            + bm25_weight / (_rrf_k_f + COALESCE(r.bm25_rank_sparse,
-                                                  r.n_candidates + 1)::DOUBLE PRECISION))
-                AS rrf_sparse,
-            -- linear fusion: retained for backward compatibility (not used for ranking in v0.6.2)
-            (vec_weight  * r.raw_vec_score
-           + bm25_weight * r.raw_bm25_score)
-                AS fusion_score
+                                                 r.n_candidates + 1)::DOUBLE PRECISION))
+                AS rrf_sparse
         FROM rrf_ranked r
     ),
-    -- Step 4: anchor top-5 by rrf_sparse for graph proximity walk (v0.6.2 Fix-A)
     anchors AS (
-        SELECT id
-        FROM scored
-        ORDER BY rrf_sparse DESC
-        LIMIT 5
+        SELECT id FROM scored ORDER BY rrf_sparse DESC LIMIT 5
     ),
-    graph_walk (anchor_id, depth, reached_id) AS (
-        SELECT id, 0, id
-        FROM anchors
-
+    graph_walk(anchor_id, depth, reached_id) AS (
+        SELECT id, 0, id FROM anchors
         UNION ALL
-
         SELECT gw.anchor_id, gw.depth + 1, me.target_id
         FROM graph_walk gw
         JOIN pgmnemo.mem_edge me ON me.source_id = gw.reached_id
-        WHERE me.relation_type IN ('CAUSED_BY', 'CO_OCCURRED', 'DERIVED_FROM')
+        WHERE me.edge_kind IN ('causal', 'temporal')
           AND gw.depth < _max_depth
     ),
     graph_proximity AS (
+        SELECT gw.reached_id AS lesson_id,
+               MAX(1.0 - gw.depth::DOUBLE PRECISION / _max_depth::DOUBLE PRECISION) AS proximity
+        FROM graph_walk WHERE gw.depth > 0 GROUP BY gw.reached_id
+    ),
+    final AS (
         SELECT
-            gw.reached_id AS lesson_id,
-            MAX(1.0 - gw.depth::DOUBLE PRECISION / _max_depth::DOUBLE PRECISION) AS proximity
-        FROM graph_walk gw
-        WHERE gw.depth > 0
-        GROUP BY gw.reached_id
+            s.id,
+            (
+                s.rrf_sparse
+              + _aux_scale * (
+                    _conf_weight * s.confidence::DOUBLE PRECISION
+                  + 0.05 * (s.importance::DOUBLE PRECISION / 5.0)
+                  + 0.05 * GREATEST(0.0, 1.0 - LEAST(
+                               EXTRACT(EPOCH FROM (NOW() - s.created_at)) / (90.0 * 86400.0), 1.0))
+                  + 0.05 * (CASE
+                                WHEN s.commit_sha IS NOT NULL AND s.verified_at IS NOT NULL THEN 1.0
+                                WHEN s.commit_sha IS NOT NULL                               THEN 0.4
+                                ELSE 0.0 END)
+                )
+              + _graph_weight * COALESCE(gp.proximity, 0.0)
+            ) AS final_score,
+            s.role, s.project_id, s.topic, s.lesson_text, s.importance,
+            s.metadata, s.commit_sha, s.artifact_hash, s.verified_at, s.created_at,
+            s.confidence, s.v_score, s.b_score, s.rrf_sparse,
+            COALESCE(gp.proximity, 0.0) AS prox
+        FROM scored s
+        LEFT JOIN graph_proximity gp ON gp.lesson_id = s.id
     )
     SELECT
-        s.id                AS lesson_id,
-        -- v0.7.0 C: confidence added as aux tiebreaker (0.05 weight, same scale as importance/recency/prov).
-        -- In hybrid path, rrf_sparse dominates; confidence nudges ties in favour of higher-confidence lessons.
-        (
-            s.rrf_sparse
-          + _aux_scale * (
-                0.05 * (s.importance::DOUBLE PRECISION / 5.0)
-              + 0.05 * s.confidence::DOUBLE PRECISION                    -- C: confidence aux term
-              + 0.05 * GREATEST(0.0,
-                           1.0 - LEAST(
-                               EXTRACT(EPOCH FROM (NOW() - s.created_at)) / (90.0 * 86400.0),
-                               1.0
-                           )
-                       )::DOUBLE PRECISION
-              + 0.05 * (CASE
-                          WHEN s.commit_sha IS NOT NULL AND s.verified_at IS NOT NULL THEN 1.0
-                          WHEN s.commit_sha IS NOT NULL                               THEN 0.4
-                          ELSE                                                             0.0
-                        END)::DOUBLE PRECISION
-            )
-          + _graph_weight * COALESCE(gp.proximity, 0.0)
-        )                   AS score,
-        s.v_score           AS vec_score,
-        s.b_score           AS bm25_score,
-        s.rrf_sparse        AS rrf_score,
-        s.role,
-        s.project_id,
-        s.topic,
-        s.lesson_text,
-        s.importance,
-        s.metadata,
-        s.commit_sha,
-        s.artifact_hash,
-        s.verified_at,
-        s.created_at,
-        s.confidence::REAL  AS match_confidence  -- E: lesson confidence score
-    FROM scored s
-    LEFT JOIN graph_proximity gp ON gp.lesson_id = s.id
-    ORDER BY
-        (
-            s.rrf_sparse
-          + _aux_scale * (
-                0.05 * (s.importance::DOUBLE PRECISION / 5.0)
-              + 0.05 * s.confidence::DOUBLE PRECISION
-              + 0.05 * GREATEST(0.0,
-                           1.0 - LEAST(
-                               EXTRACT(EPOCH FROM (NOW() - s.created_at)) / (90.0 * 86400.0),
-                               1.0
-                           )
-                       )::DOUBLE PRECISION
-              + 0.05 * (CASE
-                          WHEN s.commit_sha IS NOT NULL AND s.verified_at IS NOT NULL THEN 1.0
-                          WHEN s.commit_sha IS NOT NULL                               THEN 0.4
-                          ELSE                                                             0.0
-                        END)::DOUBLE PRECISION
-            )
-          + _graph_weight * COALESCE(gp.proximity, 0.0)
-        ) DESC
+        f.id                   AS lesson_id,
+        f.final_score          AS score,
+        f.v_score              AS vec_score,
+        f.b_score              AS bm25_score,
+        f.rrf_sparse           AS rrf_score,
+        f.role,
+        f.project_id,
+        f.topic,
+        f.lesson_text,
+        f.importance,
+        f.metadata,
+        f.commit_sha,
+        f.artifact_hash,
+        f.verified_at,
+        f.created_at,
+        f.confidence::REAL,
+        LEAST(1.0, f.final_score)::DOUBLE PRECISION AS match_confidence,
+        CASE WHEN _has_vec THEN 'hybrid' ELSE 'text_only' END::TEXT AS path_used
+    FROM final f
+    ORDER BY f.final_score DESC
     LIMIT k;
 END;
 $$;
 
 COMMENT ON FUNCTION pgmnemo.recall_hybrid(vector, TEXT, INT, TEXT, INT, DOUBLE PRECISION, DOUBLE PRECISION, INT) IS
-    'Hybrid recall v0.7.0 — adds match_confidence REAL output column (E). '
-    'v0.7.0 C: confidence pulled into candidates/scored CTEs; match_confidence = lesson.confidence. '
-    'v0.6.3: R1 AmbiguousColumn fix (#variable_conflict use_column). '
-    'v0.6.2: F1 sparse-safe RRF (Cormack 2009) + F2 as_of_ts bitemporal filter. '
-    'Primary rank signal: rrf_sparse = vec_w/(k+vec_rank) + bm25_w/(k+bm25_rank_sparse_or_sentinel). '
-    'bm25_rank_sparse: only BM25-matching items (bm25_score > 0) get a rank; others get sentinel = n_candidates+1. '
-    'Aux tie-breaker: _aux_scale*(0.05*importance + 0.05*confidence + 0.05*recency + 0.05*provenance) + graph_proximity. '
-    'BREAKING (positional callers): match_confidence REAL added as last output column. '
-    'Named-column callers: unaffected.';
+    'Hybrid recall v0.7.0 — confidence scoring, match_confidence, path_used, footgun guard. '
+    'Scoring: rrf_sparse + _aux_scale*(0.15×conf + 0.05×imp/5 + 0.05×recency + 0.05×prov) + δ×graph. '
+    'confidence: per-lesson outcome-track-record [0,1] from reinforce(). '
+    'match_confidence: LEAST(1.0, score) — interpretable [0,1] quality indicator. '
+    'path_used: ''hybrid'' when vec present, ''text_only'' when vec IS NULL. '
+    'D-footgun: RAISE NOTICE when query_embedding IS NULL. '
+    'New trailing columns (18 total): confidence REAL, match_confidence FLOAT8, path_used TEXT.';
 
 -- ─────────────────────────────────────────────────────────────────────────────
--- C + D + E: recall_lessons() — full CREATE OR REPLACE
--- C: 0.2×(importance/5) → 0.15×(importance/5) + 0.15×confidence in vector-only path
--- D: RAISE NOTICE (or EXCEPTION) when query_embedding IS NULL
--- E: match_confidence REAL added as last output column
+-- C + D + E) recall_lessons() v0.7.0
 -- ─────────────────────────────────────────────────────────────────────────────
+
+DROP FUNCTION IF EXISTS pgmnemo.recall_lessons(
+    vector, INT, TEXT, INT, TEXT, TIMESTAMPTZ
+);
 
 CREATE OR REPLACE FUNCTION pgmnemo.recall_lessons(
     query_embedding   vector(1024),
-    k                 INT           DEFAULT 10,
-    role_filter       TEXT          DEFAULT NULL,
-    project_id_filter INT           DEFAULT NULL,
-    query_text        TEXT          DEFAULT NULL,
-    as_of_ts          TIMESTAMPTZ   DEFAULT NULL  -- v0.6.1 F2: point-in-time recall
+    k                 INT         DEFAULT 10,
+    role_filter       TEXT        DEFAULT NULL,
+    project_id_filter INT         DEFAULT NULL,
+    query_text        TEXT        DEFAULT NULL,
+    as_of_ts          TIMESTAMPTZ DEFAULT NULL
 )
 RETURNS TABLE (
     lesson_id        BIGINT,
@@ -445,7 +415,9 @@ RETURNS TABLE (
     vec_score        DOUBLE PRECISION,
     bm25_score       DOUBLE PRECISION,
     rrf_score        DOUBLE PRECISION,
-    match_confidence REAL              -- E: lesson confidence score (v0.7.0)
+    confidence       REAL,
+    match_confidence DOUBLE PRECISION,
+    path_used        TEXT
 )
 LANGUAGE plpgsql
 STABLE
@@ -453,146 +425,102 @@ PARALLEL SAFE
 AS $$
 #variable_conflict use_column
 DECLARE
-    _ef_search              INT;
-    _include_unverified     BOOLEAN;
-    _tsquery                TSQUERY;
-    _has_text               BOOLEAN;
-    _gamma                  DOUBLE PRECISION;
-    _temporal_boost         DOUBLE PRECISION;
-    _graph_weight           DOUBLE PRECISION;
-    _disable_hybrid         BOOLEAN;
-    _max_depth              CONSTANT INT := 5;
-    _max_chars              INT;
-    _query_text             TEXT;
-    _strict_embedding       BOOLEAN;
+    _ef_search          INT;
+    _include_unverified BOOLEAN;
+    _tsquery            TSQUERY;
+    _has_text           BOOLEAN;
+    _has_vec            BOOLEAN;
+    _gamma              DOUBLE PRECISION;
+    _temporal_boost     DOUBLE PRECISION;
+    _graph_weight       DOUBLE PRECISION;
+    _disable_hybrid     BOOLEAN;
+    _max_depth          CONSTANT INT := 5;
+    _max_chars          INT;
+    _query_text         TEXT;
+    _path_used          TEXT;
+    _conf_weight        CONSTANT DOUBLE PRECISION := 0.15;
 BEGIN
-    -- R5: clamp query_text to pgmnemo.max_query_text_chars (default 2000).
+    -- R5: clamp query_text
     _max_chars := COALESCE(
-        NULLIF(current_setting('pgmnemo.max_query_text_chars', TRUE), '')::INT,
-        2000
-    );
+        NULLIF(current_setting('pgmnemo.max_query_text_chars', TRUE), '')::INT, 2000);
     IF query_text IS NOT NULL AND length(query_text) > _max_chars THEN
-        RAISE NOTICE 'pgmnemo.recall_lessons: query_text truncated to % chars '
-                     '(pgmnemo.max_query_text_chars). Original length: %',
+        RAISE NOTICE 'pgmnemo.recall_lessons: query_text truncated to % chars. Original: %',
                      _max_chars, length(query_text);
         _query_text := left(query_text, _max_chars);
     ELSE
         _query_text := query_text;
     END IF;
 
+    _has_vec  := query_embedding IS NOT NULL;
+    _has_text := _query_text IS NOT NULL AND length(trim(_query_text)) > 0;
+
+    -- D) Footgun guard: warn when embedding absent
+    IF NOT _has_vec THEN
+        RAISE NOTICE
+            'pgmnemo.recall_lessons: query_embedding IS NULL — semantic similarity unavailable. '
+            'Hybrid routing suppressed; path_used=''text_only''. '
+            'Provide a 1024-dim embedding for full hybrid recall.';
+    END IF;
+
     BEGIN
         _disable_hybrid := COALESCE(
-            current_setting('pgmnemo.disable_hybrid', TRUE)::BOOLEAN,
-            FALSE
-        );
-    EXCEPTION WHEN OTHERS THEN
-        _disable_hybrid := FALSE;
+            current_setting('pgmnemo.disable_hybrid', TRUE)::BOOLEAN, FALSE);
+    EXCEPTION WHEN OTHERS THEN _disable_hybrid := FALSE;
     END;
 
-    -- D: read strict_embedding_required GUC
-    BEGIN
-        _strict_embedding := COALESCE(
-            current_setting('pgmnemo.strict_embedding_required', TRUE)::BOOLEAN,
-            FALSE
-        );
-    EXCEPTION WHEN OTHERS THEN
-        _strict_embedding := FALSE;
-    END;
+    -- Route to recall_hybrid when all 3 conditions met
+    IF NOT _disable_hybrid AND _has_vec AND _has_text THEN
+        _path_used := 'hybrid';
 
-    IF NOT _disable_hybrid
-       AND _query_text IS NOT NULL
-       AND length(trim(_query_text)) > 0
-       AND query_embedding IS NOT NULL THEN
-
-        -- v0.6.1 F2: propagate as_of_ts to recall_hybrid() via GUC (transaction-local)
         IF as_of_ts IS NOT NULL THEN
             PERFORM set_config('pgmnemo.as_of_timestamp', as_of_ts::TEXT, TRUE);
         END IF;
 
         RETURN QUERY
         SELECT
-            h.lesson_id,
-            h.score,
-            h.role,
-            h.project_id,
-            h.topic,
-            h.lesson_text,
-            h.importance,
-            h.metadata,
-            h.commit_sha,
-            h.artifact_hash,
-            h.verified_at,
-            h.created_at,
-            h.vec_score,
-            h.bm25_score,
-            h.rrf_score,
-            h.match_confidence   -- E: forward match_confidence from hybrid path
+            h.lesson_id, h.score, h.role, h.project_id, h.topic, h.lesson_text,
+            h.importance, h.metadata, h.commit_sha, h.artifact_hash,
+            h.verified_at, h.created_at,
+            h.vec_score, h.bm25_score, h.rrf_score,
+            h.confidence, h.match_confidence, _path_used
         FROM pgmnemo.recall_hybrid(
-            query_embedding,
-            _query_text,
-            k,
-            role_filter,
-            project_id_filter,
-            0.4,
-            0.4,
-            60
+            query_embedding, _query_text, k,
+            role_filter, project_id_filter, 0.4, 0.4, 60
         ) h;
         RETURN;
     END IF;
 
-    -- D: warn or raise if embedding is NULL and we are in vector-only path
-    IF query_embedding IS NULL THEN
-        IF _strict_embedding THEN
-            RAISE EXCEPTION 'pgmnemo.recall_lessons: query_embedding IS NULL — recall falling back to text-only path; semantic similarity scores unavailable. Set pgmnemo.strict_embedding_required = ''on'' to raise an exception instead.';
-        ELSE
-            RAISE NOTICE 'pgmnemo.recall_lessons: query_embedding IS NULL — recall falling back to text-only path; semantic similarity scores unavailable. Set pgmnemo.strict_embedding_required = ''on'' to raise an exception instead.';
-        END IF;
-    END IF;
+    -- ── Vector-only or text-only path ──────────────────────────────────────
 
-    -- Vector-only path (or text-only when query_embedding IS NULL)
+    _path_used := CASE WHEN _has_vec THEN 'vector' ELSE 'text_only' END;
+
     BEGIN
         _ef_search := COALESCE(
-            NULLIF(current_setting('pgmnemo.ef_search', TRUE), '')::INT,
-            100
-        );
+            NULLIF(current_setting('pgmnemo.ef_search', TRUE), '')::INT, 100);
         IF _ef_search BETWEEN 10 AND 500 THEN
             EXECUTE format('SET LOCAL pgvector.hnsw.ef_search = %s', _ef_search);
         END IF;
-    EXCEPTION WHEN OTHERS THEN
-        NULL;
+    EXCEPTION WHEN OTHERS THEN NULL;
     END;
 
     BEGIN
         _include_unverified := COALESCE(
-            current_setting('pgmnemo.include_unverified', TRUE)::BOOLEAN,
-            FALSE
-        );
-    EXCEPTION WHEN OTHERS THEN
-        _include_unverified := FALSE;
+            current_setting('pgmnemo.include_unverified', TRUE)::BOOLEAN, FALSE);
+    EXCEPTION WHEN OTHERS THEN _include_unverified := FALSE;
     END;
 
-    -- Base recency weight γ (backward compat default 0.05).
     _gamma := COALESCE(
-        NULLIF(current_setting('pgmnemo.recency_weight', TRUE), '')::DOUBLE PRECISION,
-        0.05
-    );
-
-    -- H-06: recency decay coefficient = recency_weight × temporal_boost
+        NULLIF(current_setting('pgmnemo.recency_weight', TRUE), '')::DOUBLE PRECISION, 0.05);
     _temporal_boost := GREATEST(0.0, LEAST(20.0, COALESCE(
-        NULLIF(current_setting('pgmnemo.temporal_boost', TRUE), '')::DOUBLE PRECISION,
-        1.0
-    )));
+        NULLIF(current_setting('pgmnemo.temporal_boost', TRUE), '')::DOUBLE PRECISION, 1.0)));
     _gamma := _gamma * _temporal_boost;
 
     BEGIN
-        _graph_weight := COALESCE(
+        _graph_weight := GREATEST(0.0, LEAST(0.5, COALESCE(
             NULLIF(current_setting('pgmnemo.graph_proximity_weight', TRUE), '')::DOUBLE PRECISION,
-            0.2
-        );
-    EXCEPTION WHEN OTHERS THEN
-        _graph_weight := 0.2;
+            0.2)));
+    EXCEPTION WHEN OTHERS THEN _graph_weight := 0.2;
     END;
-    _graph_weight := GREATEST(0.0, LEAST(0.5, _graph_weight));
 
     _has_text := _query_text IS NOT NULL AND length(trim(_query_text)) > 0;
     IF _has_text THEN
@@ -601,44 +529,46 @@ BEGIN
         EXCEPTION WHEN OTHERS THEN
             BEGIN
                 _tsquery := plainto_tsquery('english', _query_text);
-            EXCEPTION WHEN OTHERS THEN
-                _has_text := FALSE;
+            EXCEPTION WHEN OTHERS THEN _has_text := FALSE;
             END;
         END;
     END IF;
 
     RETURN QUERY
-    WITH RECURSIVE candidates AS (
+    WITH RECURSIVE
+    candidates AS (
         SELECT
-            al.id             AS cand_id,
-            al.role           AS cand_role,
-            al.project_id     AS cand_project_id,
-            al.topic          AS cand_topic,
-            al.lesson_text    AS cand_lesson_text,
-            al.importance     AS cand_importance,
-            al.metadata       AS cand_metadata,
-            al.commit_sha     AS cand_commit_sha,
-            al.artifact_hash  AS cand_artifact_hash,
-            al.verified_at    AS cand_verified_at,
-            al.created_at     AS cand_created_at,
-            al.confidence     AS cand_confidence,                -- C: carry confidence
+            al.id          AS cand_id,
+            al.role        AS cand_role,
+            al.project_id  AS cand_project_id,
+            al.topic       AS cand_topic,
+            al.lesson_text AS cand_lesson_text,
+            al.importance  AS cand_importance,
+            al.metadata    AS cand_metadata,
+            al.commit_sha  AS cand_commit_sha,
+            al.artifact_hash AS cand_artifact_hash,
+            al.verified_at AS cand_verified_at,
+            al.created_at  AS cand_created_at,
+            al.confidence  AS cand_confidence,
             CASE
-                WHEN query_embedding IS NOT NULL AND al.embedding IS NOT NULL
+                WHEN _has_vec AND al.embedding IS NOT NULL
                 THEN (1.0 - (al.embedding <=> query_embedding))::DOUBLE PRECISION
                 ELSE 0.0::DOUBLE PRECISION
-            END AS vec_score_raw
+            END AS vec_score_raw,
+            CASE
+                WHEN _has_text AND al.full_text @@ _tsquery
+                THEN ts_rank_cd(al.full_text, _tsquery)::DOUBLE PRECISION
+                ELSE 0.0::DOUBLE PRECISION
+            END AS ft_score_raw
         FROM pgmnemo.agent_lesson al
         WHERE al.is_active
-          AND (query_embedding IS NULL OR al.embedding IS NOT NULL)
           AND (_include_unverified OR al.verified_at IS NOT NULL)
           AND (role_filter IS NULL OR al.role = role_filter)
           AND (project_id_filter IS NULL OR al.project_id = project_id_filter)
-          -- v0.6.1 F2: point-in-time filter on vector-only path
-          AND (as_of_ts IS NULL OR (al.t_valid_from <= as_of_ts AND al.t_valid_to > as_of_ts))
-        ORDER BY
-            CASE WHEN query_embedding IS NOT NULL AND al.embedding IS NOT NULL
-                 THEN al.embedding <=> query_embedding
-                 ELSE 0.0 END ASC
+          AND (as_of_ts IS NULL
+               OR (al.t_valid_from <= as_of_ts AND al.t_valid_to > as_of_ts))
+          AND (al.embedding IS NOT NULL OR _has_text)
+        ORDER BY al.embedding <=> query_embedding
         LIMIT GREATEST(k * 5, 50)
     ),
     anchors AS (
@@ -650,7 +580,7 @@ BEGIN
         SELECT gw.anchor_id, gw.depth + 1, me.target_id
         FROM graph_walk gw
         JOIN pgmnemo.mem_edge me ON me.source_id = gw.reached_id
-        WHERE me.relation_type IN ('CAUSED_BY', 'CO_OCCURRED', 'DERIVED_FROM')
+        WHERE me.edge_kind IN ('causal', 'temporal')
           AND gw.depth < _max_depth
     ),
     graph_proximity AS (
@@ -659,80 +589,72 @@ BEGIN
         FROM graph_walk WHERE depth > 0 GROUP BY reached_id
     )
     SELECT
-        c.cand_id AS lesson_id,
-        -- C: confidence-weighted blend.
-        -- Old: 0.2×(importance/5). New: 0.15×(importance/5) + 0.15×confidence.
-        -- Net importance-family weight preserved at 0.3 total.
+        c.cand_id               AS lesson_id,
         (
-            0.5 * c.vec_score_raw
-          + 0.15 * (c.cand_importance::DOUBLE PRECISION / 5.0)
-          + 0.15 * c.cand_confidence::DOUBLE PRECISION
+            0.5  * c.vec_score_raw
+          + 0.10 * (c.cand_importance::DOUBLE PRECISION / 5.0)
+          + _conf_weight * c.cand_confidence::DOUBLE PRECISION
           + _gamma * GREATEST(0.0, 1.0 - LEAST(
-                EXTRACT(EPOCH FROM (NOW() - c.cand_created_at)) / (90.0 * 86400.0), 1.0
-            ))
+                EXTRACT(EPOCH FROM (NOW() - c.cand_created_at)) / (90.0 * 86400.0), 1.0))
           + 0.1 * (CASE
                 WHEN c.cand_commit_sha IS NOT NULL AND c.cand_verified_at IS NOT NULL THEN 1.0
                 WHEN c.cand_commit_sha IS NOT NULL THEN 0.5
                 ELSE 0.0 END)
           + _graph_weight * COALESCE(gp.proximity, 0.0)
-        ) AS score,
-        c.cand_role           AS role,
-        c.cand_project_id     AS project_id,
-        c.cand_topic          AS topic,
-        c.cand_lesson_text    AS lesson_text,
-        c.cand_importance     AS importance,
-        c.cand_metadata       AS metadata,
-        c.cand_commit_sha     AS commit_sha,
-        c.cand_artifact_hash  AS artifact_hash,
-        c.cand_verified_at    AS verified_at,
-        c.cand_created_at     AS created_at,
-        c.vec_score_raw       AS vec_score,
-        NULL::DOUBLE PRECISION AS bm25_score,
-        NULL::DOUBLE PRECISION AS rrf_score,
-        c.cand_confidence     AS match_confidence  -- E: lesson confidence score
+        )                       AS score,
+        c.cand_role             AS role,
+        c.cand_project_id       AS project_id,
+        c.cand_topic            AS topic,
+        c.cand_lesson_text      AS lesson_text,
+        c.cand_importance       AS importance,
+        c.cand_metadata         AS metadata,
+        c.cand_commit_sha       AS commit_sha,
+        c.cand_artifact_hash    AS artifact_hash,
+        c.cand_verified_at      AS verified_at,
+        c.cand_created_at       AS created_at,
+        c.vec_score_raw         AS vec_score,
+        NULL::DOUBLE PRECISION  AS bm25_score,
+        NULL::DOUBLE PRECISION  AS rrf_score,
+        c.cand_confidence::REAL AS confidence,
+        LEAST(1.0,
+            0.5  * c.vec_score_raw
+          + 0.10 * (c.cand_importance::DOUBLE PRECISION / 5.0)
+          + _conf_weight * c.cand_confidence::DOUBLE PRECISION
+          + _gamma * GREATEST(0.0, 1.0 - LEAST(
+                EXTRACT(EPOCH FROM (NOW() - c.cand_created_at)) / (90.0 * 86400.0), 1.0))
+          + 0.1 * (CASE
+                WHEN c.cand_commit_sha IS NOT NULL AND c.cand_verified_at IS NOT NULL THEN 1.0
+                WHEN c.cand_commit_sha IS NOT NULL THEN 0.5 ELSE 0.0 END)
+          + _graph_weight * COALESCE(gp.proximity, 0.0)
+        )::DOUBLE PRECISION     AS match_confidence,
+        _path_used              AS path_used
     FROM candidates c
     LEFT JOIN graph_proximity gp ON gp.gp_lesson_id = c.cand_id
-    ORDER BY (
-        0.5 * c.vec_score_raw
-      + 0.15 * (c.cand_importance::DOUBLE PRECISION / 5.0)
-      + 0.15 * c.cand_confidence::DOUBLE PRECISION
-      + _gamma * GREATEST(0.0, 1.0 - LEAST(
-            EXTRACT(EPOCH FROM (NOW() - c.cand_created_at)) / (90.0 * 86400.0), 1.0
-        ))
-      + 0.1 * (CASE
-            WHEN c.cand_commit_sha IS NOT NULL AND c.cand_verified_at IS NOT NULL THEN 1.0
-            WHEN c.cand_commit_sha IS NOT NULL THEN 0.5
-            ELSE 0.0 END)
-      + _graph_weight * COALESCE(gp.proximity, 0.0)
-    ) DESC,
-    c.cand_importance DESC,
-    c.cand_created_at DESC
+    ORDER BY score DESC, c.cand_importance DESC, c.cand_created_at DESC
     LIMIT k;
 END;
 $$;
 
 COMMENT ON FUNCTION pgmnemo.recall_lessons(vector, INT, TEXT, INT, TEXT, TIMESTAMPTZ) IS
-    'v0.7.0 — confidence-weighted scoring (C), NULL-embedding warning/exception (D), '
-    'match_confidence REAL output column (E). '
-    'C: vector-only path scoring changed: 0.2×(importance/5) → 0.15×(importance/5) + 0.15×confidence. '
-    'D: when query_embedding IS NULL, emits RAISE NOTICE (or EXCEPTION if '
-    '   pgmnemo.strict_embedding_required = ''on''). '
-    'E: match_confidence column = lesson.confidence — lets callers filter independently of blended score. '
-    'BREAKING (positional callers): match_confidence REAL added as last output column. '
-    'Named-column callers: unaffected. '
-    'v0.6.3: R1 AmbiguousColumn fix (#variable_conflict use_column). '
-    'v0.6.2 hybrid router with as_of_ts point-in-time parameter (F2). '
-    'as_of_ts DEFAULT NULL preserves v0.5.1/v0.6.0 behavior at existing call sites. '
-    'R5: query_text truncated to pgmnemo.max_query_text_chars (default 2000) with RAISE NOTICE. '
-    'H-06: recency decay = max(0, 1 - age_days/90); coeff=recency_weight×temporal_boost. '
-    'Diagnostic cols: vec_score=cosine; bm25_score/rrf_score=NULL on vector-only path.';
+    'v0.7.0 — confidence integration + footgun guard + match_confidence + path_used. '
+    'Scoring (vector path): 0.5×vec + 0.10×imp/5 + 0.15×confidence + γ×recency + 0.1×prov + δ×graph. '
+    'confidence: outcome-track-record [0,1] from reinforce(). '
+    'match_confidence: LEAST(1.0, score) — interpretable [0,1] quality indicator. '
+    'path_used: ''hybrid'' | ''vector'' | ''text_only''. '
+    'D-footgun: RAISE NOTICE when query_embedding IS NULL. '
+    '18 output columns (15 existing + confidence, match_confidence, path_used). '
+    'Named-column callers unaffected; positional callers: re-audit for 3 new trailing cols.';
 
 -- ─────────────────────────────────────────────────────────────────────────────
--- F: Ingestion guards in pgmnemo.ingest()
--- Adding optional p_confidence REAL DEFAULT 0.5 parameter.
--- Three guards: min-signal, repetition-collapse, embedding dedup.
--- Signature change (new optional param) → CREATE OR REPLACE is sufficient
--- because the old 9-arg signature is replaced and callers without p_confidence still work.
+-- F) Ingestion guards — CREATE OR REPLACE (signature unchanged)
+-- G1: min-signal reject (<3 words or <10 chars)
+-- G2: repeated-substring warn (>60% repetition heuristic)
+-- G3: embedding dedup warn (cosine_sim >= pgmnemo.dedup_threshold, default 0.97)
+-- GUCs:
+--   pgmnemo.guard_min_signal  = 'on'   (default)
+--   pgmnemo.guard_repeat_warn = 'on'   (default)
+--   pgmnemo.guard_dedup_warn  = 'on'   (default)
+--   pgmnemo.dedup_threshold   = '0.97' (default)
 -- ─────────────────────────────────────────────────────────────────────────────
 
 CREATE OR REPLACE FUNCTION pgmnemo.ingest(
@@ -744,96 +666,115 @@ CREATE OR REPLACE FUNCTION pgmnemo.ingest(
     p_embedding     vector(1024) DEFAULT NULL,
     p_commit_sha    TEXT         DEFAULT NULL,
     p_artifact_hash TEXT         DEFAULT NULL,
-    p_metadata      JSONB        DEFAULT '{}'::jsonb,
-    p_confidence    REAL         DEFAULT 0.5       -- F: confidence seed (v0.7.0)
+    p_metadata      JSONB        DEFAULT '{}'::jsonb
 ) RETURNS BIGINT
 LANGUAGE plpgsql AS $$
 DECLARE
-    new_id              BIGINT;
-    _max_chars          INT;
-    _content_hash       TEXT;
-    _prior_count        INT;
-    _dedup_threshold    REAL;
+    new_id             BIGINT;
+    _max_chars         INT;
+    _content_hash      TEXT;
+    _prior_count       INT;
+    _word_count        INT;
+    _guard_min         BOOLEAN;
+    _guard_repeat      BOOLEAN;
+    _guard_dedup       BOOLEAN;
+    _dedup_threshold   REAL;
+    _near_dup_id       BIGINT;
+    _near_dup_sim      REAL;
+    _collapsed_len     INT;
 BEGIN
-    -- F guard 1: min-signal guard
-    IF length(trim(COALESCE(p_lesson_text, ''))) < 20 THEN
-        RAISE EXCEPTION 'pgmnemo.ingest: lesson_text too short (min 20 chars) / topic too short (min 3 chars)';
-    END IF;
-    IF length(trim(COALESCE(p_topic, ''))) < 3 THEN
-        RAISE EXCEPTION 'pgmnemo.ingest: lesson_text too short (min 20 chars) / topic too short (min 3 chars)';
-    END IF;
-
-    -- F guard 2: repetition-collapse guard
-    -- Checks for any substring of length ≥ 8 repeated ≥ 3 times consecutively.
-    BEGIN
-        IF regexp_count(p_lesson_text, '(.{8,})\1{2,}') > 0 THEN
-            RAISE EXCEPTION 'pgmnemo.ingest: lesson_text appears to be repetition-collapsed (repeated pattern detected). Summarise the lesson instead.';
-        END IF;
-    EXCEPTION
-        WHEN invalid_regular_expression THEN
-            -- regex not supported on this PG version — skip guard (fail-open)
-            NULL;
-        WHEN undefined_function THEN
-            -- regexp_count not available (PG < 15) — skip guard (fail-open)
-            NULL;
-    END;
-
-    -- F confidence range check
-    IF p_confidence < 0.0 OR p_confidence > 1.0 THEN
-        RAISE EXCEPTION 'pgmnemo.ingest: p_confidence must be between 0.0 and 1.0, got %', p_confidence;
-    END IF;
-
-    -- R5: clamp lesson_text
+    -- R5: clamp lesson_text length
     _max_chars := COALESCE(
-        NULLIF(current_setting('pgmnemo.max_query_text_chars', TRUE), '')::INT,
-        2000
-    );
+        NULLIF(current_setting('pgmnemo.max_query_text_chars', TRUE), '')::INT, 2000);
     IF p_lesson_text IS NULL OR length(trim(p_lesson_text)) = 0 THEN
         RAISE NOTICE 'pgmnemo.ingest: p_lesson_text is NULL or empty — proceeding.';
     ELSIF _max_chars > 0 AND length(p_lesson_text) > _max_chars THEN
-        RAISE NOTICE 'pgmnemo.ingest: p_lesson_text truncated to % chars '
-                     '(pgmnemo.max_query_text_chars). Original length: %',
+        RAISE NOTICE 'pgmnemo.ingest: p_lesson_text truncated to % chars. Original: %',
                      _max_chars, length(p_lesson_text);
         p_lesson_text := left(p_lesson_text, _max_chars);
     END IF;
 
+    -- G1: min-signal guard
+    BEGIN
+        _guard_min := COALESCE(
+            current_setting('pgmnemo.guard_min_signal', TRUE)::BOOLEAN, TRUE);
+    EXCEPTION WHEN OTHERS THEN _guard_min := TRUE;
+    END;
+
+    IF _guard_min AND p_lesson_text IS NOT NULL AND length(trim(p_lesson_text)) > 0 THEN
+        _word_count := array_length(
+            string_to_array(
+                regexp_replace(trim(p_lesson_text), '\s+', ' ', 'g'), ' '), 1);
+        IF COALESCE(_word_count, 0) < 3 OR length(trim(p_lesson_text)) < 10 THEN
+            RAISE EXCEPTION
+                'pgmnemo.ingest: min-signal guard rejected — lesson_text has % word(s) and % chars '
+                '(minimum: 3 words AND 10 chars). '
+                'Disable with SET pgmnemo.guard_min_signal = ''off''.',
+                COALESCE(_word_count, 0), length(trim(p_lesson_text));
+        END IF;
+    END IF;
+
+    -- G2: repeated-substring warn
+    BEGIN
+        _guard_repeat := COALESCE(
+            current_setting('pgmnemo.guard_repeat_warn', TRUE)::BOOLEAN, TRUE);
+    EXCEPTION WHEN OTHERS THEN _guard_repeat := TRUE;
+    END;
+
+    IF _guard_repeat AND p_lesson_text IS NOT NULL AND length(p_lesson_text) >= 20 THEN
+        _collapsed_len := length(
+            regexp_replace(p_lesson_text, '(.{10,})\1{2,}', '', 'g'));
+        IF _collapsed_len < length(p_lesson_text) * 0.4 THEN
+            RAISE NOTICE
+                'pgmnemo.ingest: repeated-substring pattern detected (collapsed % → % chars, '
+                '>60%% repetition). Ingesting anyway — consider de-duplicating.',
+                length(p_lesson_text), _collapsed_len;
+        END IF;
+    END IF;
+
+    -- Embedding dimension guard
     IF p_embedding IS NOT NULL AND vector_dims(p_embedding) <> 1024 THEN
         RAISE EXCEPTION 'pgmnemo.ingest: embedding dimension mismatch — expected 1024, got %',
             vector_dims(p_embedding);
     END IF;
 
-    -- F guard 3: embedding dedup guard
-    -- Gate behind pgmnemo.embedding_dedup_threshold GUC (default 0.99). If 0.0, skip.
-    IF p_embedding IS NOT NULL THEN
-        BEGIN
-            _dedup_threshold := COALESCE(
-                NULLIF(current_setting('pgmnemo.embedding_dedup_threshold', TRUE), '')::REAL,
-                0.99
-            );
-        EXCEPTION WHEN OTHERS THEN
-            _dedup_threshold := 0.99;
-        END;
+    -- G3: embedding dedup warn
+    BEGIN
+        _guard_dedup := COALESCE(
+            current_setting('pgmnemo.guard_dedup_warn', TRUE)::BOOLEAN, TRUE);
+    EXCEPTION WHEN OTHERS THEN _guard_dedup := TRUE;
+    END;
 
-        IF _dedup_threshold > 0.0 THEN
-            IF EXISTS (
-                SELECT 1 FROM pgmnemo.agent_lesson
-                WHERE is_active
-                  AND embedding IS NOT NULL
-                  AND 1 - (embedding <=> p_embedding) > _dedup_threshold
-                LIMIT 1
-            ) THEN
-                RAISE EXCEPTION 'pgmnemo.ingest: near-duplicate embedding detected (cosine similarity > %). '
-                                'Use reinforce() to update an existing lesson instead of inserting a duplicate.',
-                                _dedup_threshold;
-            END IF;
+    BEGIN
+        _dedup_threshold := COALESCE(
+            NULLIF(current_setting('pgmnemo.dedup_threshold', TRUE), '')::REAL, 0.97);
+    EXCEPTION WHEN OTHERS THEN _dedup_threshold := 0.97;
+    END;
+
+    IF _guard_dedup AND p_embedding IS NOT NULL THEN
+        SELECT id, (1.0 - (embedding <=> p_embedding))::REAL
+        INTO _near_dup_id, _near_dup_sim
+        FROM pgmnemo.agent_lesson
+        WHERE is_active
+          AND embedding IS NOT NULL
+          AND (1.0 - (embedding <=> p_embedding)) >= _dedup_threshold
+          AND (p_project_id IS NULL OR project_id = p_project_id)
+        ORDER BY embedding <=> p_embedding
+        LIMIT 1;
+
+        IF FOUND THEN
+            RAISE NOTICE
+                'pgmnemo.ingest: near-duplicate embedding — lesson_id=% cosine_sim=% '
+                '(threshold=%). Ingesting anyway. '
+                'Raise pgmnemo.dedup_threshold to suppress.',
+                _near_dup_id, ROUND(_near_dup_sim::NUMERIC, 4), _dedup_threshold;
         END IF;
     END IF;
 
-    -- Q5: compute content_hash to detect upcoming bitemporal close (dedup observability)
-    -- Replicates GENERATED ALWAYS AS formula from agent_lesson.content_hash column.
+    -- Bitemporal dedup observability (Q5)
     _content_hash := MD5(
-        COALESCE(p_role, '')        || '|' ||
-        COALESCE(p_topic, '')       || '|' ||
+        COALESCE(p_role, '')  || '|' ||
+        COALESCE(p_topic, '') || '|' ||
         COALESCE(p_commit_sha, COALESCE(p_artifact_hash, ''))
     );
 
@@ -844,67 +785,65 @@ BEGIN
 
     INSERT INTO pgmnemo.agent_lesson (
         role, project_id, topic, lesson_text, importance, embedding,
-        commit_sha, artifact_hash, metadata, verified_at, confidence
+        commit_sha, artifact_hash, metadata, verified_at
     ) VALUES (
         p_role, p_project_id, p_topic, p_lesson_text, p_importance, p_embedding,
         p_commit_sha, p_artifact_hash, p_metadata,
         CASE WHEN p_commit_sha IS NOT NULL OR p_artifact_hash IS NOT NULL
-             THEN NOW() ELSE NULL END,
-        p_confidence
+             THEN NOW() ELSE NULL END
     ) RETURNING id INTO new_id;
 
-    -- Q5: RAISE NOTICE if bitemporal close+create fired (trigger trg_agent_lesson_bitemporal_close)
     IF _prior_count > 0 THEN
-        RAISE NOTICE 'pgmnemo.ingest: bitemporal close+create fired — closed % prior version(s) '
-                     '(content_hash=%). New lesson_id=%. '
-                     'Prior row(s) now have t_valid_to=NOW().',
-                     _prior_count, _content_hash, new_id;
+        RAISE NOTICE
+            'pgmnemo.ingest: bitemporal close+create fired — closed % prior version(s) '
+            '(content_hash=%). New lesson_id=%.',
+            _prior_count, _content_hash, new_id;
     END IF;
 
     RETURN new_id;
 END;
 $$;
 
-COMMENT ON FUNCTION pgmnemo.ingest(TEXT, INT, TEXT, TEXT, SMALLINT, vector, TEXT, TEXT, JSONB, REAL) IS
-    'Validated public write API (v0.7.0). '
-    'F: Three new pre-insert guards: '
-    '  (1) min-signal: RAISE EXCEPTION if lesson_text < 20 chars or topic < 3 chars. '
-    '  (2) repetition-collapse: RAISE EXCEPTION if lesson_text contains repeated patterns (≥8 chars, ≥3×). '
-    '      Guard is fail-open on PG < 15 (no regexp_count). '
-    '  (3) embedding dedup: RAISE EXCEPTION if near-duplicate embedding exists '
-    '      (cosine > pgmnemo.embedding_dedup_threshold, default 0.99). Use reinforce() instead. '
-    '      Gated: threshold = 0.0 skips dedup check entirely. '
-    'F: p_confidence REAL DEFAULT 0.5 — seed confidence for new lesson. '
-    'Q5 (v0.6.0): RAISE NOTICE when bitemporal close+create fires. '
-    'R5 (v0.5.0): Truncates p_lesson_text to pgmnemo.max_query_text_chars with RAISE NOTICE.';
+COMMENT ON FUNCTION pgmnemo.ingest(TEXT, INT, TEXT, TEXT, SMALLINT, vector, TEXT, TEXT, JSONB) IS
+    'Validated public write API v0.7.0 + ingestion guards. '
+    'G1 (min-signal): rejects lesson_text < 3 words or < 10 chars. '
+    'Disable: SET pgmnemo.guard_min_signal = ''off''. '
+    'G2 (repeat-warn): RAISE NOTICE when > 60% of text is repeated pattern (heuristic). '
+    'Disable: SET pgmnemo.guard_repeat_warn = ''off''. '
+    'G3 (dedup-warn): RAISE NOTICE when cosine_sim >= pgmnemo.dedup_threshold (default 0.97). '
+    'Disable: SET pgmnemo.guard_dedup_warn = ''off''. '
+    'Q5: bitemporal close+create NOTICE (pre-existing). '
+    'R5: lesson_text truncation to pgmnemo.max_query_text_chars (pre-existing).';
 
 -- ─────────────────────────────────────────────────────────────────────────────
--- G: stats() — confidence distribution extension
--- Return type changes (14 → 17 cols) → must DROP before CREATE OR REPLACE.
--- Adds: avg_confidence REAL, p50_confidence REAL, lessons_needing_reinforcement INT
+-- G) stats() v0.7.0 — confidence distribution columns
+-- Return-type change requires DROP + CREATE.
 -- ─────────────────────────────────────────────────────────────────────────────
 
 DROP FUNCTION IF EXISTS pgmnemo.stats();
 
 CREATE OR REPLACE FUNCTION pgmnemo.stats()
 RETURNS TABLE (
-    version                         TEXT,
-    lesson_count                    BIGINT,
-    embedded_count                  BIGINT,
-    embedding_coverage_pct          DOUBLE PRECISION,
-    tsv_coverage_pct                DOUBLE PRECISION,
-    mem_edge_count                  BIGINT,
-    recency_weight                  DOUBLE PRECISION,
-    ef_search                       INT,
-    importance_weight               DOUBLE PRECISION,
-    hybrid_enabled                  BOOLEAN,
-    recall_hybrid_available         BOOLEAN,
-    oldest_lesson_age_days          INT,
-    orphan_count                    BIGINT,
-    ghost_count                     BIGINT,
-    avg_confidence                  REAL,         -- G: v0.7.0 — mean confidence of active lessons
-    p50_confidence                  REAL,         -- G: v0.7.0 — median confidence of active lessons
-    lessons_needing_reinforcement   INT           -- G: v0.7.0 — active lessons with confidence < 0.3
+    version                    TEXT,
+    lesson_count               BIGINT,
+    embedded_count             BIGINT,
+    embedding_coverage_pct     DOUBLE PRECISION,
+    tsv_coverage_pct           DOUBLE PRECISION,
+    mem_edge_count             BIGINT,
+    recency_weight             DOUBLE PRECISION,
+    ef_search                  INT,
+    importance_weight          DOUBLE PRECISION,
+    hybrid_enabled             BOOLEAN,
+    recall_hybrid_available    BOOLEAN,
+    oldest_lesson_age_days     INT,
+    orphan_count               BIGINT,
+    ghost_count                BIGINT,
+    -- v0.7.0: confidence distribution (5 new columns)
+    confidence_mean            DOUBLE PRECISION,
+    confidence_p25             DOUBLE PRECISION,
+    confidence_median          DOUBLE PRECISION,
+    confidence_p75             DOUBLE PRECISION,
+    confidence_below_half      BIGINT
 )
 LANGUAGE sql
 STABLE
@@ -917,14 +856,14 @@ AS $$
          FROM pgmnemo.agent_lesson WHERE embedding IS NOT NULL)                    AS embedded_count,
         (SELECT CASE WHEN COUNT(*) > 0
                      THEN ROUND(100.0 *
-                                SUM(CASE WHEN embedding IS NOT NULL THEN 1 ELSE 0 END)::NUMERIC
-                                / COUNT(*), 2)::DOUBLE PRECISION
+                          SUM(CASE WHEN embedding IS NOT NULL THEN 1 ELSE 0 END)::NUMERIC
+                          / COUNT(*), 2)::DOUBLE PRECISION
                      ELSE 0.0 END
          FROM pgmnemo.agent_lesson)                                                AS embedding_coverage_pct,
         (SELECT CASE WHEN COUNT(*) > 0
                      THEN ROUND(100.0 *
-                                SUM(CASE WHEN lesson_tsv IS NOT NULL THEN 1 ELSE 0 END)::NUMERIC
-                                / COUNT(*), 2)::DOUBLE PRECISION
+                          SUM(CASE WHEN lesson_tsv IS NOT NULL THEN 1 ELSE 0 END)::NUMERIC
+                          / COUNT(*), 2)::DOUBLE PRECISION
                      ELSE 0.0 END
          FROM pgmnemo.agent_lesson)                                                AS tsv_coverage_pct,
         (SELECT COUNT(*)::BIGINT FROM pgmnemo.mem_edge)                            AS mem_edge_count,
@@ -945,7 +884,6 @@ AS $$
                     EXTRACT(EPOCH FROM (NOW() - MIN(created_at))) / 86400.0, 0
                 )::INT
          FROM pgmnemo.agent_lesson)                                                AS oldest_lesson_age_days,
-        -- orphan_count: pgmnemo-schema functions not owned by the extension
         (SELECT COUNT(*)::BIGINT
          FROM pg_proc p
          JOIN pg_namespace n ON n.oid = p.pronamespace
@@ -955,31 +893,39 @@ AS $$
          WHERE n.nspname = 'pgmnemo'
            AND p.proname NOT LIKE '\_%' ESCAPE '\'
            AND d.objid IS NULL)                                                    AS orphan_count,
-        -- ghost_count (v0.6.0): active lessons without provenance (Agency RFC Q4)
         (SELECT COUNT(*)::BIGINT
          FROM pgmnemo.agent_lesson
          WHERE verified_at IS NULL
            AND t_valid_to = 'infinity'::TIMESTAMPTZ)                               AS ghost_count,
-        -- avg_confidence (v0.7.0 G): mean confidence of currently-active lessons
-        (SELECT COALESCE(AVG(confidence), 0.5)::REAL
+        -- v0.7.0: confidence distribution (active rows, t_valid_to = infinity)
+        (SELECT COALESCE(AVG(confidence)::DOUBLE PRECISION, 0.5)
          FROM pgmnemo.agent_lesson
-         WHERE is_active)                                                           AS avg_confidence,
-        -- p50_confidence (v0.7.0 G): median confidence of currently-active lessons
-        (SELECT COALESCE(PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY confidence), 0.5)::REAL
+         WHERE t_valid_to = 'infinity'::TIMESTAMPTZ)                               AS confidence_mean,
+        (SELECT COALESCE(
+                    PERCENTILE_CONT(0.25) WITHIN GROUP (ORDER BY confidence), 0.5
+                )::DOUBLE PRECISION
          FROM pgmnemo.agent_lesson
-         WHERE is_active)                                                           AS p50_confidence,
-        -- lessons_needing_reinforcement (v0.7.0 G): active lessons with confidence < 0.3
-        (SELECT COUNT(*)::INT
+         WHERE t_valid_to = 'infinity'::TIMESTAMPTZ)                               AS confidence_p25,
+        (SELECT COALESCE(
+                    PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY confidence), 0.5
+                )::DOUBLE PRECISION
          FROM pgmnemo.agent_lesson
-         WHERE is_active
-           AND confidence < 0.3)                                                   AS lessons_needing_reinforcement;
+         WHERE t_valid_to = 'infinity'::TIMESTAMPTZ)                               AS confidence_median,
+        (SELECT COALESCE(
+                    PERCENTILE_CONT(0.75) WITHIN GROUP (ORDER BY confidence), 0.5
+                )::DOUBLE PRECISION
+         FROM pgmnemo.agent_lesson
+         WHERE t_valid_to = 'infinity'::TIMESTAMPTZ)                               AS confidence_p75,
+        (SELECT COUNT(*)::BIGINT
+         FROM pgmnemo.agent_lesson
+         WHERE t_valid_to = 'infinity'::TIMESTAMPTZ
+           AND confidence < 0.5)                                                   AS confidence_below_half;
 $$;
 
 COMMENT ON FUNCTION pgmnemo.stats() IS
-    'v0.7.0 diagnostic health-check. Adds confidence distribution stats (G): '
-    'avg_confidence: mean confidence of active lessons (REAL, default population 0.5). '
-    'p50_confidence: median confidence via PERCENTILE_CONT(0.5). '
-    'lessons_needing_reinforcement: active lessons with confidence < 0.3 (candidates for reinforce()). '
-    'v0.6.0: ghost_count (Agency RFC Q4) — active lessons without provenance. '
-    'v0.4.1: diagnostic health-check (Agency RFC R3). '
-    'Single-row summary; <50ms on N=10k corpus.';
+    'v0.7.0 diagnostic health-check (19 columns, was 14). '
+    'New columns: confidence_mean, confidence_p25, confidence_median, confidence_p75, '
+    'confidence_below_half (lessons with confidence < 0.5 — candidates for deprecation). '
+    'ghost_count: active lessons (t_valid_to=infinity) without provenance. '
+    'orphan_count: pgmnemo-schema functions not owned by the extension. '
+    'Single-row; <100ms on N=10k corpus.';
