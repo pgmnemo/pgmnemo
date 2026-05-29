@@ -5,6 +5,83 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [0.7.0] — 2026-05-29
+
+### Theme
+
+**Outcome-learning loop: agents now teach pgmnemo from experience.** v0.7.0 adds a
+`confidence` column to `agent_lesson` (REAL, default 0.5, CHECK 0.0–1.0) tracking each
+lesson's outcome track record, and a `reinforce(lesson_id, outcome)` function that
+adjusts confidence based on success (+0.10), failure (−0.15), or neutral (no change),
+clamped to [0.0, 1.0]. Confidence is wired into the `recall_hybrid()` scoring formula
+as an auxiliary term, so high-confidence lessons rank above low-confidence ones in
+tie-break situations. `stats()` gains five confidence-distribution columns
+(`confidence_mean`, `confidence_p10`, `confidence_p50`, `confidence_p90`,
+`confidence_below_threshold_count`) for operational monitoring.
+
+`recall_hybrid()` output grows by two columns: `confidence REAL` (lesson outcome
+track record) and `match_confidence REAL` (interpretable [0,1] quality indicator,
+computed as `LEAST(1.0, GREATEST(0.0, final_score / 1.5))`).
+
+Also ships: `ingest()` function guards — minimum lesson length (20 chars) and
+repetitive-content detection (>80% single-token frequency) both raise exceptions
+with descriptive messages, preventing low-quality lessons from polluting the corpus.
+
+### Added
+
+- **`confidence` column on `agent_lesson`** — `REAL NOT NULL DEFAULT 0.5`,
+  `CHECK(confidence >= 0.0 AND confidence <= 1.0)`. Carries per-lesson outcome
+  history from `reinforce()` calls.
+- **`pgmnemo.reinforce(lesson_id BIGINT, outcome TEXT) RETURNS REAL`** — Updates
+  `confidence` in-place and increments `success_count` or `fail_count`. Outcomes:
+  `'success'` (+0.10), `'failure'` (−0.15), `'neutral'` (no change). Clamped to
+  [0.0, 1.0]. Returns new `confidence` value. Raises `RAISE EXCEPTION` for unknown
+  outcome values.
+- **`success_count` and `fail_count` columns on `agent_lesson`** — `INTEGER NOT NULL
+  DEFAULT 0`. Populated by `reinforce()`. Useful for filtering lessons with
+  insufficient signal (count < N).
+- **`confidence` and `match_confidence` output columns on `recall_hybrid()`** —
+  `confidence REAL` is the lesson's outcome track record; `match_confidence REAL` is
+  `LEAST(1.0, GREATEST(0.0, final_score / 1.5))` for interpretable quality reporting.
+- **`ingest()` quality guards** — minimum length check (raises `'lesson_text too short
+  (min 20 chars)'`) and repetition guard (raises `'repetitive content...'` when a
+  single token exceeds 80% of all tokens).
+- **`stats()` confidence distribution** — five new output columns:
+  `confidence_mean REAL`, `confidence_p10 REAL`, `confidence_p50 REAL`,
+  `confidence_p90 REAL`, `confidence_below_threshold_count BIGINT`.
+- **`test_confidence` pg_regress test suite** — 9 test groups (T1–T9) covering the
+  full v0.7.0 outcome-learning loop: column constraints, `reinforce()` paths,
+  boundary clamping, recall ranking, footgun NOTICE, ingest guards, stats distribution.
+
+### Changed
+
+- **`recall_hybrid()` scoring formula** — auxiliary term now includes
+  `0.025 * confidence` (was absent). High-confidence lessons score up to +0.025 above
+  low-confidence lessons at equal semantic distance. Scoring change is incremental;
+  existing benchmarks carry forward from v0.6.3.
+- **`recall_hybrid()` COMMENT** — updated to v0.7.0; includes RRF (Cormack 2009)
+  citation and confidence/match_confidence column documentation.
+
+### Fixed
+
+- **`graph_proximity` CTE alias bug in `recall_hybrid()`** — `FROM graph_walk WHERE
+  gw.depth > 0` lacked the `gw` alias, causing `ERROR: missing FROM-clause entry for
+  table "gw"` whenever the graph traversal CTE was reached. Fixed in both
+  `pgmnemo--0.7.0.sql` and `pgmnemo--0.6.3--0.7.0.sql`.
+
+### Upgrade
+
+```sql
+ALTER EXTENSION pgmnemo UPDATE TO '0.7.0';
+```
+
+Adds `confidence REAL DEFAULT 0.5`, `success_count INTEGER DEFAULT 0`,
+`fail_count INTEGER DEFAULT 0` columns to `agent_lesson` with `LOCK TABLE` (brief).
+Existing rows receive defaults; no data loss. `reinforce()` and `stats()` columns
+added. All changes are backwards-compatible for read paths.
+
+---
+
 ## [0.6.3] — 2026-05-24
 
 ### Theme

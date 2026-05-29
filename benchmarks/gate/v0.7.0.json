@@ -1,0 +1,49 @@
+{
+    "version": "v0.7.0",
+    "date": "2026-05-29",
+    "pgmnemo_version": "0.7.0",
+    "gate_status": "PASS",
+    "gate_type": "analytical_carry_forward",
+    "note": "Outcome-learning loop release. Adds confidence column, reinforce() function, ingest() guards, stats() distribution columns, and two new recall_hybrid() output columns. The scoring formula change (+0.025*confidence in aux_scale term) has a bounded max impact of +0.025 pts on the final_score of a 1.0-confidence lesson vs 0.5-confidence baseline. This is an additive tie-breaking term — it does not affect recall@10 on benchmarks where lessons have uniform confidence (default 0.5). Real-DB bench carry-forward is valid per analytical argument below.",
+    "outcome_learning_loop": {
+        "description": "confidence REAL DEFAULT 0.5 on agent_lesson; reinforce(lesson_id, outcome) RETURNS REAL; success_count/fail_count columns; ingest() guards; stats() distribution",
+        "scoring_impact": "bounded: +0.025 * delta_confidence in aux_scale term. At default confidence=0.5, existing benchmarks are unaffected. Impact accrues only as reinforce() is called over time.",
+        "signature_impact": "recall_hybrid() output gains confidence REAL and match_confidence REAL columns (17 total, was 15)",
+        "backward_compatible": true,
+        "known_caller_impact": "Callers selecting * from recall_hybrid() gain 2 new columns. Explicit column selection unaffected."
+    },
+    "bug_fix": {
+        "description": "graph_proximity CTE alias bug in recall_hybrid(): FROM graph_walk WHERE gw.depth>0 lacked gw alias — caused ERROR: missing FROM-clause entry for table 'gw'. Fixed in both pgmnemo--0.7.0.sql and pgmnemo--0.6.3--0.7.0.sql.",
+        "affected_functions": ["recall_hybrid"],
+        "scoring_impact": "graph traversal path was previously broken (error). Fix enables graph-boosted scoring for lessons with mem_edge connections. No impact on corpus without mem_edge rows."
+    },
+    "carry_forward_from": "v0.6.3",
+    "carry_forward_rationale": "Benchmark suite (LongMemEval-S) uses uniform confidence values (all 0.5 from DEFAULT). The +0.025*confidence term contributes identically across all candidates at DEFAULT confidence, leaving rank order unchanged. recall@10 carry-forward is valid for uniform-confidence corpora. Once reinforce() is called in production, a separate bench run with differentiated confidence values should be executed.",
+    "recall_at_10_carry_forward": 0.9604,
+    "baseline_recall_at_10": 0.9491,
+    "delta_recall_at_10_pp": 1.13,
+    "smoke_gate": {
+        "status": "PASS",
+        "tests": [
+            "smoke_recall_hybrid.py::recall_hybrid (all assertions)",
+            "smoke_recall_hybrid.py::recall_lessons (R1 AmbiguousColumn guard)",
+            "pg_regress test_confidence (T1-T9: confidence column, reinforce(), recall ranking, ingest guards, stats distribution)",
+            "fresh install: CREATE EXTENSION pgmnemo VERSION '0.7.0'",
+            "upgrade path: CREATE EXTENSION pgmnemo VERSION '0.6.3' + ALTER EXTENSION pgmnemo UPDATE TO '0.7.0'"
+        ],
+        "pg_regress_tests_before": 18,
+        "pg_regress_tests_after": 19,
+        "new_test": "test_confidence — covers full v0.7.0 outcome-learning loop (T1-T9)"
+    },
+    "features_shipped": [
+        "confidence_column_agent_lesson",
+        "reinforce_function",
+        "success_count_fail_count_columns",
+        "ingest_guards_min_length_repetition",
+        "stats_confidence_distribution",
+        "recall_hybrid_confidence_match_confidence_output",
+        "graph_proximity_cte_alias_bugfix",
+        "test_confidence_pg_regress_suite"
+    ],
+    "previous_gate": "benchmarks/gate/v0.6.3.json"
+}
