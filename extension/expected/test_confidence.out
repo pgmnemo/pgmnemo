@@ -11,22 +11,19 @@
 --   T7: footgun NOTICE fires on NULL embedding with text query
 --   T8: ingest() guards (F1 min-length, F2 repetition)
 --   T9: stats() confidence distribution columns present and in-range
-
 -- Prerequisites: pgmnemo 0.7.0 installed.
 -- gate_strict=off: insert test rows without commit_sha/artifact_hash.
 -- include_unverified=on: recall unverified test rows.
 SET pgmnemo.gate_strict = 'off';
 SET pgmnemo.include_unverified = 'on';
-
 -- =============================================================================
 -- T1: confidence column default and CHECK constraint
 -- =============================================================================
-
 -- T1a: INSERT without explicit confidence → DEFAULT 0.5
 INSERT INTO pgmnemo.agent_lesson (role, topic, lesson_text)
 VALUES ('tc_v070', 'confidence_default', 'default confidence value test lesson text here')
 RETURNING confidence = 0.5 AS default_is_half;
- default_is_half
+ default_is_half 
 -----------------
  t
 (1 row)
@@ -42,8 +39,6 @@ EXCEPTION WHEN check_violation THEN
 END;
 $$;
 NOTICE:  T1b PASS: confidence<0 rejected
-DO
-
 -- T1c: CHECK rejects confidence > 1.0
 DO $$
 BEGIN
@@ -55,12 +50,9 @@ EXCEPTION WHEN check_violation THEN
 END;
 $$;
 NOTICE:  T1c PASS: confidence>1 rejected
-DO
-
 -- =============================================================================
 -- T2: reinforce() success path (+0.10, clamped, increments success_count)
 -- =============================================================================
-
 WITH ins AS (
     INSERT INTO pgmnemo.agent_lesson (role, topic, lesson_text)
     VALUES ('tc_v070', 'reinforce_success',
@@ -71,7 +63,7 @@ reinforced AS (
     SELECT pgmnemo.reinforce(id, 'success') AS new_conf FROM ins
 )
 SELECT new_conf > 0.55 AND new_conf < 0.65 AS success_confidence_raised FROM reinforced;
- success_confidence_raised
+ success_confidence_raised 
 ---------------------------
  t
 (1 row)
@@ -79,7 +71,6 @@ SELECT new_conf > 0.55 AND new_conf < 0.65 AS success_confidence_raised FROM rei
 -- =============================================================================
 -- T3: reinforce() failure path (-0.15, clamped, increments fail_count)
 -- =============================================================================
-
 WITH ins AS (
     INSERT INTO pgmnemo.agent_lesson (role, topic, lesson_text)
     VALUES ('tc_v070', 'reinforce_failure',
@@ -90,7 +81,7 @@ reinforced AS (
     SELECT pgmnemo.reinforce(id, 'failure') AS new_conf FROM ins
 )
 SELECT new_conf > 0.30 AND new_conf < 0.40 AS failure_confidence_lowered FROM reinforced;
- failure_confidence_lowered
+ failure_confidence_lowered 
 ----------------------------
  t
 (1 row)
@@ -98,7 +89,6 @@ SELECT new_conf > 0.30 AND new_conf < 0.40 AS failure_confidence_lowered FROM re
 -- =============================================================================
 -- T4: reinforce() neutral (no-op, returns unchanged confidence)
 -- =============================================================================
-
 WITH ins AS (
     INSERT INTO pgmnemo.agent_lesson (role, topic, lesson_text)
     VALUES ('tc_v070', 'reinforce_neutral',
@@ -109,7 +99,7 @@ reinforced AS (
     SELECT pgmnemo.reinforce(id, 'neutral') AS new_conf FROM ins
 )
 SELECT new_conf = 0.5 AS neutral_confidence_unchanged FROM reinforced;
- neutral_confidence_unchanged
+ neutral_confidence_unchanged 
 ------------------------------
  t
 (1 row)
@@ -117,7 +107,6 @@ SELECT new_conf = 0.5 AS neutral_confidence_unchanged FROM reinforced;
 -- =============================================================================
 -- T5a: reinforce() upper boundary: 0.95 + success → clamped to 1.0
 -- =============================================================================
-
 WITH ins AS (
     INSERT INTO pgmnemo.agent_lesson (role, topic, lesson_text, confidence)
     VALUES ('tc_v070', 'reinforce_clamp_high',
@@ -128,7 +117,7 @@ reinforced AS (
     SELECT pgmnemo.reinforce(id, 'success') AS new_conf FROM ins
 )
 SELECT new_conf = 1.0 AS clamped_to_one FROM reinforced;
- clamped_to_one
+ clamped_to_one 
 ----------------
  t
 (1 row)
@@ -144,7 +133,7 @@ reinforced AS (
     SELECT pgmnemo.reinforce(id, 'failure') AS new_conf FROM ins
 )
 SELECT new_conf = 0.0 AS clamped_to_zero FROM reinforced;
- clamped_to_zero
+ clamped_to_zero 
 -----------------
  t
 (1 row)
@@ -153,15 +142,12 @@ SELECT new_conf = 0.0 AS clamped_to_zero FROM reinforced;
 -- T6: recall_lessons() ranks high-confidence lesson above low-confidence
 --     (vector-only path with NULL embedding; tie-broken by confidence term)
 -- =============================================================================
-
 INSERT INTO pgmnemo.agent_lesson (role, topic, lesson_text, confidence)
 VALUES ('tc_v070', 'recall_confidence_high',
         'confidence ranking recall test high confidence lesson text', 0.9);
-INSERT 0 1
 INSERT INTO pgmnemo.agent_lesson (role, topic, lesson_text, confidence)
 VALUES ('tc_v070', 'recall_confidence_low',
         'confidence ranking recall test low confidence lesson text', 0.1);
-INSERT 0 1
 -- The NOTICE fires because query_embedding IS NULL.
 -- High-confidence (0.9) scores +0.135 vs low-confidence (0.1) +0.015 in confidence term.
 SELECT confidence > 0.5 AS top_result_is_high_confidence
@@ -174,7 +160,7 @@ FROM pgmnemo.recall_lessons(
 )
 LIMIT 1;
 NOTICE:  pgmnemo: query_embedding IS NULL -- falling back to text-only recall; no semantic similarity
- top_result_is_high_confidence
+ top_result_is_high_confidence 
 -------------------------------
  t
 (1 row)
@@ -182,7 +168,6 @@ NOTICE:  pgmnemo: query_embedding IS NULL -- falling back to text-only recall; n
 -- =============================================================================
 -- T7: footgun NOTICE fires when recall_hybrid called with NULL embedding + text
 -- =============================================================================
-
 SELECT COUNT(*) >= 0 AS recall_hybrid_text_only_runs
 FROM pgmnemo.recall_hybrid(
     NULL::vector(1024),
@@ -192,7 +177,7 @@ FROM pgmnemo.recall_hybrid(
     NULL
 );
 NOTICE:  pgmnemo: query_embedding IS NULL -- falling back to text-only recall; no semantic similarity
- recall_hybrid_text_only_runs
+ recall_hybrid_text_only_runs 
 ------------------------------
  t
 (1 row)
@@ -202,7 +187,6 @@ NOTICE:  pgmnemo: query_embedding IS NULL -- falling back to text-only recall; n
 -- F1: lesson_text < 20 chars → RAISE EXCEPTION
 -- F2: repetitive content (>80% most-frequent token) → RAISE EXCEPTION
 -- =============================================================================
-
 -- F1: min-length guard
 DO $$
 BEGIN
@@ -217,8 +201,6 @@ EXCEPTION WHEN OTHERS THEN
 END;
 $$;
 NOTICE:  F1 PASS: min-length guard fired
-DO
-
 -- F2: repetition guard (single token repeated >80% of all tokens)
 DO $$
 BEGIN
@@ -234,12 +216,9 @@ EXCEPTION WHEN OTHERS THEN
 END;
 $$;
 NOTICE:  F2 PASS: repetition guard fired
-DO
-
 -- =============================================================================
 -- T9: stats() confidence distribution columns present and in valid range
 -- =============================================================================
-
 SELECT
     confidence_mean  BETWEEN 0.0 AND 1.0 AS mean_in_range,
     confidence_p10   BETWEEN 0.0 AND 1.0 AS p10_in_range,
@@ -247,7 +226,7 @@ SELECT
     confidence_p90   BETWEEN 0.0 AND 1.0 AS p90_in_range,
     confidence_below_threshold_count >= 0  AS threshold_count_nonneg
 FROM pgmnemo.stats();
- mean_in_range | p10_in_range | p50_in_range | p90_in_range | threshold_count_nonneg
+ mean_in_range | p10_in_range | p50_in_range | p90_in_range | threshold_count_nonneg 
 ---------------+--------------+--------------+--------------+------------------------
  t             | t            | t            | t            | t
 (1 row)
@@ -255,5 +234,4 @@ FROM pgmnemo.stats();
 -- =============================================================================
 -- Cleanup
 -- =============================================================================
-
 DELETE FROM pgmnemo.agent_lesson WHERE role = 'tc_v070';

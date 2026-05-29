@@ -3294,7 +3294,7 @@ BEGIN
     graph_proximity AS (
         SELECT gw.reached_id AS lesson_id,
                MAX(1.0 - gw.depth::DOUBLE PRECISION / _max_depth::DOUBLE PRECISION) AS proximity
-        FROM graph_walk WHERE gw.depth > 0 GROUP BY gw.reached_id
+        FROM graph_walk gw WHERE gw.depth > 0 GROUP BY gw.reached_id
     ),
     final AS (
         SELECT
@@ -3346,6 +3346,7 @@ $func$;
 
 COMMENT ON FUNCTION pgmnemo.recall_hybrid(vector, TEXT, INT, TEXT, INT, DOUBLE PRECISION, DOUBLE PRECISION, INT) IS
     'Hybrid recall v0.7.0 -- confidence scoring + match_confidence output. '
+    'RRF (Reciprocal Rank Fusion, Cormack 2009): combines vector + BM25 ranks. '
     'Scoring: rrf_sparse + _aux_scale*(0.025*imp/5 + 0.025*conf + 0.05*recency + 0.05*prov) + delta*graph. '
     'confidence: per-lesson outcome-track-record [0,1] from reinforce(). '
     'match_confidence: LEAST(1.0, GREATEST(0.0, score/1.5)) -- interpretable [0,1] quality indicator. '
