@@ -5,7 +5,7 @@
 --   A: confidence + outcome tracking columns exist on agent_lesson
 --   B: reinforce() function exists and has correct signature
 --   C: recall_lessons() scoring formula changed (confidence-weighted blend)
---   D: stats() has avg_confidence, p50_confidence, lessons_needing_reinforcement columns
+--   D: stats() has confidence_mean, confidence_median, confidence_below_half columns
 --   E: match_confidence output column present in recall_lessons and recall_hybrid
 --   F: ingestion guards (min-signal, repetition-collapse, embedding dedup)
 --   G: ingest() accepts optional p_confidence parameter
@@ -81,7 +81,7 @@ WHERE n.nspname = 'pgmnemo'
 -- D: stats() — verify confidence distribution columns
 -- ─────────────────────────────────────────────────────────────────────────────
 
--- D1: stats() has avg_confidence column
+-- D1: stats() has confidence_mean column
 SELECT a.attname AS column_name
 FROM pg_proc p
 JOIN pg_namespace n    ON n.oid = p.pronamespace
@@ -89,9 +89,9 @@ JOIN pg_type t         ON t.oid = p.prorettype
 JOIN pg_attribute a    ON a.attrelid = t.typrelid AND a.attnum > 0
 WHERE n.nspname = 'pgmnemo'
   AND p.proname  = 'stats'
-  AND a.attname  = 'avg_confidence';
+  AND a.attname  = 'confidence_mean';
 
--- D2: stats() has p50_confidence column
+-- D2: stats() has confidence_median column
 SELECT a.attname AS column_name
 FROM pg_proc p
 JOIN pg_namespace n    ON n.oid = p.pronamespace
@@ -99,9 +99,9 @@ JOIN pg_type t         ON t.oid = p.prorettype
 JOIN pg_attribute a    ON a.attrelid = t.typrelid AND a.attnum > 0
 WHERE n.nspname = 'pgmnemo'
   AND p.proname  = 'stats'
-  AND a.attname  = 'p50_confidence';
+  AND a.attname  = 'confidence_median';
 
--- D3: stats() has lessons_needing_reinforcement column
+-- D3: stats() has confidence_below_half column
 SELECT a.attname AS column_name
 FROM pg_proc p
 JOIN pg_namespace n    ON n.oid = p.pronamespace
@@ -109,7 +109,7 @@ JOIN pg_type t         ON t.oid = p.prorettype
 JOIN pg_attribute a    ON a.attrelid = t.typrelid AND a.attnum > 0
 WHERE n.nspname = 'pgmnemo'
   AND p.proname  = 'stats'
-  AND a.attname  = 'lessons_needing_reinforcement';
+  AND a.attname  = 'confidence_below_half';
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- E: recall_hybrid() — verify match_confidence column
@@ -205,9 +205,9 @@ LIMIT 1;
 
 -- G2: stats() is callable and returns expected column names (smoke test)
 SELECT
-    version IS NOT NULL       AS has_version,
-    lesson_count >= 0         AS has_lesson_count,
-    avg_confidence >= 0.0     AS has_avg_confidence,
-    p50_confidence >= 0.0     AS has_p50_confidence,
-    lessons_needing_reinforcement >= 0 AS has_lnr
+    version IS NOT NULL            AS has_version,
+    lesson_count >= 0              AS has_lesson_count,
+    confidence_mean >= 0.0         AS has_confidence_mean,
+    confidence_median >= 0.0       AS has_confidence_median,
+    confidence_below_half >= 0     AS has_confidence_below_half
 FROM pgmnemo.stats();

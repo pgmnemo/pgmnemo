@@ -666,7 +666,8 @@ CREATE OR REPLACE FUNCTION pgmnemo.ingest(
     p_embedding     vector(1024) DEFAULT NULL,
     p_commit_sha    TEXT         DEFAULT NULL,
     p_artifact_hash TEXT         DEFAULT NULL,
-    p_metadata      JSONB        DEFAULT '{}'::jsonb
+    p_metadata      JSONB        DEFAULT '{}'::jsonb,
+    p_confidence    REAL         DEFAULT 0.5   -- initial outcome-track-record score [0,1]
 ) RETURNS BIGINT
 LANGUAGE plpgsql AS $$
 DECLARE
@@ -683,6 +684,13 @@ DECLARE
     _near_dup_sim      REAL;
     _collapsed_len     INT;
 BEGIN
+    -- p_confidence range guard
+    IF p_confidence IS NOT NULL AND (p_confidence < 0.0 OR p_confidence > 1.0) THEN
+        RAISE EXCEPTION
+            'pgmnemo.ingest: p_confidence must be between 0.0 and 1.0, got %',
+            p_confidence;
+    END IF;
+
     -- R5: clamp lesson_text length
     _max_chars := COALESCE(
         NULLIF(current_setting('pgmnemo.max_query_text_chars', TRUE), '')::INT, 2000);
@@ -785,12 +793,13 @@ BEGIN
 
     INSERT INTO pgmnemo.agent_lesson (
         role, project_id, topic, lesson_text, importance, embedding,
-        commit_sha, artifact_hash, metadata, verified_at
+        commit_sha, artifact_hash, metadata, verified_at, confidence
     ) VALUES (
         p_role, p_project_id, p_topic, p_lesson_text, p_importance, p_embedding,
         p_commit_sha, p_artifact_hash, p_metadata,
         CASE WHEN p_commit_sha IS NOT NULL OR p_artifact_hash IS NOT NULL
-             THEN NOW() ELSE NULL END
+             THEN NOW() ELSE NULL END,
+        COALESCE(p_confidence, 0.5)
     ) RETURNING id INTO new_id;
 
     IF _prior_count > 0 THEN
@@ -804,8 +813,10 @@ BEGIN
 END;
 $$;
 
-COMMENT ON FUNCTION pgmnemo.ingest(TEXT, INT, TEXT, TEXT, SMALLINT, vector, TEXT, TEXT, JSONB) IS
-    'Validated public write API v0.7.0 + ingestion guards. '
+COMMENT ON FUNCTION pgmnemo.ingest(TEXT, INT, TEXT, TEXT, SMALLINT, vector, TEXT, TEXT, JSONB, REAL) IS
+    'Validated public write API v0.7.0 + ingestion guards (10-arg). '
+    'New v0.7.0: p_confidence REAL DEFAULT 0.5 — initial outcome-track-record score [0,1]. '
+    'Range guard: EXCEPTION if p_confidence not in [0.0, 1.0]. '
     'G1 (min-signal): rejects lesson_text < 3 words or < 10 chars. '
     'Disable: SET pgmnemo.guard_min_signal = ''off''. '
     'G2 (repeat-warn): RAISE NOTICE when > 60% of text is repeated pattern (heuristic). '
