@@ -40,7 +40,7 @@ BEGIN
     FROM pg_proc p
     JOIN pg_namespace n ON n.oid = p.pronamespace
     WHERE n.nspname = 'pgmnemo' AND p.proname = 'reinforce'
-      AND pg_catalog.pg_get_function_arguments(p.oid) LIKE 'bigint[]%';
+      AND pg_catalog.pg_get_function_arguments(p.oid) LIKE '%bigint[]%';
 
     IF _ret = 'integer' THEN
         RAISE NOTICE 'A2 PASS: batch reinforce RETURNS integer';
@@ -122,7 +122,8 @@ BEGIN
     _lesson_id := pgmnemo.ingest(
         'test_v071_batch', -1, 'batch_reinforce_skip_test',
         'Test lesson for v0.7.1 batch reinforce skip behavior.',
-        3, NULL, 'sha_v071_b5_' || to_char(clock_timestamp(), 'US'), NULL, '{}'::JSONB
+        3::SMALLINT, NULL::vector(1024),
+        'sha_v071_b5_' || to_char(clock_timestamp(), 'US'), NULL, '{}'::JSONB
     );
 
     SELECT confidence INTO _conf_before
@@ -168,7 +169,7 @@ BEGIN
     _lesson_id := pgmnemo.ingest(
         'test_v071_recall', -2, 'match_confidence_calibration_test',
         'Test lesson for v0.7.1 match_confidence calibration fix (BUG-1).',
-        3, _vec_val,
+        3::SMALLINT, _vec_val,
         'sha_v071_c1_' || to_char(clock_timestamp(), 'US'),
         NULL, '{}'::JSONB
     );
