@@ -2,7 +2,7 @@
    "name": "pgmnemo",
    "abstract": "Provenance-gated, vector-hybrid memory for LLM agents in PostgreSQL",
    "description": "pgmnemo adds a first-class memory layer to PostgreSQL for LLM-based agents. Every ingest() call requires a commit_sha or artifact_hash provenance token; rows without provenance are blocked or warned. Hybrid recall combines cosine similarity (HNSW via pgvector), BM25 full-text search, recency decay, and importance weighting in a single SQL call. Includes RLS-based multi-tenant isolation, causal-chain traversal, temporal windowed recall, and graph-proximity scoring.",
-   "version": "0.7.0",
+   "version": "0.7.1",
    "maintainer": [
       "Alex Gaydabura <asistentgaidaburas@gmail.com>"
    ],
@@ -10,8 +10,8 @@
    "provides": {
       "pgmnemo": {
          "abstract": "Provenance-gated, vector-hybrid memory for LLM agents in PostgreSQL",
-         "version": "0.7.0",
-         "file": "extension/pgmnemo--0.7.0.sql",
+         "version": "0.7.1",
+         "file": "extension/pgmnemo--0.7.1.sql",
          "docfile": "README.md"
       }
    },

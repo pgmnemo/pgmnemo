@@ -5,6 +5,69 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [0.7.1] — 2026-06-01
+
+### Theme
+
+**Calibration patch: `match_confidence` is now a usable [0,1] quality signal.**
+
+v0.7.0 shipped `match_confidence` in `recall_hybrid()` output computed as
+`final_score / 1.5`. This was correct for the `recall_lessons()` weighted-sum
+path but wrong for the `recall_hybrid()` RRF path, where `final_score` is on
+the RRF scale (~0.008–0.05). Good semantic hits (cosine=0.52) reported
+`match_confidence ≈ 0.005` — unusable as an interpretable quality signal.
+
+Fix: `match_confidence = vec_score` (cosine similarity, already [0,1] by
+pgvector guarantee). Recall ranking (`ORDER BY final_score DESC`) is unchanged.
+
+### Fixed
+
+- **`recall_hybrid()` match_confidence mis-calibration (BUG-1, P0 user-facing)** —
+  Changed from `LEAST(1.0, GREATEST(0.0, final_score / 1.5))` to
+  `LEAST(1.0, GREATEST(0.0, v_score))`. On a genuine semantic hit with
+  `vec_score=0.52`, `match_confidence` is now `0.52` instead of `0.0058`.
+  On the text-only path (NULL embedding), `match_confidence = 0.0` (emit via
+  existing RAISE NOTICE footgun guard). `recall_lessons()` is **not** affected —
+  its weighted-sum scoring correctly uses `/1.5`. Reproduced live on Agency
+  `prod_corpus` (3,905-lesson corpus, bge-m3 embeddings).
+  Source: `PGMNEMO_V070_INTEGRATION_FEEDBACK_2026-05-29.md` §2.
+
+### Added
+
+- **`pgmnemo.reinforce(p_lesson_ids BIGINT[], p_outcome TEXT) RETURNS INT`** —
+  Batch confidence update overload. Iterates the array; silently skips missing
+  lesson IDs (no `RAISE EXCEPTION` — bitemporal supersession/TTL is normal).
+  Returns count of rows actually updated. Unknown `p_outcome` still raises.
+  `neutral` outcome is a no-op and is not counted. Eliminates the N-round-trip
+  per-call loop workaround needed to avoid a single missing ID aborting the
+  whole transaction.
+  Source: `PGMNEMO_V070_INTEGRATION_FEEDBACK_2026-05-29.md` §3.
+
+### Changed
+
+- **`recall_hybrid()` COMMENT** — Updated to v0.7.1; corrects the
+  `match_confidence` formula description and adds: *"graph_proximity contributes
+  only when mem_edge is populated; with no edges the graph term is 0 (correct,
+  not a bug)."*
+  Source: `PGMNEMO_V070_INTEGRATION_FEEDBACK_2026-05-29.md` §4.
+
+### Upgrade
+
+```sql
+ALTER EXTENSION pgmnemo UPDATE TO '0.7.1';
+```
+
+Function-only patch — no column additions, no table DDL. `recall_hybrid()` is
+`DROP` + re-`CREATE` (same signature and return type, required for COMMENT update
+consistency). `reinforce(BIGINT[], TEXT)` is additive.
+
+> **Breaking note for match_confidence consumers:** If you had threshold logic
+> like `WHERE match_confidence > 0.01` to filter "good" results, update to a
+> meaningful cosine threshold (e.g. `> 0.3` for moderate similarity). The old
+> values were ~0.005 for good hits; new values are the actual cosine similarity.
+
+---
+
 ## [0.7.0] — 2026-05-29
 
 ### Theme
