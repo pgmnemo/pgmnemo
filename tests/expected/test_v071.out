@@ -14,7 +14,7 @@ NOTICE:  B5 PASS: batch reinforce [present, missing] returns 1, confidence updat
 DO
 NOTICE:  C1 PASS: match_confidence=1 vec_score=1 (BUG-1 fixed: mc≈cosine, not ~0.005)
 DO
-NOTICE:  D1 PASS: recall_hybrid COMMENT references v0.7.1
+NOTICE:  D1 PASS: recall_hybrid COMMENT describes vec_score formula (BUG-1 fix)
 DO
 NOTICE:  D2 PASS: recall_hybrid COMMENT includes mem_edge / graph_proximity dormancy note
 DO
