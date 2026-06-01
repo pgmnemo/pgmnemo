@@ -198,7 +198,7 @@ $$;
 -- D: COMMENT regression guards
 -- =============================================================================
 
--- D1: recall_hybrid COMMENT mentions v0.7.1 (not v0.7.0)
+-- D1: recall_hybrid COMMENT describes vec_score formula (BUG-1 fix content, version-agnostic)
 DO $$
 DECLARE _comment TEXT;
 BEGIN
@@ -207,10 +207,10 @@ BEGIN
     JOIN pg_namespace n ON n.oid = p.pronamespace
     WHERE n.nspname = 'pgmnemo' AND p.proname = 'recall_hybrid';
 
-    IF _comment LIKE '%v0.7.1%' THEN
-        RAISE NOTICE 'D1 PASS: recall_hybrid COMMENT references v0.7.1';
+    IF _comment LIKE '%vec_score%' THEN
+        RAISE NOTICE 'D1 PASS: recall_hybrid COMMENT describes vec_score formula (BUG-1 fix)';
     ELSE
-        RAISE EXCEPTION 'D1 FAIL: recall_hybrid COMMENT does not mention v0.7.1: %',
+        RAISE EXCEPTION 'D1 FAIL: recall_hybrid COMMENT missing vec_score formula description: %',
             left(_comment, 80);
     END IF;
 END;

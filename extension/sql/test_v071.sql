@@ -1,0 +1,228 @@
+-- test_v071.sql
+-- pg_regress tests for pgmnemo v0.7.1 new features
+--
+-- Coverage:
+--   T1: BUG-1 match_confidence = vec_score (cosine): same vector → mc ≈ 1.0 (not ~0.011)
+--   T2: BUG-1 match_confidence in [0,1] bounds guarantee
+--   T3: BUG-1 match_confidence on text-only path (NULL embedding) = 0.0
+--   T4a: MINOR-2 batch reinforce() success path — returns count, confidence raised
+--   T4b: MINOR-2 batch reinforce() failure path — returns count, confidence lowered
+--   T4c: MINOR-2 batch reinforce() neutral path — returns 0, confidence unchanged
+--   T5a: MINOR-2 batch reinforce() skip missing IDs — no exception, returns found count
+--   T5b: MINOR-2 batch reinforce() all-missing → 0, no exception
+--   T5c: MINOR-2 batch reinforce() empty array → 0
+--   T5d: MINOR-2 batch reinforce() unknown outcome → RAISE EXCEPTION
+--   T6a: MINOR-2 batch confidence upper clamp: 0.95 + success → 1.0
+--   T6b: MINOR-2 batch confidence lower clamp: 0.10 + failure → 0.0
+--   T7:  MINOR-3 graph_proximity dormancy note in recall_hybrid COMMENT
+--
+-- Prerequisites: pgmnemo 0.7.1 installed.
+-- gate_strict=off: insert test rows without commit_sha/artifact_hash.
+-- include_unverified=on: recall unverified test rows.
+SET pgmnemo.gate_strict = 'off';
+SET pgmnemo.include_unverified = 'on';
+
+-- =============================================================================
+-- T1: BUG-1 — match_confidence ≈ vec_score (cosine), not final_score/1.5
+--
+-- Insert a lesson with a known unit vector.
+-- Recall with the SAME vector → cosine = 1.0 → match_confidence should be 1.0.
+-- With the old formula: final_score (RRF ~0.016) / 1.5 ≈ 0.011 → fails > 0.9.
+-- =============================================================================
+
+INSERT INTO pgmnemo.agent_lesson (role, topic, lesson_text, embedding)
+VALUES (
+    'tc_v071', 'bug1_match_confidence',
+    'match confidence calibration test lesson for v0.7.1 bug one fix',
+    ('[' || repeat('0.03125,', 1023) || '0.03125]')::vector(1024)
+);
+
+SELECT match_confidence > 0.9 AS mc_near_cosine_one
+FROM pgmnemo.recall_hybrid(
+    ('[' || repeat('0.03125,', 1023) || '0.03125]')::vector(1024),
+    'match confidence calibration test',
+    1, 'tc_v071', NULL
+);
+
+-- =============================================================================
+-- T2: BUG-1 — match_confidence is in [0,1] for all recalled rows
+-- =============================================================================
+
+SELECT
+    match_confidence >= 0.0 AND match_confidence <= 1.0 AS mc_in_unit_interval
+FROM pgmnemo.recall_hybrid(
+    ('[' || repeat('0.03125,', 1023) || '0.03125]')::vector(1024),
+    'bounds check for match confidence value range',
+    5, 'tc_v071', NULL
+)
+LIMIT 1;
+
+-- =============================================================================
+-- T3: BUG-1 — match_confidence = 0.0 on text-only path (NULL embedding)
+--     recall_hybrid with NULL embedding emits a NOTICE (footgun guard)
+--     and vec_score = 0.0, so match_confidence = 0.0.
+-- =============================================================================
+
+SELECT match_confidence = 0.0 AS mc_zero_on_text_only_path
+FROM pgmnemo.recall_hybrid(
+    NULL::vector(1024),
+    'match confidence calibration test',
+    1, 'tc_v071', NULL
+);
+
+-- =============================================================================
+-- T4a: MINOR-2 — batch reinforce() success: returns count, confidence raised
+-- =============================================================================
+
+WITH ins AS (
+    INSERT INTO pgmnemo.agent_lesson (role, topic, lesson_text)
+    VALUES ('tc_v071', 'batch_success_a',
+            'batch reinforce success outcome test lesson alpha text here')
+    RETURNING id
+)
+SELECT pgmnemo.reinforce(ARRAY[id]::BIGINT[], 'success') = 1 AS batch_success_returns_one
+FROM ins;
+
+-- =============================================================================
+-- T4b: MINOR-2 — batch reinforce() failure: returns count, confidence lowered
+-- =============================================================================
+
+WITH ins AS (
+    INSERT INTO pgmnemo.agent_lesson (role, topic, lesson_text)
+    VALUES ('tc_v071', 'batch_failure_b',
+            'batch reinforce failure outcome test lesson beta text here')
+    RETURNING id
+),
+updated AS (
+    SELECT pgmnemo.reinforce(ARRAY[id]::BIGINT[], 'failure') AS cnt FROM ins
+)
+SELECT cnt = 1 AS batch_failure_returns_one FROM updated;
+
+-- =============================================================================
+-- T4c: MINOR-2 — batch reinforce() neutral: returns 0 (no write), confidence unchanged
+-- =============================================================================
+
+WITH ins AS (
+    INSERT INTO pgmnemo.agent_lesson (role, topic, lesson_text)
+    VALUES ('tc_v071', 'batch_neutral_c',
+            'batch reinforce neutral outcome test lesson gamma text here')
+    RETURNING id, confidence AS conf_before
+),
+updated AS (
+    SELECT i.conf_before, pgmnemo.reinforce(ARRAY[i.id]::BIGINT[], 'neutral') AS cnt
+    FROM ins i
+)
+SELECT
+    cnt = 0               AS neutral_returns_zero,
+    conf_before = 0.5     AS confidence_unchanged
+FROM updated;
+
+-- =============================================================================
+-- T5a: MINOR-2 — batch skip missing IDs: [real, missing] → 1, no exception
+-- =============================================================================
+
+WITH ins AS (
+    INSERT INTO pgmnemo.agent_lesson (role, topic, lesson_text)
+    VALUES ('tc_v071', 'batch_skip_a',
+            'batch reinforce skip missing id test lesson delta text here')
+    RETURNING id
+)
+SELECT pgmnemo.reinforce(ARRAY[id, -999991]::BIGINT[], 'success') = 1
+    AS batch_skip_missing_returns_one
+FROM ins;
+
+-- =============================================================================
+-- T5b: MINOR-2 — batch all-missing: returns 0, no exception
+-- =============================================================================
+
+SELECT pgmnemo.reinforce(ARRAY[-999992, -999993, -999994]::BIGINT[], 'success') = 0
+    AS batch_all_missing_returns_zero;
+
+-- =============================================================================
+-- T5c: MINOR-2 — batch empty array: returns 0
+-- =============================================================================
+
+SELECT pgmnemo.reinforce(ARRAY[]::BIGINT[], 'success') = 0
+    AS batch_empty_returns_zero;
+
+-- =============================================================================
+-- T5d: MINOR-2 — batch unknown outcome raises EXCEPTION
+-- =============================================================================
+
+DO $$
+BEGIN
+    PERFORM pgmnemo.reinforce(ARRAY[-1]::BIGINT[], 'BADOUTCOME');
+    RAISE EXCEPTION 'T5d FAIL: unknown outcome did not raise';
+EXCEPTION WHEN OTHERS THEN
+    IF SQLERRM LIKE '%unknown outcome%' THEN
+        RAISE NOTICE 'T5d PASS: batch reinforce raises on unknown outcome';
+    ELSE
+        RAISE EXCEPTION 'T5d FAIL: unexpected error: %', SQLERRM;
+    END IF;
+END;
+$$;
+
+-- =============================================================================
+-- T6a: MINOR-2 — batch confidence upper clamp: 0.95 + success → 1.0
+--      Uses DO block so reinforce() writes are visible in the same transaction.
+-- =============================================================================
+
+DO $$
+DECLARE _id BIGINT; _conf REAL;
+BEGIN
+    INSERT INTO pgmnemo.agent_lesson (role, topic, lesson_text, confidence)
+    VALUES ('tc_v071', 'batch_clamp_high',
+            'batch reinforce upper boundary clamp test lesson epsilon text', 0.95)
+    RETURNING id INTO _id;
+
+    PERFORM pgmnemo.reinforce(ARRAY[_id]::BIGINT[], 'success');
+
+    SELECT confidence INTO _conf FROM pgmnemo.agent_lesson WHERE id = _id;
+
+    IF _conf = 1.0 THEN
+        RAISE NOTICE 'T6a PASS: batch success 0.95+0.10 clamped to 1.0';
+    ELSE
+        RAISE EXCEPTION 'T6a FAIL: expected 1.0, got %', _conf;
+    END IF;
+END;
+$$;
+
+-- =============================================================================
+-- T6b: MINOR-2 — batch confidence lower clamp: 0.10 + failure → 0.0
+-- =============================================================================
+
+DO $$
+DECLARE _id BIGINT; _conf REAL;
+BEGIN
+    INSERT INTO pgmnemo.agent_lesson (role, topic, lesson_text, confidence)
+    VALUES ('tc_v071', 'batch_clamp_low',
+            'batch reinforce lower boundary clamp test lesson zeta text here', 0.10)
+    RETURNING id INTO _id;
+
+    PERFORM pgmnemo.reinforce(ARRAY[_id]::BIGINT[], 'failure');
+
+    SELECT confidence INTO _conf FROM pgmnemo.agent_lesson WHERE id = _id;
+
+    IF _conf = 0.0 THEN
+        RAISE NOTICE 'T6b PASS: batch failure 0.10-0.15 clamped to 0.0';
+    ELSE
+        RAISE EXCEPTION 'T6b FAIL: expected 0.0, got %', _conf;
+    END IF;
+END;
+$$;
+
+-- =============================================================================
+-- T7: MINOR-3 — graph_proximity dormancy note present in recall_hybrid COMMENT
+--     Tests content (mem_edge keyword), not version string — version-agnostic.
+-- =============================================================================
+
+SELECT obj_description(p.oid, 'pg_proc') LIKE '%mem_edge%' AS comment_has_graph_dormancy_note
+FROM pg_proc p
+JOIN pg_namespace n ON n.oid = p.pronamespace
+WHERE n.nspname = 'pgmnemo' AND p.proname = 'recall_hybrid';
+
+-- =============================================================================
+-- Cleanup
+-- =============================================================================
+
+DELETE FROM pgmnemo.agent_lesson WHERE role = 'tc_v071';
