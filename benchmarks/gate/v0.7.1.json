@@ -1,0 +1,48 @@
+{
+    "version": "v0.7.1",
+    "date": "2026-06-01",
+    "pgmnemo_version": "0.7.1",
+    "gate_status": "PASS",
+    "gate_type": "analytical_carry_forward",
+    "note": "Calibration patch release. BUG-1: match_confidence formula in recall_hybrid() corrected (vec_score replaces final_score/1.5). ORDER BY uses final_score (unchanged) — recall ranking is identical to v0.7.0. match_confidence is an OUTPUT column only; it does not affect ranking. Analytical carry-forward is valid.",
+    "bug_fix": {
+        "id": "BUG-1",
+        "description": "recall_hybrid() match_confidence was computed as LEAST(1.0, GREATEST(0.0, final_score/1.5)). final_score is RRF-scale (~0.008-0.05), not weighted-sum scale (~0-1.5), so the formula produced values ~0.005 for good hits. Fix: use vec_score (cosine similarity, already [0,1] by pgvector guarantee).",
+        "affected_functions": ["recall_hybrid"],
+        "scoring_impact": "none — ORDER BY final_score DESC is unchanged; only match_confidence output value changes",
+        "recall_ranking_impact": "zero",
+        "agency_reproduction": "score=0.00867 vec_score=0.525 match_confidence=0.00578 (old) vs match_confidence=0.525 (new)"
+    },
+    "minor_2": {
+        "description": "New overloaded reinforce(BIGINT[], TEXT) RETURNS INT — batch form that skips missing lesson_ids (CONTINUE, no RAISE) and returns count updated. Scalar reinforce(BIGINT, TEXT) unchanged.",
+        "scoring_impact": "none",
+        "backward_compatible": true
+    },
+    "minor_3": {
+        "description": "COMMENT on recall_hybrid() updated: corrected match_confidence formula description, added note that graph_proximity contributes only when mem_edge is populated.",
+        "scoring_impact": "none"
+    },
+    "carry_forward_from": "v0.7.0",
+    "carry_forward_rationale": "ORDER BY f.final_score DESC in recall_hybrid() is unchanged. match_confidence is a derived output column that does not feed back into scoring or ranking. The fix changes only the displayed value of match_confidence, not recall@10 ordering. LongMemEval-S benchmark carry-forward is analytically valid.",
+    "recall_at_10_carry_forward": 0.9604,
+    "baseline_recall_at_10": 0.9491,
+    "delta_recall_at_10_pp": 0.0,
+    "smoke_gate": {
+        "status": "PASS",
+        "tests": [
+            "pg_regress test_v071 (T1-T6: match_confidence≈cosine, batch reinforce skip, regression guard)",
+            "pg_regress test_v070 (T1-T9: all v0.7.0 tests still pass, no regression)",
+            "fresh install: CREATE EXTENSION pgmnemo VERSION '0.7.1'",
+            "upgrade path: CREATE EXTENSION pgmnemo VERSION '0.7.0' + ALTER EXTENSION pgmnemo UPDATE TO '0.7.1'"
+        ],
+        "pg_regress_tests_before": 19,
+        "pg_regress_tests_after": 20,
+        "new_test": "test_v071 — covers BUG-1 fix, batch reinforce, recall_lessons non-regression"
+    },
+    "features_shipped": [
+        "recall_hybrid_match_confidence_bugfix",
+        "reinforce_batch_overload",
+        "recall_hybrid_comment_graph_proximity_note"
+    ],
+    "previous_gate": "benchmarks/gate/v0.7.0.json"
+}
