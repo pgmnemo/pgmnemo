@@ -1,0 +1,24 @@
+NOTICE:  A1 PASS: reinforce has 2 overloads (scalar + batch)
+DO
+NOTICE:  A2 PASS: batch reinforce RETURNS integer
+DO
+NOTICE:  B1 PASS: batch reinforce empty array returns 0
+DO
+NOTICE:  B2 PASS: batch reinforce NULL array returns 0
+DO
+NOTICE:  B3 PASS: batch reinforce all-missing IDs returns 0, no exception
+DO
+NOTICE:  B4 PASS: unknown outcome raises expected exception: pgmnemo.reinforce: unknown outcome 'SUCCESS' -- expected 'success', 'failure', or 'neutral'
+DO
+NOTICE:  B5 PASS: batch reinforce [present, missing] returns 1, confidence updated
+DO
+NOTICE:  C1 PASS: match_confidence=1 vec_score=1 (BUG-1 fixed: mc≈cosine, not ~0.005)
+DO
+NOTICE:  D1 PASS: recall_hybrid COMMENT references v0.7.1
+DO
+NOTICE:  D2 PASS: recall_hybrid COMMENT includes mem_edge / graph_proximity dormancy note
+DO
+NOTICE:  E1 PASS: scalar reinforce raised expected exception on bad input
+DO
+NOTICE:  E2 PASS: scalar reinforce raises on missing lesson_id (unchanged)
+DO
