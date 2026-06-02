@@ -5,6 +5,55 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [0.7.2] — 2026-06-01
+
+### Theme
+
+**Packaging fix — the 0.7.1 distribution double-nested the extension dir
+(`extension/extension/`) making it uninstallable from PGXN/GitHub; 0.7.2 ships a
+correctly-structured dist. Added a CI clean-room install gate. No schema changes.**
+
+### Fixed
+
+- **Uninstallable 0.7.1 distribution (packaging).** The published 0.7.1 bundle
+  nested the extension directory one level too deep
+  (`pgmnemo-0.7.1/extension/extension/`). Every documented install path then
+  copied files to the wrong location and `CREATE EXTENSION pgmnemo` failed with
+  `could not open extension control file ".../pgmnemo.control": No such file or
+  directory`. 0.7.2 produces a single, correctly-placed
+  `pgmnemo-0.7.2/extension/` directory. The extension SQL itself was always
+  correct; only the packaging was broken.
+
+### Added
+
+- **CI clean-room install gate.** A new job unzips the *built* release bundle
+  into a pristine `pgvector/pgvector:pg17` container, installs it via the
+  documented `cp -r .../extension/*` path, and asserts
+  `CREATE EXTENSION vector; CREATE EXTENSION pgmnemo; SELECT pgmnemo.version()`
+  returns the expected version. It runs both at PR time and as a hard gate on the
+  GitHub Release + PGXN/PyPI publish — so a malformed dist can no longer ship
+  green. The bundle builder also enforces a dist-shape guard that rejects
+  `extension/extension/` double-nesting and dev/test/build cruft.
+
+### Changed
+
+- Single bundle builder: `scripts/build_pgxn_bundle.sh` is now the only path that
+  assembles the release zip (the release workflow calls it instead of an inline
+  copy block). Dev/test assets (`*_smoke.sql`, `test_*.sql`, `stress_*.sql`,
+  `expected/*.out`) and orphan/dead-end migration variants are excluded from the
+  bundle (they remain in-repo for the CI upgrade-path matrix).
+- Install docs (`README.md`, `docs/INSTALL.md`) updated to the single-level
+  `cp -r .../extension/*` copy and bumped to 0.7.2.
+
+### Notes
+
+- **No SQL schema change.** `pgmnemo--0.7.2.sql` is byte-identical to
+  `pgmnemo--0.7.1.sql` (modulo the header version comment). The
+  `pgmnemo--0.7.1--0.7.2.sql` upgrade is a documented no-op (no DDL) — it exists
+  only so PostgreSQL bumps `pg_extension.extversion` to `0.7.2`.
+
+---
+
 ## [0.7.1] — 2026-06-01
 
 ### Theme
