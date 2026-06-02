@@ -1,7 +1,7 @@
 -- pgmnemo--0.6.2--0.6.3.sql
 -- Incremental upgrade: v0.6.2 → v0.6.3
 --
--- R1 (P0 — Agency production blocker): Fix AmbiguousColumn in recall_lessons() and recall_hybrid().
+-- R1 (P0 — production blocker): Fix AmbiguousColumn in recall_lessons() and recall_hybrid().
 -- Error: psycopg2.errors.AmbiguousColumn: column reference "role" is ambiguous
 -- Root cause: PL/pgSQL variable_conflict between RETURNS TABLE OUT variable "role TEXT" and
 -- agent_lesson.role column. Table-qualification (al.role, r.role, s.role) is NOT sufficient to

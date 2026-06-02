@@ -23,7 +23,7 @@
 -- variant (A-scale) after real-DB benchmark validation.
 -- See spec/v060/INVESTIGATION_FIX_A_REGRESSION.md for context.
 
--- §3  pgmnemo.stats() — add ghost_count BIGINT (Agency RFC Q4)
+-- §3  pgmnemo.stats() — add ghost_count BIGINT (RFC Q4)
 --
 -- Return type changes (13 → 14 cols) → must DROP before CREATE.
 -- ghost_count: active lessons with verified_at IS NULL (no provenance).
@@ -98,9 +98,9 @@ AS $$
          WHERE n.nspname = 'pgmnemo'
            AND p.proname NOT LIKE '\_%' ESCAPE '\'
            AND d.objid IS NULL)                                                    AS orphan_count,
-        -- ghost_count (v0.6.0): active lessons without provenance (Agency RFC Q4)
+        -- ghost_count (v0.6.0): active lessons without provenance (RFC Q4)
         -- Definition: t_valid_to = 'infinity' (authoritative active-row indicator) AND verified_at IS NULL.
-        -- NOTE: Agency Q4 spec says "is_active = TRUE"; implementation uses t_valid_to = 'infinity'
+        -- NOTE: the RFC Q4 spec says "is_active = TRUE"; implementation uses t_valid_to = 'infinity'
         -- because _bitemporal_close_prior() trigger does NOT update is_active when closing rows.
         -- t_valid_to = 'infinity' is the correct semantic equivalent of "currently active".
         (SELECT COUNT(*)::BIGINT
@@ -110,7 +110,7 @@ AS $$
 $$;
 
 COMMENT ON FUNCTION pgmnemo.stats() IS
-    'v0.6.0 diagnostic health-check. Adds ghost_count (Agency RFC Q4). '
+    'v0.6.0 diagnostic health-check. Adds ghost_count (RFC Q4). '
     'ghost_count: active lessons where verified_at IS NULL — no commit_sha AND no artifact_hash. '
     'Distinct from orphan_count (functions not owned by extension). '
     'Use ghost_count to track provenance migration progress: target < 5% of lesson_count '
@@ -119,7 +119,7 @@ COMMENT ON FUNCTION pgmnemo.stats() IS
 
 
 -- ─────────────────────────────────────────────────────────────────────────────
--- §4  pgmnemo.ingest() — RAISE NOTICE on bitemporal close+create (Agency RFC Q5)
+-- §4  pgmnemo.ingest() — RAISE NOTICE on bitemporal close+create (RFC Q5)
 --
 -- Pre-insert content_hash check; RAISE NOTICE if dedup close fires.
 -- content_hash formula matches GENERATED ALWAYS AS column:
@@ -208,7 +208,7 @@ COMMENT ON FUNCTION pgmnemo.ingest(TEXT, INT, TEXT, TEXT, SMALLINT, vector, TEXT
     'R5 (v0.5.0).';
 
 -- ─── R9: recall hit-count metric view ────────────────────────────────────────
--- Agency RFC R9 (deferred from v0.4.1). Requires track_functions = 'pl' or
+-- RFC R9 (deferred from v0.4.1). Requires track_functions = 'pl' or
 -- 'all' in postgresql.conf; rows only appear after the first call post-reset.
 
 CREATE OR REPLACE VIEW pgmnemo.recall_stats AS
