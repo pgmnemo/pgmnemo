@@ -156,7 +156,7 @@ After push and CI complete:
 - [ ] PyPI shows pgmnemo-mcp v0.6.3 available
 - [ ] GitHub Release v0.6.3 created
 - [ ] Smoke test: `recall_lessons()` and `recall_hybrid()` return without AmbiguousColumn
-- [ ] Document link updated in Agency wiki (if applicable)
+- [ ] Document link updated in internal wiki (if applicable)
 
 ---
 

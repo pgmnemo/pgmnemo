@@ -126,7 +126,7 @@ files are baked into the new image layer.
 
 ---
 
-## Path 4 — Vendored extension directory (Agency-style)
+## Path 4 — Vendored extension directory (air-gapped style)
 
 If you cannot reach the internet at build time (air-gapped, strict CI policy),
 vendor the extension files into your repository:

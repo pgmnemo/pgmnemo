@@ -144,7 +144,7 @@ questions that emerge *after* a successful install:
 - "The provenance gate is blocking my LangChain integration — how do I integrate?"
 - "I get RLS blocks after setting `pgmnemo.tenant_id` — how do I debug?"
 
-These surface from real adopter experience (Agency RFC, WG early-adopter feedback)
+These surface from real adopter experience (production-feedback RFC, early-adopter feedback)
 and are not answered anywhere in the current doc set. The `temporal_boost`
 calibration table was added to USAGE.md in v0.5.2 but it's buried mid-document
 with no FAQ framing.
@@ -221,7 +221,7 @@ with `SELECT DISTINCT project_id FROM pgmnemo.agent_lesson`.
 |---|---|---|---|
 | 1 | pgmnemo vs pgvector alone | **P0** | Evaluators already on pgvector (majority of target market) |
 | 2 | Performance at scale (latency/throughput) | **P0** | Production go/no-go decision; points to open issue #29 |
-| 3 | Operational FAQ (runtime troubleshooting) | **P1** | Post-install confusion from real adopter questions (Agency RFC) |
+| 3 | Operational FAQ (runtime troubleshooting) | **P1** | Post-install confusion from real adopter questions (production-feedback RFC) |
 
 ## Recommended ownership
 

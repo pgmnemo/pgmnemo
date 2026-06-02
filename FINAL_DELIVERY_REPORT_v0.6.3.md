@@ -146,12 +146,12 @@
    - Verify: `gh run list --workflow=release.yml`
    - **Expected output:** Run status ✅ PASS within 5-10 minutes
 
-2. **Agency Production DB (post-CI):**
+2. **Production DB (post-CI):**
    ```sql
    -- After release.yml passes
    ALTER EXTENSION pgmnemo UPDATE TO '0.6.3';
    ```
-   - Deploys hotfix to Agency production  
+   - Deploys hotfix to production  
    - Resolves `AmbiguousColumn` errors in recall_lessons() / recall_hybrid()
 
 ---

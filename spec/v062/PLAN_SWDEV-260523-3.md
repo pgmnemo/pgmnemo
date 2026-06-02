@@ -34,7 +34,7 @@ All steps are fast (< 2 min total). Abort the plan if any check fails.
 
 | Step | Command | Expected | Block on fail? |
 |------|---------|----------|----------------|
-| P1 v3-next container | `docker inspect agentura-v2-agency-v3-next-1 --format '{{.RestartCount}}'` | `0` | YES |
+| P1 v3-next container | (internal container health check) | `0` | YES |
 | P2 MLX:9200 health | `curl -s http://localhost:9200/health` | HTTP 200 |  YES |
 | P3 LME-S data file | `ls benchmarks/data/longmemeval/longmemeval_s_cleaned.json` | file exists | YES |
 | P4 embed cache | `ls benchmarks/.embed_cache/ \| wc -l` | > 0 files | YES |
@@ -261,7 +261,7 @@ Actions:
 - Technical: what changed and why (Cormack 2009 proper RRF semantics)
 - Metrics: recall@10 delta with benchmark citation
 - Upgrade path
-- No internal Agency references
+- No internal references
 
 ### 6.2 Single SHIP commit
 
