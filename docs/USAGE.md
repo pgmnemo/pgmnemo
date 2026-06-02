@@ -451,7 +451,7 @@ accuracy matters more than p99 latency. Below 40 = sharp recall degradation.
 SET pgmnemo.recency_weight = '0.10';
 ```
 
-Agency RFC (Production corpus N=1081, age 0–365 days) found 0.05 near-optimal.
+An internal RFC (production corpus N=1081, age 0–365 days) found 0.05 near-optimal.
 If your corpus is shorter-lived (e.g. 30-day rolling window) you may want 0.10–0.15.
 
 ### HNSW index parameters
@@ -541,7 +541,7 @@ SELECT pg_reload_conf();
 
 #### Balanced (recommended default)
 Suitable for most general-purpose agents. Recent lessons are preferred but lessons from the
-past two months remain competitive. Matches the Agency RFC N=1081 corpus validation.
+past two months remain competitive. Matches the N=1081 production corpus validation.
 
 ```sql
 SET pgmnemo.temporal_boost = '0.01';  -- half-life ≈ 70 days

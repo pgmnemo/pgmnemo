@@ -220,7 +220,7 @@ Provenance gate behavior set by GUC `pgmnemo.gate_strict`:
 - `warn`: succeed, emit WARNING, leave `verified_at` NULL
 - `off`: no check (development only)
 
-**Bitemporal dedup NOTICE (v0.6.0, Agency RFC Q5):** When an `INSERT` triggers
+**Bitemporal dedup NOTICE (v0.6.0, RFC Q5):** When an `INSERT` triggers
 the `trg_agent_lesson_bitemporal_close` trigger (same `content_hash` as an active
 row), `ingest()` emits:
 ```
@@ -434,7 +434,7 @@ provenance debt.
 
 **Recommended provenance target:** `ghost_count < 5% × lesson_count` before
 enabling `pgmnemo.include_unverified = 'off'`. Use `ghost_count` to track
-Phase 4 migration progress (Agency RFC Q4).
+Phase 4 migration progress (RFC Q4).
 
 **Typical usage:**
 
@@ -453,7 +453,7 @@ FROM pgmnemo.stats();
 -- Check for orphan functions (non-zero blocks ALTER EXTENSION UPDATE):
 SELECT orphan_count FROM pgmnemo.stats();
 
--- v0.6.0: Check ghost lesson debt (Agency RFC Q4):
+-- v0.6.0: Check ghost lesson debt (RFC Q4):
 SELECT ghost_count, lesson_count,
        ROUND(100.0 * ghost_count / NULLIF(lesson_count, 0), 1) AS ghost_pct
 FROM pgmnemo.stats();
@@ -485,11 +485,11 @@ for the detection + recovery procedure.
 
 | GUC | Type | Default | Range | Description |
 |---|---|---|---|---|
-| `pgmnemo.recency_weight` | float | **`0.05`** (v0.4.1; was `0.08` in v0.2.1–v0.4.0, was `0.20` in v0.1.x) | 0.0 – 0.3 (rec.) | Coefficient on the recency-decay term (90-day half-life). Lower values reduce the bias toward recent lessons. Agency RFC ablation (N=1081, 0-365d age) found 0.05 near-optimal for long-lived corpora. |
+| `pgmnemo.recency_weight` | float | **`0.05`** (v0.4.1; was `0.08` in v0.2.1–v0.4.0, was `0.20` in v0.1.x) | 0.0 – 0.3 (rec.) | Coefficient on the recency-decay term (90-day half-life). Lower values reduce the bias toward recent lessons. An internal RFC ablation (N=1081, 0-365d age) found 0.05 near-optimal for long-lived corpora. |
 | `pgmnemo.importance_weight` | float | **`0.15`** (v0.4.1 documented; was implicit `0.20` in pre-v0.4.1 formula) | 0.0 – 0.3 | Coefficient on `importance / 5` term in scoring. Documents the per-formula importance coefficient. |
 | `pgmnemo.ef_search` | int | `100` (v0.2.1+) | 10 – 500 | Applied as `SET LOCAL pgvector.hnsw.ef_search` at recall entry. Higher = more accurate ANN at cost of latency. |
 | `pgmnemo.disable_hybrid` | bool | `false` (v0.4.0+) | `true` / `false` | Opt out of hybrid routing. When `true`, `recall_lessons()` always uses vector-only path regardless of `query_text`. Use for adopters who need deterministic v0.3.x behaviour. |
-| `pgmnemo.graph_proximity_weight` | float | `0.2` | 0.0 – 0.5 | Weight on `mem_edge` graph-walk proximity term in `recall_hybrid()` scoring. Set to `0.0` for pure semantic recall (Agency's bench setup). |
+| `pgmnemo.graph_proximity_weight` | float | `0.2` | 0.0 – 0.5 | Weight on `mem_edge` graph-walk proximity term in `recall_hybrid()` scoring. Set to `0.0` for pure semantic recall (the reference bench setup). |
 | `pgmnemo.temporal_boost` | float | `1.0` (v0.5.0+) | 0.0 – 20.0 | Multiplier on the recency component. `effective_γ = recency_weight × temporal_boost`. Default `1.0` = unchanged behaviour from v0.4.1. H-06 optimal: `boost=10` with `recency_weight=0.05` → `effective_γ=0.5`. Helper: `SELECT pgmnemo.get_temporal_boost()`. |
 
 ### 3.2 Write/ingest GUCs (used by `pgmnemo.ingest()` and `recall_lessons()` filtering)
@@ -531,7 +531,7 @@ SELECT name, setting, sourcefile FROM pg_file_settings WHERE name LIKE 'pgmnemo.
 | Version | GUC | Old → New | Reason |
 |---|---|---|---|
 | v0.2.1 | `pgmnemo.recency_weight` | `0.20` → `0.08` | Pending REC-1 ablation (never completed our side) |
-| v0.4.1 | `pgmnemo.recency_weight` | `0.08` → `0.05` | Agency RFC ablation (N=1081 production corpus); see RFC §R1 |
+| v0.4.1 | `pgmnemo.recency_weight` | `0.08` → `0.05` | Internal RFC ablation (N=1081 production corpus); see RFC §R1 |
 | v0.2.1 | `pgmnemo.ef_search` | (new GUC, default 100) | HNSW recall quality at production query rate |
 | v0.4.0 | `pgmnemo.disable_hybrid` | (new GUC, default FALSE) | Hybrid retrieval became default; this is the opt-out switch |
 | v0.5.0 | `pgmnemo.temporal_boost` | (new GUC, default 1.0) | H-06: tunable recency multiplier; default 1.0 = no change from v0.4.1 behaviour |

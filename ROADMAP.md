@@ -40,14 +40,14 @@ Tagline updated to: **"The write-time gate for agent memory."** (POSITIONING.md 
 |---|---|---|---|
 | **v0.3.1** | Hygiene + documentation + bench-gate in CI | All issues closed; gate file mechanism live; no recall change | 2026-05-13 (✅ SHIPPED) |
 | **v0.4.0** | Hybrid retrieval promoted to default | LoCoMo session recall@10 +4.15pp (p<0.05); LongMemEval neutral | 2026-05-15 (✅ SHIPPED) |
-| **v0.4.1** | **Production hardening** (per Agency RFC 2026-05-16) | R1, R2 docs, R3, R4, R7 from `AGENCY_REQUIREMENTS_FOR_PGMNEMO.md`; Agency bench recall@10 ≥ 0.55 maintained | 2026-05-17 (✅ SHIPPED) |
+| **v0.4.1** | **Production hardening** (per first external production-user feedback, 2026-05-16) | R1, R2 docs, R3, R4, R7 from production-user requirements; bench recall@10 gate maintained | 2026-05-17 (✅ SHIPPED) |
 | **v0.5.0** | Per-category lift + graph helpers | R5, R6, R10 + H-06 temporal weight tune; previously-planned graph-deprecation cycle folded in here | 2026-05-17 (✅ SHIPPED) |
 | **v0.5.1** | Correctness fixes | MCP write path via `ingest()` SP; `temporal_boost` comment corrected | 2026-05-18 (✅ SHIPPED) |
 | **v0.5.2** | MCP wheel fix + CI gate | `pgmnemo-mcp` empty wheel fix ([#32](https://github.com/pgmnemo/pgmnemo/issues/32)), `packaging-smoke` CI, docs rollback/calibration | 2026-05-22 (✅ SHIPPED) |
 | **v0.6.0** | Adoption tooling (Mem0/AWS, MCP wrapper) | 2026-05-23 (✅ SHIPPED) — RRF Fix-A attempt rolled back (`-22.44 pp` regression confirmed); `as_of_ts` deferred together |
 | **v0.6.1** | `as_of_ts` (F2) + stress test fixtures (F3) | 2026-05-23 (✅ SHIPPED) — F1 RRF Fix-A A-scale variant benchmarked, regressed; F1 deferred to v0.6.2 with real-DB evidence in `benchmarks/longmemeval/results/v0.6.1_realdb_20260523/` |
 | **v0.6.2** | RRF Fix-A — sparse-safe (Cormack 2009) | 2026-05-24 (✅ SHIPPED) — `recall@10: 0.9491 → 0.9604 (+1.13 pp, p=0.017)` on LongMemEval-S N=500 bge-m3 1024d; resolves v0.6.0/v0.6.1 RRF deferral |
-| **v0.6.3** | `recall_lessons` / `recall_hybrid` AmbiguousColumn hotfix (R1) + R2-R4 USAGE.md docs | 2026-05-24 (✅ SHIPPED) — unblocks Agency production recall (was failing at 0 % hit rate per `BENCH_V060_AGENCY_2026-05-23.md`); `#variable_conflict use_column` directive, no signature change |
+| **v0.6.3** | `recall_lessons` / `recall_hybrid` AmbiguousColumn hotfix (R1) + R2-R4 USAGE.md docs | 2026-05-24 (✅ SHIPPED) — unblocks production recall (was failing at 0 % hit rate on an internal deployment); `#variable_conflict use_column` directive, no signature change |
 | **v0.7.0** | Optional graph eval (only if adopter pulls) | Bench that exercises `mem_edge`; +X pp gate | 2026-09 (conditional) |
 | **v1.0** | API freeze + stability commitment | ≥ 3 external adopters with public case studies; 2 consecutive non-breaking releases | 2026-Q4 |
 
@@ -130,22 +130,22 @@ Alternative:      Stay EXPERIMENTAL, lose the BM25 race
 
 ## v0.4.1 — Production hardening (✅ SHIPPED 2026-05-17) **— REPRIORITISED**
 
-**Theme:** ship the items that the first external production adopter (Agency v2)
-asked for in `AGENCY_REQUIREMENTS_FOR_PGMNEMO.md` (2026-05-16). Previously this
+**Theme:** ship the items that the first external production adopter
+asked for in their production requirements (2026-05-16). Previously this
 release was scoped as "graph deprecation cycle"; that scope is deferred to v0.5.x
 in favour of production-hardening items with concrete adopter pull.
 
-**Pivot driver:** First external production user RFC (Architecture C gate passed
-on Agency corpus, recall@10 = 0.5745 N=1060, p_adj < 0.001) requested specific
+**Pivot driver:** First external production-user RFC (production recall@10 gate passed
+on an internal corpus, recall@10 = 0.5745 N=1060, p_adj < 0.001) requested specific
 production-readiness improvements. Per `docs/the release process §4.4` "Do we have an
 adopter who asked for this?" — answer: yes, 6 of 10 R-items, with specific
 production evidence.
 
-### What ships (Agency RFC items)
+### What ships (production-feedback RFC items)
 
 | R-item | Scope | Priority |
 |---|---|---|
-| **R1** — GUC registration | Register `recency_weight`, `ef_search`, `importance_weight`, `disable_hybrid` in `pg_settings`. New defaults per Agency ablation: `recency_weight=0.05` (was 0.20 in v0.2.x; v0.4.0 kept that), `ef_search=100`, `importance_weight=0.15`. | P0 (blocking) |
+| **R1** — GUC registration | Register `recency_weight`, `ef_search`, `importance_weight`, `disable_hybrid` in `pg_settings`. New defaults per an internal ablation: `recency_weight=0.05` (was 0.20 in v0.2.x; v0.4.0 kept that), `ef_search=100`, `importance_weight=0.15`. | P0 (blocking) |
 | **R2** — Distribution docs | Add `docs/INSTALL.md` covering PGXN + Dockerfile snippets. PGXN/GitHub release artifacts already shipped in v0.4.0. | P0 |
 | **R3** — `pgmnemo.stats()` SP | Single diagnostic SP returning version + lesson_count + embedding_coverage_pct + mem_edge_count + GUC values + hybrid_enabled + orphan_count. | P1 |
 | **R4** — `recall_lessons()` diagnostics | Append `vec_score`, `bm25_score`, `rrf_score` columns. Backward-compatible (named-column callers unaffected; positional callers re-audit). | P1 |
@@ -157,7 +157,7 @@ production evidence.
 The previously-planned graph-deprecation cycle (BFS-mixin demotion, `traverse_*`
 "advanced/optional" labelling, `recall_lessons_pooled()` documentation note,
 `edge_kind` ENUM stays) **moves to v0.5.x**, decoupled from the production-hardening
-release. Agency's R6 (mem_edge contract + helper) makes graph features actually
+release. The R6 item (mem_edge contract + helper) makes graph features actually
 useful, which contradicts the v0.4.1-as-deprecation framing. Rationale: deprecate
 features that nobody uses; document + improve features that someone *just started*
 using.
@@ -167,8 +167,8 @@ using.
 - `scripts/significance_test_extended.py` exit ≤ 1 (neutral or improvement) on all 3 tables
   vs v0.4.0 baseline. R1 changes GUC defaults — must re-bench LoCoMo session under new
   defaults and confirm no regression.
-- Agency's `RECALL_LOCOMO_PGMNEMO` bench rerun on v0.4.1 candidate shows recall@10
-  ≥ 0.55 (Architecture C gate held).
+- An internal LoCoMo bench rerun on the v0.4.1 candidate shows recall@10
+  ≥ 0.55 (production gate held).
 - `pgmnemo.stats()` smoke test passes in CI (similar to `smoke_recall_hybrid.py`).
 - `pg_settings` lists all 4 GUCs with documented defaults.
 - `docs/INSTALL.md` walks a fresh user from `docker pull pgvector/pgvector:pg17` to
@@ -206,18 +206,18 @@ next release planning checkpoint sees them as done before v0.5.0 scope is locked
 ## v0.5.0 — Per-category lift + graph helpers (target 2026-06-20)
 
 **Theme:** fix the weakest LoCoMo category (`temporal`), unblock Stella V5, AND
-ship the graph-feature documentation + helper SP requested by Agency (R6).
+ship the graph-feature documentation + helper SP requested by the production adopter (R6).
 Previously-planned graph-deprecation cycle is folded in here (BFS-mixin
 demotion + `recall_lessons_pooled()` documentation note + `recall_lessons_with_graph()`
 opt-in function), now alongside `pgmnemo.add_edge()` (R6).
 
-### Agency RFC items shipped in v0.5.0
+### Production-feedback RFC items shipped in v0.5.0
 
 | R-item | Scope |
 |---|---|
 | **R5** — query_text preprocessing | `pgmnemo.max_query_text_chars` GUC (default 2000), internal truncation with NOTICE, NULL/empty graceful fallback |
 | **R6** — `mem_edge` contract + helper | `pgmnemo.add_edge(source_id, target_id, relation_type, weight, metadata)` SP with `ON CONFLICT DO UPDATE`. `docs/SQL_REFERENCE.md §1.2` documents the canonical contract. |
-| **R10** — Overload removal | 4-arg `traverse_causal_chain()` removed (only 5-arg form remains). NOTICE deprecation in v0.4.1 gave Agency one release to migrate. |
+| **R10** — Overload removal | 4-arg `traverse_causal_chain()` removed (only 5-arg form remains). NOTICE deprecation in v0.4.1 gave adopters one release to migrate. |
 
 ### Hypotheses
 
@@ -246,7 +246,7 @@ ICE:              I=6 C=7 E=9
 
 ### Competitive response items (WG-STRAT-260517, P1 + P2)
 
-Added alongside Agency RFC items. R5, R6, R10 scope unchanged.
+Added alongside the production-feedback RFC items. R5, R6, R10 scope unchanged.
 
 | Item | Rec # | Priority | Owner | Notes |
 |---|---|---|---|---|

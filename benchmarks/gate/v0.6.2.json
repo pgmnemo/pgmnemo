@@ -30,8 +30,8 @@
         "v061_attempt_a_scale_regression": "ORDER BY rrf_diag with ROW_NUMBER() tie-break caused -22.44pp regression on same corpus. v0.6.2 sparse-safe RRF fixes the root cause: high-cosine items without BM25 match no longer rank below BM25-matching non-answers."
     },
     "r1_deferred": {
-        "issue": "AmbiguousColumn 'role' in recall_lessons / recall_hybrid (Agency production blocker)",
-        "source": "projects/pgmnemo/BENCH_V060_AGENCY_2026-05-23.md section 8 R1",
+        "issue": "AmbiguousColumn 'role' in recall_lessons / recall_hybrid (production blocker)",
+        "source": "internal production benchmark, section 8 R1",
         "target_version": "v0.6.3",
         "reason": "All bare 'role' references already qualified as 'al.role'; bug is PL/pgSQL variable_conflict with RETURNS TABLE OUT variable. Fix requires either '#variable_conflict use_column' directive or renaming OUT column (backward-incompat). Needs proper investigation, not shipped halfway in v0.6.2."
     },

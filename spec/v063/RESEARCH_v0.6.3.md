@@ -128,7 +128,7 @@ RETURNS TABLE (
 
 **Cons:**
 - **BREAKING API CHANGE** — callers doing `SELECT role FROM pgmnemo.recall_lessons(...)` must change to `SELECT lesson_role`
-- Agency production code references `role` column by name (in `pgmnemo_recall.py`, `context_service.py`)
+- Production adopter code references the `role` column by name
 - All existing SQL using these functions breaks
 - Column renamed in incremental upgrade script; psycopg2 `cursor.description` column index shifts
 - Not acceptable for a hotfix; deferred to a v1.0 semantic major
