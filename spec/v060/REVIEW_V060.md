@@ -16,7 +16,7 @@
 | 2 | No breaking public function signatures | ⚠️ PARTIAL | `recall_hybrid()` unchanged ✓; `recall_lessons()` 5→6 args — technically drops old overload (see §3.4) |
 | 3 | ORDER BY normalization divisor correct | ✅ PASS | `(0.4+0.4)/(60+1) = 0.8/61 ≈ 0.013115` verified; test T1 confirms |
 | 4 | `as_of_ts IS NULL` path unchanged | ✅ PASS | Dual-condition WHERE preserves v0.5.1 active filter exactly |
-| 5 | `ghost_count` matches Agency Q4 spec | ⚠️ PARTIAL | Implementation correct but deviates from spec text (see §3.3) |
+| 5 | `ghost_count` matches RFC Q4 spec | ⚠️ PARTIAL | Implementation correct but deviates from spec text (see §3.3) |
 | 6 | NOTICE format parseable (Q5) | ✅ PASS | Token "bitemporal close+create fired" present; test verifies indirectly (see §3.5) |
 | 7 | All 4 test files syntactically sound | ✅ PASS | Cannot run live against PG17+pgvector 0.7.0 in review; SQL logic verified manually |
 | 8 | CHANGELOG customer-readable | ❌ FAIL | Incomplete bench verdict placeholder + jargon terms (see §3.1, §3.2) |
@@ -108,7 +108,7 @@ RAISE NOTICE 'pgmnemo.ingest: bitemporal close+create fired — closed % prior v
 ```
 
 Parseable token: `"bitemporal close+create fired"`. Structured fields: N, hash, new id.  
-Agency Q5 requested `RAISE NOTICE` or second return value. ✅ (NOTICE chosen, documented in Q5 answer.)  
+RFC Q5 requested `RAISE NOTICE` or second return value. ✅ (NOTICE chosen, documented in Q5 answer.)  
 Manual parse command documented in test header: `grep "NOTICE.*bitemporal"`.
 
 ### §1.5 Q6 Rollback documentation
@@ -119,11 +119,11 @@ Manual parse command documented in test header: `grep "NOTICE.*bitemporal"`.
 - Documents `ACCESS EXCLUSIVE` lock caveat ✅
 - Notes "Zero-downtime rollback: not available" ✅
 
-Addresses all three Agency Q6 sub-requests. ✅
+Addresses all three RFC Q6 sub-requests. ✅
 
 ### §1.6 Q7 temporal_boost documentation
 
-`docs/USAGE.md` added with recency×boost calibration table matching Agency Q7 request. ✅
+`docs/USAGE.md` added with recency×boost calibration table matching RFC Q7 request. ✅
 
 ---
 
@@ -198,7 +198,7 @@ Terms used without explanation:
 
 **File:** `extension/pgmnemo--0.5.1--0.6.0.sql` line 622–626
 
-Agency Q4 spec says: `COUNT(*) WHERE verified_at IS NULL AND is_active = TRUE`
+RFC Q4 spec says: `COUNT(*) WHERE verified_at IS NULL AND is_active = TRUE`
 
 Implementation uses: `WHERE verified_at IS NULL AND t_valid_to = 'infinity'::TIMESTAMPTZ`
 
@@ -211,9 +211,9 @@ indicator. The spec's `is_active = TRUE` is imprecise (stale after bitemporal cl
 **Recommended fix:** Add inline comment at line 622:
 
 ```sql
--- ghost_count (v0.6.0): active lessons without provenance (Agency RFC Q4)
+-- ghost_count (v0.6.0): active lessons without provenance (RFC Q4)
 -- Definition: t_valid_to = 'infinity' (authoritative active-row indicator).
--- NOTE: Agency Q4 spec says "is_active = TRUE"; implementation uses t_valid_to = 'infinity'
+-- NOTE: the RFC Q4 spec says "is_active = TRUE"; implementation uses t_valid_to = 'infinity'
 -- because _bitemporal_close_prior() does NOT update is_active when closing rows.
 -- t_valid_to = 'infinity' is the correct semantic equivalent of "currently active".
 ```

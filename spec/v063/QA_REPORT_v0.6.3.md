@@ -78,7 +78,7 @@ Verified in four locations:
 | Fixture sweep: no `UPDATE TO '0.6.2'` in expected/*.out | ✅ PASS | `grep -c "0\.6\.2"` = 0 in all |
 | Fixtures with UPDATE TO reference 0.6.3 (5 sql, 5 expected) | ✅ PASS | 10 files updated (verified) |
 | `CHANGELOG.md` entry [0.6.3] >200 chars | ✅ PASS | Section is ~4045 chars |
-| CHANGELOG leads with Agency production unblock | ✅ PASS | "unblocks Agency production" in theme |
+| CHANGELOG leads with production unblock | ✅ PASS | "unblocks production" in theme |
 | `README.md` badge updated to 0.6.3 | ✅ PASS | `version-0.6.3-green.svg` on line 6 |
 | `README.md` v0.6.3 recent-updates note | ✅ PASS | Line 13 — first recent-updates item |
 | `docs/release_notes/v0.6.3_telegram.md` ≤3500 chars | ✅ PASS | 2107 chars |

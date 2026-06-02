@@ -1,4 +1,4 @@
--- Test: pgmnemo.recall_stats view (Agency RFC R9, v0.6.0)
+-- Test: pgmnemo.recall_stats view (RFC R9, v0.6.0)
 -- Verifies view exists and expected columns are present.
 -- NOTE: calls/total_time/self_time may be 0 if track_functions='none';
 --       this test only checks structural presence, not live counter values.

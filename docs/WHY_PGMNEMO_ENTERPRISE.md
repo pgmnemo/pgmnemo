@@ -193,12 +193,12 @@ WHERE lesson_id IN (SELECT id FROM spatial_pre);
 If you adopt and contribute back the pattern that works for your workflow,
 we'll cite you in `docs/cookbook/spatial.md` (planned v0.6.0).
 
-### Gap 4 — Production user count: 1 (Agency v2)
+### Gap 4 — Production user count: 1
 
 We have one named production user. You'd be #2 (or #3, etc., depending on
 sequence). For some procurement processes this is a stopper. We can offer:
 
-- **Reference call** with Agency's tech lead (after their consent)
+- **Reference call** with the existing adopter's tech lead (after their consent)
 - **Co-development arrangement**: we treat your adoption as a top-priority
   validation project; you get direct maintainer attention
 - **Public case study** (after your pilot, named or anonymous, your choice)

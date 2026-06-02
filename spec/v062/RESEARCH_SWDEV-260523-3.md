@@ -23,7 +23,7 @@ the bench result. No new implementation is proposed here; this is a decision fra
 
 | Pre-condition | Check | Expected |
 |--------------|-------|---------|
-| v3-next container health | `docker inspect agentura-v2-agency-v3-next-1 --format '{{.RestartCount}}'` | `0` |
+| v3-next container health | (internal container health check) | `0` |
 | MLX:9200 reachable | `curl -s http://localhost:9200/health` or bge-m3 smoke | HTTP 200, 1024d |
 | LME-S data present | `ls benchmarks/data/longmemeval/longmemeval_s_cleaned.json` | file exists |
 | Embedding cache present | `ls benchmarks/.embed_cache/` | non-empty (same as v0.6.1 bench) |

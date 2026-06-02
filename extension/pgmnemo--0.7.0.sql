@@ -1588,7 +1588,7 @@ COMMENT ON COLUMN pgmnemo.agent_lesson.lesson_tsv IS
     'Required as of v0.4.0 (was opt-in in v0.2.2).';
 -- pgmnemo 0.4.0 → 0.4.1 upgrade
 --
--- THEME: Production hardening per Agency RFC 2026-05-16 (first external
+-- THEME: Production hardening per first external
 --        production-user feedback). Operational observability + safe deprecation.
 --
 -- Bench evidence (real-DB, expected 2026-05-21 after Phase 2):
@@ -1596,13 +1596,13 @@ COMMENT ON COLUMN pgmnemo.agent_lesson.lesson_tsv IS
 --                       cause near-threshold drift; OVERALL r@10 = 0.8409 hold
 --   LoCoMo segment    : neutral expected — router unchanged
 --   LongMemEval-S     : neutral expected — hybrid neutral on bge-m3 saturated
---   Agency corpus     : Architecture C gate (recall@10 ≥ 0.55) must hold after
---                       default change (Agency reruns harness post-ship per A5)
+--   Prod corpus       : recall@10 gate must hold after
+--                       default change (harness rerun post-ship)
 --
 -- Honest scope:
 --   ✓ pgmnemo.stats() one-query health check (R3)
 --   ✓ vec_score / bm25_score / rrf_score in recall_lessons output (R4)
---   ✓ recency_weight default 0.08 → 0.05 per Agency ablation (R1 code part)
+--   ✓ recency_weight default 0.08 → 0.05 per an internal ablation (R1 code part)
 --   ✓ orphan_count signal in pgmnemo.stats() (R7)
 --   ✓ traverse_causal_chain 4-arg overload restored with RAISE NOTICE (R10)
 --   ✗ Recall algorithm itself unchanged — same router as v0.4.0
@@ -1621,7 +1621,7 @@ COMMENT ON COLUMN pgmnemo.agent_lesson.lesson_tsv IS
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- S1: pgmnemo.stats() — diagnostic health-check SP
--- Agency RFC R3 + maintainer additions (recall_hybrid_available,
+-- RFC R3 + maintainer additions (recall_hybrid_available,
 -- oldest_lesson_age_days, orphan_count for R7).
 -- ─────────────────────────────────────────────────────────────────────────────
 
@@ -1686,7 +1686,7 @@ AS $$
 $$;
 
 COMMENT ON FUNCTION pgmnemo.stats() IS
-    'v0.4.1 diagnostic health-check (Agency RFC R3). Single-row summary of '
+    'v0.4.1 diagnostic health-check (RFC R3). Single-row summary of '
     'corpus size, embedding/tsvector coverage, GUC values, hybrid availability, '
     'and orphan-function count (functions in pgmnemo schema not owned by the '
     'extension — typically caused by intermediate manual SQL patches; see '
@@ -1814,7 +1814,7 @@ BEGIN
 
     _gamma := COALESCE(
         NULLIF(current_setting('pgmnemo.recency_weight', TRUE), '')::DOUBLE PRECISION,
-        0.05  -- v0.4.1: default lowered from 0.08 per Agency ablation (R1)
+        0.05  -- v0.4.1: default lowered from 0.08 per an internal ablation (R1)
     );
 
     BEGIN
@@ -1932,17 +1932,17 @@ COMMENT ON FUNCTION pgmnemo.recall_lessons(vector, INT, TEXT, INT, TEXT) IS
     'v0.4.1 hybrid router with diagnostic columns. Routes to recall_hybrid() '
     'when query_text non-empty AND embedding present AND pgmnemo.disable_hybrid '
     'is FALSE/unset. Vector-only path uses §6.4 scoring with γ = '
-    'pgmnemo.recency_weight (default 0.05 since v0.4.1 per Agency ablation). '
+    'pgmnemo.recency_weight (default 0.05 since v0.4.1 per an internal ablation). '
     'Diagnostic columns (v0.4.1, R4): vec_score = raw cosine; bm25_score / '
     'rrf_score = NULL on vector-only path, populated on hybrid path. '
     'Opt-out: SET pgmnemo.disable_hybrid = ''true''.';
 
 
 -- ─────────────────────────────────────────────────────────────────────────────
--- S4: traverse_causal_chain — 4-arg deprecation with NOTICE (Agency RFC R10)
+-- S4: traverse_causal_chain — 4-arg deprecation with NOTICE (RFC R10)
 --
 -- v0.4.0 ships only the 5-arg form with direction DEFAULT 'forward'. To support
--- Agency's existing 4-arg callers (v3_001_baseline.py) AND add a deprecation
+-- existing 4-arg callers AND add a deprecation
 -- NOTICE, we restructure both overloads:
 --   - 5-arg: remove DEFAULT on direction (becomes explicit required parameter)
 --   - 4-arg: new wrapper emitting RAISE NOTICE, delegating to 5-arg
@@ -2076,7 +2076,7 @@ END;
 $$;
 
 COMMENT ON FUNCTION pgmnemo.traverse_causal_chain(BIGINT, INT, TEXT[], BOOLEAN) IS
-    'DEPRECATED in v0.4.1 (Agency RFC R10). Wrapper around 5-arg form with '
+    'DEPRECATED in v0.4.1 (RFC R10). Wrapper around 5-arg form with '
     'direction=''forward''. Emits RAISE NOTICE on every call. Will be REMOVED '
     'in v0.5.0; update callers to pass direction explicitly.';
 
@@ -2763,7 +2763,7 @@ COMMENT ON FUNCTION pgmnemo.add_edge(BIGINT, BIGINT, TEXT, FLOAT8, JSONB, TEXT) 
 -- variant (A-scale) after real-DB benchmark validation.
 -- See spec/v060/INVESTIGATION_FIX_A_REGRESSION.md for context.
 
--- §3  pgmnemo.stats() — add ghost_count BIGINT (Agency RFC Q4)
+-- §3  pgmnemo.stats() — add ghost_count BIGINT (RFC Q4)
 --
 -- Return type changes (13 → 14 cols) → must DROP before CREATE.
 -- ghost_count: active lessons with verified_at IS NULL (no provenance).
@@ -2838,9 +2838,9 @@ AS $$
          WHERE n.nspname = 'pgmnemo'
            AND p.proname NOT LIKE '\_%' ESCAPE '\'
            AND d.objid IS NULL)                                                    AS orphan_count,
-        -- ghost_count (v0.6.0): active lessons without provenance (Agency RFC Q4)
+        -- ghost_count (v0.6.0): active lessons without provenance (RFC Q4)
         -- Definition: t_valid_to = 'infinity' (authoritative active-row indicator) AND verified_at IS NULL.
-        -- NOTE: Agency Q4 spec says "is_active = TRUE"; implementation uses t_valid_to = 'infinity'
+        -- NOTE: the RFC Q4 spec says "is_active = TRUE"; implementation uses t_valid_to = 'infinity'
         -- because _bitemporal_close_prior() trigger does NOT update is_active when closing rows.
         -- t_valid_to = 'infinity' is the correct semantic equivalent of "currently active".
         (SELECT COUNT(*)::BIGINT
@@ -2850,7 +2850,7 @@ AS $$
 $$;
 
 COMMENT ON FUNCTION pgmnemo.stats() IS
-    'v0.6.0 diagnostic health-check. Adds ghost_count (Agency RFC Q4). '
+    'v0.6.0 diagnostic health-check. Adds ghost_count (RFC Q4). '
     'ghost_count: active lessons where verified_at IS NULL — no commit_sha AND no artifact_hash. '
     'Distinct from orphan_count (functions not owned by extension). '
     'Use ghost_count to track provenance migration progress: target < 5% of lesson_count '
@@ -2859,7 +2859,7 @@ COMMENT ON FUNCTION pgmnemo.stats() IS
 
 
 -- ─────────────────────────────────────────────────────────────────────────────
--- §4  pgmnemo.ingest() — RAISE NOTICE on bitemporal close+create (Agency RFC Q5)
+-- §4  pgmnemo.ingest() — RAISE NOTICE on bitemporal close+create (RFC Q5)
 --
 -- Pre-insert content_hash check; RAISE NOTICE if dedup close fires.
 -- content_hash formula matches GENERATED ALWAYS AS column:
@@ -2948,7 +2948,7 @@ COMMENT ON FUNCTION pgmnemo.ingest(TEXT, INT, TEXT, TEXT, SMALLINT, vector, TEXT
     'R5 (v0.5.0).';
 
 -- ─── R9: recall hit-count metric view ────────────────────────────────────────
--- Agency RFC R9 (deferred from v0.4.1). Requires track_functions = 'pl' or
+-- RFC R9 (deferred from v0.4.1). Requires track_functions = 'pl' or
 -- 'all' in postgresql.conf; rows only appear after the first call post-reset.
 
 CREATE OR REPLACE VIEW pgmnemo.recall_stats AS

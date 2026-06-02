@@ -1,4 +1,4 @@
--- Test: ghost_count in pgmnemo.stats() (Agency RFC Q4)
+-- Test: ghost_count in pgmnemo.stats() (RFC Q4)
 -- pgmnemo v0.6.0
 -- ghost_count = active lessons with verified_at IS NULL (no provenance)
 

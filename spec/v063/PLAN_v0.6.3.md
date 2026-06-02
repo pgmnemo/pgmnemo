@@ -334,17 +334,17 @@ Analytical carry-forward of v0.6.2 recall@10 metrics. Format mirrors existing ga
 
 ### Step 10 — `CHANGELOG.md` entry (P0, ~10 min)
 
-Add `[0.6.3]` entry at top of changelog (after the `[Unreleased]` section if present, else as newest entry). Minimum 200 chars. Lead with Agency production unblock:
+Add `[0.6.3]` entry at top of changelog (after the `[Unreleased]` section if present, else as newest entry). Minimum 200 chars. Lead with the production unblock:
 
 ```markdown
 ## [0.6.3] — 2026-05-24
 
 ### Fixed
-- **R1 (P0 — Agency production blocker):** `AmbiguousColumn: column reference "role" is ambiguous`
+- **R1 (P0 — production blocker):** `AmbiguousColumn: column reference "role" is ambiguous`
   error in `recall_lessons()` and `recall_hybrid()`. Root cause: PL/pgSQL variable_conflict between
   the `RETURNS TABLE` OUT variable `role TEXT` and the `agent_lesson.role` column. Fixed by adding
   `#variable_conflict use_column` directive to both function bodies — zero signature change,
-  zero scoring change, fully backward compatible. Agency `pgmnemo_recall.py` callers unblocked.
+  zero scoring change, fully backward compatible. Production recall callers unblocked.
 
 ### Added
 - New pg_regress test `role_no_ambiguity` — regression guard for R1 fix (pg_regress count: 17 → 18).
@@ -366,7 +366,7 @@ Update version badge (if present) from 0.6.2 → 0.6.3. Add one line in "Recent 
 
 ### Step 12 — `docs/release_notes/v0.6.3_telegram.md` (~10 min)
 
-New file, ≤3500 chars. Lead with "recall_lessons() now callable from Agency production." Format mirrors existing release notes.
+New file, ≤3500 chars. Lead with "recall_lessons() now callable from production." Format mirrors existing release notes.
 
 ---
 
