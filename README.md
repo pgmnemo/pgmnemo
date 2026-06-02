@@ -3,13 +3,17 @@
 **Multi-agent memory substrate for PostgreSQL — provenance-gated, vector-hybrid recall.**
 
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.7.0-green.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.7.2-green.svg)](CHANGELOG.md)
 [![PGXN](https://badge.pgxn.org/stable/pgmnemo.svg)](https://pgxn.org/dist/pgmnemo/)
 [![CI](https://github.com/pgmnemo/pgmnemo/actions/workflows/ci.yml/badge.svg)](https://github.com/pgmnemo/pgmnemo/actions/workflows/ci.yml)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-17-4169E1.svg)](https://www.postgresql.org/)
 [![LoCoMo recall@10](https://img.shields.io/badge/LoCoMo_recall%4010-0.8409-success.svg)](docs/img/all_metrics_history.md)
 [![LongMemEval recall@10](https://img.shields.io/badge/LongMemEval_recall%4010-0.9334-brightgreen.svg)](docs/img/all_metrics_history.md)
 
+> **v0.7.2 (2026-06-01):** **Packaging fix.** The v0.7.1 distribution double-nested the extension directory (`extension/extension/`), making it uninstallable from PGXN and GitHub release zips (`could not open extension control file`). v0.7.2 ships a correctly-structured dist and adds a CI **clean-room install gate** that installs the built zip into a pristine `pgvector/pgvector:pg17` container before any publish. **No schema changes** — SQL is identical to v0.7.1. See [CHANGELOG.md](CHANGELOG.md).
+>
+> **v0.7.1 (2026-06-01):** `recall_hybrid()` `match_confidence` calibration fix (BUG-1) + batch `reinforce(BIGINT[], TEXT)` overload. ⚠️ The v0.7.1 **dist was uninstallable** — use **v0.7.2** instead. See [CHANGELOG.md](CHANGELOG.md).
+>
 > **v0.6.3 (2026-05-24):** **`recall_lessons()` and `recall_hybrid()` now callable without `psycopg2.errors.AmbiguousColumn`.** Added `#variable_conflict use_column` to both function bodies (compile-time only — no scoring change, no signature change). New pg_regress test `role_no_ambiguity` (18 total). `pgmnemo.include_unverified` GUC semantics, hybrid-mode activation conditions, and psycopg2 calling convention documented in `docs/USAGE.md`. Gate: [`benchmarks/gate/v0.6.3.json`](benchmarks/gate/v0.6.3.json). See [CHANGELOG.md](CHANGELOG.md).
 >
 > **v0.6.1 (2026-05-23):** **`recall_lessons(as_of_ts)`** — 6th param for point-in-time bitemporal recall (F2), propagates to `recall_hybrid()` via GUC. **`as_of_ts` + `stress_recall` pg_regress fixtures** (16/16 PASS, F3). RRF Fix-A (F1) benchmarked on N=500 LME-S with bge-m3: −22.44pp regression with `rrf_diag` ordering; **`recall_hybrid()` scoring unchanged** (`fusion_score` primary); F1 deferred to v0.6.2. Gate: [`benchmarks/gate/v0.6.1.json`](benchmarks/gate/v0.6.1.json). See [CHANGELOG.md](CHANGELOG.md).
@@ -24,7 +28,7 @@
 >
 > **Breaking changes (v0.5.0):** 4-argument `traverse_causal_chain(start, max_depth, role, project)` removed — use 2-argument form + `WHERE` clause. `mem_edge` columns renamed: `lesson_a_id` → `source_id`, `lesson_b_id` → `target_id`. Use `pgmnemo.add_edge()` to avoid direct column references. See [docs/MIGRATION.md](docs/MIGRATION.md).
 >
-> **What's next:** v0.6.1 — RRF Fix-A re-attempt with A-scale variant + real-DB CI bench. Full plan: [ROADMAP.md](ROADMAP.md).
+> **What's next:** v0.7 outcome-learning loop (reinforcement-from-outcome recall weighting). Full plan: [ROADMAP.md](ROADMAP.md).
 
 ## Benchmarks (v0.5.1, retrieval-only)
 
@@ -104,7 +108,7 @@ into a recent green run to see which PG versions the latest build passed on.
 **PGXN install (if `pgxnclient` is available):**
 
 ```bash
-pgxn install pgmnemo==0.5.2
+pgxn install pgmnemo==0.7.2
 ```
 
 **Docker (production):** pgmnemo is **pure SQL** — no compilation. Bake files
@@ -112,22 +116,21 @@ into your image with a 3-line Dockerfile:
 
 ```dockerfile
 FROM pgvector/pgvector:pg17
-ADD https://github.com/pgmnemo/pgmnemo/releases/download/v0.5.2/pgmnemo-0.5.2.zip /tmp/
+ADD https://github.com/pgmnemo/pgmnemo/releases/download/v0.7.2/pgmnemo-0.7.2.zip /tmp/
 RUN apt-get update && apt-get install -y --no-install-recommends unzip \
-    && unzip /tmp/pgmnemo-0.5.2.zip -d /tmp/ \
-    && cp /tmp/pgmnemo-0.5.2/extension/pgmnemo.control \
-          /tmp/pgmnemo-0.5.2/extension/pgmnemo--*.sql \
+    && unzip /tmp/pgmnemo-0.7.2.zip -d /tmp/ \
+    && cp -r /tmp/pgmnemo-0.7.2/extension/* \
           /usr/share/postgresql/17/extension/ \
-    && apt-get remove -y unzip && rm -rf /tmp/pgmnemo-0.5.2* /var/lib/apt/lists/*
+    && apt-get remove -y unzip && rm -rf /tmp/pgmnemo-0.7.2* /var/lib/apt/lists/*
 ```
 
 **Dev / laptop one-liner (NOT for production — state lost on container rebuild):**
 
 ```bash
 docker run --name pgmnemo-dev -e POSTGRES_PASSWORD=pass -p 5432:5432 -d pgvector/pgvector:pg17
-curl -L https://github.com/pgmnemo/pgmnemo/releases/download/v0.5.2/pgmnemo-0.5.2.zip -o /tmp/pg.zip
+curl -L https://github.com/pgmnemo/pgmnemo/releases/download/v0.7.2/pgmnemo-0.7.2.zip -o /tmp/pg.zip
 docker cp /tmp/pg.zip pgmnemo-dev:/tmp/
-docker exec pgmnemo-dev bash -c "cd /tmp && unzip -q pg.zip && cp pgmnemo-0.5.2/extension/pgmnemo.control pgmnemo-0.5.2/extension/pgmnemo--*.sql /usr/share/postgresql/17/extension/"
+docker exec pgmnemo-dev bash -c "cd /tmp && unzip -q pg.zip && cp -r pgmnemo-0.7.2/extension/* /usr/share/postgresql/17/extension/"
 ```
 
 ```sql
