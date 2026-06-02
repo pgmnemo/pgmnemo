@@ -252,9 +252,35 @@ jobs:
             echo "Gate file $GATE found — Δ=0 or previously confirmed."
           fi
 
+  # ─── Job 2.5: clean-room install gate (THE gate missing when v0.7.1 shipped) ─
+  # Builds the REAL bundle zip and installs it into a pristine pgvector/pg17
+  # container via the DOCUMENTED path, then CREATE EXTENSION + version assert.
+  # No SQL-source installcheck can catch a packaging double-nest — this can.
+  # The GitHub Release + PGXN/PyPI publish are gated on this passing.
+  clean-room-install:
+    needs: [installcheck, bench-gate]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Extract version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "VERSION=${{ github.event.inputs.version }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build the REAL bundle (single builder)
+        run: scripts/build_pgxn_bundle.sh "${{ steps.version.outputs.VERSION }}"
+
+      - name: Clean-room install the BUILT zip into pgvector/pgvector:pg17
+        run: scripts/clean_room_install_check.sh "${{ steps.version.outputs.VERSION }}"
+
   # ─── Job 3: build PGXN bundle + create GitHub Release ────────────────────
   release:
-    needs: [installcheck, bench-gate]
+    needs: [installcheck, bench-gate, clean-room-install]
     runs-on: ubuntu-latest
     outputs:
       bundle: ${{ steps.bundle.outputs.bundle }}
@@ -274,11 +300,14 @@ jobs:
         id: bundle
         run: |
           VERSION=${{ steps.version.outputs.VERSION }}
+          # Single source of truth for bundle assembly. scripts/build_pgxn_bundle.sh
+          # produces a correctly-structured, single-level extension/ dist and runs
+          # the dist-shape guard (rejects extension/extension/ double-nesting, dev
+          # test assets, and .git/.o/.so/.bak/__pycache__ cruft). The previous inline
+          # copy block here double-nested the extension dir and shipped an
+          # uninstallable v0.7.1 (could not open extension control file).
+          scripts/build_pgxn_bundle.sh "${VERSION}"
           BUNDLE="pgmnemo-${VERSION}.zip"
-          mkdir -p "pgmnemo-${VERSION}/extension"
-          cp -r extension/ "pgmnemo-${VERSION}/extension/"
-          cp Makefile README.md LICENSE CHANGELOG.md META.json "pgmnemo-${VERSION}/"
-          zip -r "${BUNDLE}" "pgmnemo-${VERSION}/"
           echo "bundle=${BUNDLE}" >> "$GITHUB_OUTPUT"
           echo "Built ${BUNDLE} ($(wc -c < ${BUNDLE}) bytes)"
 
@@ -346,7 +375,7 @@ jobs:
   #   Path B — API token (classic): add PYPI_API_TOKEN secret to this GitHub repo.
   #     When PYPI_API_TOKEN is set it overrides OIDC automatically.
   publish-mcp:
-    needs: [installcheck, bench-gate]
+    needs: [installcheck, bench-gate, clean-room-install]
     runs-on: ubuntu-latest
     environment: pypi
     permissions:
@@ -555,7 +584,7 @@ jobs:
   # ─── Job 8: notify-failure (auto-open issue on any failed release job) ────
   notify-failure:
     if: failure()
-    needs: [pre-flight, installcheck, bench-gate, release, publish-mcp, smoke-pypi, smoke-pgxn, notify-telegram]
+    needs: [pre-flight, installcheck, bench-gate, clean-room-install, release, publish-mcp, smoke-pypi, smoke-pgxn, notify-telegram]
     runs-on: ubuntu-latest
     permissions:
       issues: write
