@@ -509,7 +509,7 @@ ALTER EXTENSION pgmnemo UPDATE TO '0.2.1';
 ALTER EXTENSION pgmnemo UPDATE TO '0.4.1';
 ```
 
-- **New SP `pgmnemo.stats()`** — 13-column health-check snapshot (R3 of Agency RFC).
+- **New SP `pgmnemo.stats()`** — 13-column health-check snapshot (R3 of the production-feedback RFC).
   Safe to call from monitoring loops.
 - **`recall_lessons()` output grew 12 → 15 columns** (R4). Appended diagnostic
   columns: `vec_score`, `bm25_score`, `rrf_score`. Named-column callers

@@ -19,7 +19,7 @@ status: complete
 ## 0. Current State Summary
 
 ### v0.6.0 delivered (2026-05-22)
-- `pgmnemo.stats()` `ghost_count BIGINT` column (Agency RFC Q4)
+- `pgmnemo.stats()` `ghost_count BIGINT` column (RFC Q4)
 - `pgmnemo.ingest()` RAISE NOTICE on bitemporal dedup (Q5)
 - `pgmnemo.recall_stats` view (R9)
 - **`recall_lessons()` and `recall_hybrid()` are BYTE-IDENTICAL to v0.5.1**
@@ -319,12 +319,12 @@ COMMIT;  -- GUC resets to NULL
 - Simplest implementation
 
 **Cons:**
-- **API regression**: Agency RFC explicitly requested `recall_lessons(as_of_ts := ...)` syntax for N1 as_of_ts injection pattern (`apps/api/src/api/services/pgmnemo_recall.py:123–274`)
+- **API regression**: the production-feedback RFC explicitly requested `recall_lessons(as_of_ts := ...)` syntax for an as_of_ts injection pattern
 - Forces callers to manage transaction scope for GUC isolation
 - CHANGELOG v0.6.0 already documented `as_of_ts` as a parameter — removing it would be misleading
 - Cannot be used with connection pools that don't support SET LOCAL isolation
 
-**Verdict:** Does not satisfy Agency RFC requirement. Out of scope.
+**Verdict:** Does not satisfy the production-feedback RFC requirement. Out of scope.
 
 ### Recommendation for Feature 2
 
@@ -333,7 +333,7 @@ COMMIT;  -- GUC resets to NULL
 Rationale:
 1. Minimal diff = minimal risk. The v0.6.0 failure was CTE restructuring, not the GUC mechanism.
 2. Consistent with existing GUC patterns in the codebase.
-3. Agency N1 pattern sets the GUC before calling — this is already the downstream integration pattern.
+3. The adopter's pattern sets the GUC before calling — this is already the downstream integration pattern.
 4. smoke_recall_hybrid.py output column assertions unchanged.
 
 **CRITICAL implementation guard:** Do NOT rename, restructure, or add CTEs to `recall_hybrid()`. The only body changes are:

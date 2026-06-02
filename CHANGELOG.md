@@ -28,9 +28,8 @@ pgvector guarantee). Recall ranking (`ORDER BY final_score DESC`) is unchanged.
   `vec_score=0.52`, `match_confidence` is now `0.52` instead of `0.0058`.
   On the text-only path (NULL embedding), `match_confidence = 0.0` (emit via
   existing RAISE NOTICE footgun guard). `recall_lessons()` is **not** affected —
-  its weighted-sum scoring correctly uses `/1.5`. Reproduced live on Agency
-  `agency_v3` (3,905-lesson corpus, bge-m3 embeddings).
-  Source: `PGMNEMO_V070_INTEGRATION_FEEDBACK_2026-05-29.md` §2.
+  its weighted-sum scoring correctly uses `/1.5`. Reproduced live on a
+  production corpus (~3,900 lessons, bge-m3 embeddings).
 
 ### Added
 
@@ -41,7 +40,6 @@ pgvector guarantee). Recall ranking (`ORDER BY final_score DESC`) is unchanged.
   `neutral` outcome is a no-op and is not counted. Eliminates the N-round-trip
   per-call loop workaround needed to avoid a single missing ID aborting the
   whole transaction.
-  Source: `PGMNEMO_V070_INTEGRATION_FEEDBACK_2026-05-29.md` §3.
 
 ### Changed
 
@@ -49,7 +47,6 @@ pgvector guarantee). Recall ranking (`ORDER BY final_score DESC`) is unchanged.
   `match_confidence` formula description and adds: *"graph_proximity contributes
   only when mem_edge is populated; with no edges the graph term is 0 (correct,
   not a bug)."*
-  Source: `PGMNEMO_V070_INTEGRATION_FEEDBACK_2026-05-29.md` §4.
 
 ### Upgrade
 
@@ -150,7 +147,7 @@ added. All changes are backwards-compatible for read paths.
 ### Theme
 
 **Hotfix: `recall_lessons()` and `recall_hybrid()` are now callable without
-`psycopg2.errors.AmbiguousColumn`.** This unblocks Agency production — the error
+`psycopg2.errors.AmbiguousColumn`.** This unblocks production deployments — the error
 surfaced on every pgmnemo dispatch since v0.6.2 was installed. Root cause: PL/pgSQL
 resolved `role` as the `RETURNS TABLE` OUT variable rather than the CTE column, even
 when table-qualified (`al.role`, `r.role`). Fix: `#variable_conflict use_column`
@@ -280,7 +277,7 @@ causing high-cosine answers without BM25 match to rank below BM25-matching non-a
 
 ### Note on R1 (AmbiguousColumn in `recall_lessons` / `recall_hybrid`) — DEFERRED to v0.6.3
 
-Agency production benchmark (`projects/pgmnemo/BENCH_V060_AGENCY_2026-05-23.md` §8 R1)
+A production benchmark on an internal deployment
 reported `psycopg2.errors.AmbiguousColumn: column reference "role" is ambiguous`
 on every production call. Investigation: all bare `role` references inside
 function bodies are already qualified as `al.role`. Root cause is PL/pgSQL
@@ -379,7 +376,7 @@ extension version from backup if needed.
 ### Theme
 
 Temporal recall API (`as_of_ts`) + dedup observability + ghost-count metric.
-Answers Agency RFC Q5/Q6/Q7. RRF Fix-A (rank-based fusion promotion) deferred
+Answers production-feedback RFC Q5/Q6/Q7. RRF Fix-A (rank-based fusion promotion) deferred
 to v0.6.1 after failing the real-database benchmark gate.
 
 ### Note on RRF Fix-A
@@ -698,7 +695,7 @@ long-running agentic workflows.
 ### Removed
 
 - **`pgmnemo.traverse_causal_chain(BIGINT, INT, TEXT[], BOOLEAN)`** — 4-arg overload
-  deprecated in v0.4.1 (Agency RFC R10) is now **dropped**. Use the 5-arg form with
+  deprecated in v0.4.1 (RFC R10) is now **dropped**. Use the 5-arg form with
   an explicit `direction` parameter (`'forward'`, `'backward'`, or `'both'`).
   Migration: `extension/pgmnemo--0.4.1--0.5.0.sql`.
 
@@ -719,7 +716,7 @@ Idempotent. Breaking changes for adopters:
 
 ### Theme
 
-Production hardening per Agency RFC (first external production user, 2026-05-16).
+Production hardening per first external production-user feedback (2026-05-16).
 Operational observability + safe API deprecation + GUC default re-tuning.
 
 ### Bench verdict
@@ -733,7 +730,7 @@ Operational observability + safe API deprecation + GUC default re-tuning.
 | LoCoMo segment | recall@10 | 0.3660 | TBD | TBD | recency_weight 0.08→0.05 may shift vector-only path |
 | LongMemEval-S | recall@10 | 0.9334 | TBD | TBD | hybrid path saturated; expected neutral |
 
-5 R-items from Agency RFC shipped (#18, #20, #21, #24, #27). 3 R-items deferred
+5 R-items from the production-feedback RFC shipped (#18, #20, #21, #24, #27). 3 R-items deferred
 to v0.5.0 (#22, #23 helper SP portion, #27 final removal). 2 R-items deferred
 to v0.6.0 (#25, #26).
 
@@ -780,8 +777,8 @@ to v0.6.0 (#25, #26).
 
 ### Changed
 
-- **`pgmnemo.recency_weight` default 0.08 → 0.05** (R1 code part). Per Agency
-  ablation on production corpus (N=1081, age 0-365d). Adopters who set this
+- **`pgmnemo.recency_weight` default 0.08 → 0.05** (R1 code part). Per an
+  internal ablation on a production corpus (N=1081, age 0-365d). Adopters who set this
   via `ALTER SYSTEM` keep their values across upgrade; only the function-default
   fallback changes. To explicitly use the previous default: `SET pgmnemo.recency_weight = '0.08'`.
 - **`docs/SQL_REFERENCE.md §3 GUCs` rewritten** — 5 recall scoring GUCs +
@@ -790,7 +787,7 @@ to v0.6.0 (#25, #26).
   fixed in commit `1f12c12`.
 - **`docs/USAGE.md` Tuning section** — switched from documenting upstream
   `hnsw.ef_search` to documenting the pgmnemo wrapper GUC; added recency-weight
-  tuning subsection with Agency ablation citation.
+  tuning subsection with the ablation citation.
 - **README** — added Compatibility matrix table (PG 14-17 + pgvector range);
   added pointer block to WORKFLOW + RELEASE_CHECKLIST + BENCHMARK_PROTOCOL
   for maintainer audience.
@@ -803,7 +800,7 @@ to v0.6.0 (#25, #26).
 - **`pgmnemo.traverse_causal_chain(BIGINT, INT, TEXT[], BOOLEAN)`** — the
   4-arg overload now emits `RAISE NOTICE` on every call and delegates to
   the 5-arg form with `direction='forward'`. **Will be REMOVED in v0.5.0.**
-  Update callers to pass `direction` explicitly (R10, Agency-specific).
+  Update callers to pass `direction` explicitly (R10).
   Issue #27.
 
 ### Fixed

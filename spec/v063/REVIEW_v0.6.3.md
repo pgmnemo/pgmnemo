@@ -27,7 +27,7 @@
 | Fixture sweep: no `UPDATE TO '0.6.2'` remaining | ✅ PASS | All 10 fixture files updated |
 | All fixtures now reference `UPDATE TO '0.6.3'` | ✅ PASS | 5 sql + 5 expected files |
 | `CHANGELOG.md` entry >200 chars | ✅ PASS | 4045 chars for [0.6.3] block |
-| `CHANGELOG.md` leads with Agency production unblock | ✅ PASS | "Hotfix: recall_lessons() … unblocks Agency production" |
+| `CHANGELOG.md` leads with production unblock | ✅ PASS | "Hotfix: recall_lessons() … unblocks production" |
 | `README.md` badge updated to 0.6.3 | ✅ PASS | `version-0.6.3-green.svg` |
 | `README.md` v0.6.3 recent-updates note present | ✅ PASS | First item in recent-updates block |
 | `docs/release_notes/v0.6.3_telegram.md` ≤3500 chars | ✅ PASS | 2107 chars |

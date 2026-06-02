@@ -3,7 +3,7 @@
 **Phase:** PLAN  
 **Author:** chief_architect (id=86)  
 **Date:** 2026-05-22  
-**Input:** `spec/competitive/BENCHMARK_FIX_A_RRF_v060.md` + `projects/pgmnemo/DESIGN_AS_OF_TS_V060.md` + `spec/AGENCY_FOLLOWUP_RFC_2026-05-20.md`  
+**Input:** `spec/competitive/BENCHMARK_FIX_A_RRF_v060.md` + internal design notes + the production-feedback follow-up RFC  
 **Deliverable scope:** RRF Fix-A (Option A-norm) + `as_of_ts` param + `ghost_count` in stats + ingest NOTICE
 
 ---
@@ -500,7 +500,7 @@ COMMENT ON FUNCTION pgmnemo.recall_lessons(vector, INT, TEXT, INT, TEXT, TIMESTA
 **Strategy:** Return type changes → must DROP before CREATE.
 
 ```sql
--- §3: pgmnemo.stats() — add ghost_count BIGINT (Agency RFC Q4).
+-- §3: pgmnemo.stats() — add ghost_count BIGINT (RFC Q4).
 -- ghost_count: active lessons with verified_at IS NULL (no commit_sha AND no artifact_hash).
 -- Distinct from orphan_count (functions not owned by extension).
 
@@ -572,7 +572,7 @@ AS $$
          WHERE n.nspname = 'pgmnemo'
            AND p.proname NOT LIKE '\_%' ESCAPE '\'
            AND d.objid IS NULL)                                                    AS orphan_count,
-        -- ghost_count (v0.6.0): active lessons without provenance (Agency RFC Q4)
+        -- ghost_count (v0.6.0): active lessons without provenance (RFC Q4)
         -- Definition: verified_at IS NULL (commit_sha IS NULL AND artifact_hash IS NULL)
         --             AND t_valid_to = 'infinity' (currently active)
         (SELECT COUNT(*)::BIGINT
@@ -582,7 +582,7 @@ AS $$
 $$;
 
 COMMENT ON FUNCTION pgmnemo.stats() IS
-    'v0.6.0 diagnostic health-check. Adds ghost_count (Agency RFC Q4). '
+    'v0.6.0 diagnostic health-check. Adds ghost_count (RFC Q4). '
     'ghost_count: active lessons where verified_at IS NULL — no commit_sha AND no artifact_hash. '
     'Distinct from orphan_count (functions not owned by extension). '
     'Use ghost_count to track provenance migration progress: target < 5% of lesson_count '
@@ -595,10 +595,10 @@ COMMENT ON FUNCTION pgmnemo.stats() IS
 ### §4  `pgmnemo.ingest()` — RAISE NOTICE on bitemporal close+create
 
 **Strategy:** `CREATE OR REPLACE` (signature unchanged). Add pre-insert content_hash
-check; RAISE NOTICE if dedup close fires. Answers Agency RFC Q5.
+check; RAISE NOTICE if dedup close fires. Answers RFC Q5.
 
 ```sql
--- §4: ingest() — add RAISE NOTICE when bitemporal close+create fires (Agency RFC Q5).
+-- §4: ingest() — add RAISE NOTICE when bitemporal close+create fires (RFC Q5).
 -- content_hash formula matches GENERATED ALWAYS AS column:
 --   MD5(COALESCE(role,'') || '|' || COALESCE(topic,'') || '|' || COALESCE(commit_sha, artifact_hash, ''))
 -- Pre-insert count gives caller-visible dedup signal.
@@ -738,7 +738,7 @@ Behavior identical to v0.5.1. **Zero breakage.**
 
 **MCP server (`pgmnemo_mcp/pgmnemo_mcp/server.py`):**
 → MCP calls `recall_lessons` with named params via asyncpg. Add `as_of_ts` to the call-site list
-as optional if/when Agency requests it. Current calls unchanged. **Zero breakage.**
+as optional if/when an adopter requests it. Current calls unchanged. **Zero breakage.**
 
 #### `stats()` → adds `ghost_count BIGINT`
 
@@ -782,7 +782,7 @@ extension/sql/test_v060_rrf_fix_a.sql
 ### 3.2 `test_v060_ghost_count.sql`
 
 ```sql
--- Test: ghost_count in pgmnemo.stats() (Agency RFC Q4)
+-- Test: ghost_count in pgmnemo.stats() (RFC Q4)
 
 -- Setup: insert 2 lessons — one with provenance (commit_sha), one without (ghost)
 SELECT pgmnemo.ingest('test-role', 1, 'topic-prov', 'lesson with provenance',
@@ -861,7 +861,7 @@ FROM pgmnemo.recall_lessons($embedding, 10, NULL, NULL, 'some query text', NOW()
 ### 3.4 `test_v060_ingest_notice.sql`
 
 ```sql
--- Test: RAISE NOTICE on bitemporal close+create (Agency RFC Q5)
+-- Test: RAISE NOTICE on bitemporal close+create (RFC Q5)
 -- pgTAP does not capture RAISE NOTICE directly; test via indirect count verification.
 
 SET pgmnemo.gate_strict = 'off';
@@ -1104,7 +1104,7 @@ from earlier systems), use `recency_weight=0.05` + `temporal_boost=10` or
 ### Theme
 
 RRF Fix-A (rank-based fusion replaces linear fusion) + temporal recall API
-(`as_of_ts`) + dedup observability + ghost-count metric. Answers Agency RFC Q4/Q5/Q6/Q7.
+(`as_of_ts`) + dedup observability + ghost-count metric. Answers RFC Q4/Q5/Q6/Q7.
 
 ### Bench verdict
 
@@ -1125,15 +1125,15 @@ RRF Fix-A (rank-based fusion replaces linear fusion) + temporal recall API
 - **`recall_lessons()` — `as_of_ts TIMESTAMPTZ DEFAULT NULL`** (6th param). Point-in-time
   recall scoping. When non-NULL, restricts to lessons valid at `as_of_ts`
   (`t_valid_from ≤ as_of_ts < t_valid_to`). Backward compatible: existing calls unchanged.
-  Implements "temporal moat" positioning (R4 Final) + Agency RFC Q1 Phase 2.
+  Implements "temporal moat" positioning (R4 Final) + RFC Q1 Phase 2.
 
 - **`pgmnemo.stats()` — `ghost_count BIGINT`** — active lessons without provenance
   (`verified_at IS NULL`). Use to track Phase 4 migration progress toward
-  `include_unverified=off`. Agency RFC Q4.
+  `include_unverified=off`. RFC Q4.
 
 - **`ingest()` — bitemporal close+create NOTICE** — `RAISE NOTICE` when dedup
   bitemporal close+create fires. Message: `"bitemporal close+create fired — closed
-  N prior version(s) (content_hash=...). New lesson_id=..."`. Agency RFC Q5.
+  N prior version(s) (content_hash=...). New lesson_id=..."`. RFC Q5.
 
 ### Upgrade
 
@@ -1328,8 +1328,8 @@ The RRF fix becomes v0.6.1 pending investigation.
 | Item | Reason deferred |
 |------|-----------------|
 | Expose `as_of_ts` directly on `recall_hybrid()` signature | Removes GUC indirection; v0.6.0 uses GUC for minimal blast radius |
-| `CREATE INDEX ix_lesson_bitemp ON pgmnemo.agent_lesson (t_valid_from, t_valid_to)` | Not needed at Agency corpus size (~50k rows); needed at >500k |
-| `recall_lessons_pooled()` — add `as_of_ts` param | Low-priority; cross-role use-case not Agency's Phase 2 requirement |
+| `CREATE INDEX ix_lesson_bitemp ON pgmnemo.agent_lesson (t_valid_from, t_valid_to)` | Not needed at the adopter corpus size (~50k rows); needed at >500k |
+| `recall_lessons_pooled()` — add `as_of_ts` param | Low-priority; cross-role use-case not in the adopter's Phase 2 requirement |
 | `content_hash` update to SHA-256 from MD5 | Collision risk negligible at corpus sizes; breaking schema change |
 
 ---

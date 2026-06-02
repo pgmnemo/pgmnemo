@@ -115,7 +115,7 @@ Full install guide (Docker / PGXN / vendored): [docs/INSTALL.md](INSTALL.md).
 
 ## Honest current state
 
-- **Production user count:** 1 (Agency v2, 1081 lessons, 6 months — see [ADOPTION.md](ADOPTION.md))
+- **Production user count:** 1 (an internal production deployment, 1081 lessons, 6 months)
 - **Latest release:** v0.4.1 (2026-05-17)
 - **Bench numbers:** LoCoMo session recall@10 = 0.84 (paper-canonical, +4pp vs v0.4.0 vector-only); LongMemEval-S = 0.93 (loses to BM25 baseline 0.98 — see [COMPETITIVE_REALITY.md](COMPETITIVE_REALITY.md))
 - **Open issues:** 10 (all tagged with target version)

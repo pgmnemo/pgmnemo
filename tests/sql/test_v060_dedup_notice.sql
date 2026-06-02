@@ -1,4 +1,4 @@
--- Test: RAISE NOTICE on bitemporal close+create (Agency RFC Q5)
+-- Test: RAISE NOTICE on bitemporal close+create (RFC Q5)
 -- pgmnemo v0.6.0
 -- NOTICE content: "bitemporal close+create fired — closed N prior version(s) (content_hash=...). New lesson_id=..."
 --
@@ -142,7 +142,7 @@ WHERE role = 'test-notice'
 --     | grep -c "bitemporal close+create fired"
 --
 -- Expected count: ≥ 2  (fires for T2 second ingest + T5 idempotent re-run + T7 noprov).
--- This is the parseable signal documented in Agency RFC Q5.
+-- This is the parseable signal documented in RFC Q5.
 
 -- ─── Cleanup ─────────────────────────────────────────────────────────────────
 

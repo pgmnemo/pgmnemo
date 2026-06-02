@@ -11,7 +11,7 @@
         "affected_functions": ["recall_hybrid"],
         "scoring_impact": "none — ORDER BY final_score DESC is unchanged; only match_confidence output value changes",
         "recall_ranking_impact": "zero",
-        "agency_reproduction": "score=0.00867 vec_score=0.525 match_confidence=0.00578 (old) vs match_confidence=0.525 (new)"
+        "prod_reproduction": "score=0.00867 vec_score=0.525 match_confidence=0.00578 (old) vs match_confidence=0.525 (new)"
     },
     "minor_2": {
         "description": "New overloaded reinforce(BIGINT[], TEXT) RETURNS INT — batch form that skips missing lesson_ids (CONTINUE, no RAISE) and returns count updated. Scalar reinforce(BIGINT, TEXT) unchanged.",
