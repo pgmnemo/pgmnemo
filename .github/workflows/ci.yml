@@ -251,3 +251,24 @@ jobs:
             echo "::endgroup::"
           done
           echo "✓ All upgrade paths verified to $TARGET_VER"
+
+  clean-room-install:
+    # PR-time packaging gate. Builds the REAL bundle zip (same builder the release
+    # uses) and installs it into a pristine pgvector/pgvector:pg17 container via
+    # the DOCUMENTED path from docs/INSTALL.md, then CREATE EXTENSION + version
+    # assert. This is the gate that was MISSING when v0.7.1 shipped a double-nested
+    # extension/extension/ dist that no SQL-source installcheck could catch.
+    # Docker is preinstalled on GitHub-hosted ubuntu runners.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Read version from control file
+        id: version
+        run: |
+          V=$(grep '^default_version' extension/pgmnemo.control | sed "s/.*= *'//;s/'.*//")
+          echo "VERSION=$V" >> "$GITHUB_OUTPUT"
+          echo "default_version=$V"
+      - name: Build the REAL bundle (single builder)
+        run: scripts/build_pgxn_bundle.sh "${{ steps.version.outputs.VERSION }}"
+      - name: Clean-room install the BUILT zip
+        run: scripts/clean_room_install_check.sh "${{ steps.version.outputs.VERSION }}"

@@ -1,7 +1,7 @@
 # pgmnemo extension control file
 # SPDX-License-Identifier: Apache-2.0
 comment = 'Multi-agent memory substrate for PostgreSQL — provenance-gated, vector-hybrid recall'
-default_version = '0.7.1'
+default_version = '0.7.2'
 requires = 'vector'
 relocatable = false
 schema = 'pgmnemo'

@@ -1,0 +1,17 @@
+{
+    "version": "v0.7.2",
+    "date": "2026-06-01",
+    "pgmnemo_version": "0.7.2",
+    "gate_status": "PASS",
+    "gate_type": "analytical_carry_forward",
+    "note": "PACKAGING-ONLY release. pgmnemo--0.7.2.sql is byte-identical to pgmnemo--0.7.1.sql (modulo header version comment); pgmnemo--0.7.1--0.7.2.sql is a documented no-op (no DDL). No function bodies, signatures, indexes, or scoring change. Recall behaviour is identical to v0.7.1. The only change is the distribution structure (un-nested extension/ dir) plus a new CI clean-room install gate. Analytical carry-forward of the v0.7.1 gate is valid; no new benchmark run is warranted.",
+    "schema_change": false,
+    "scoring_impact": "none",
+    "recall_ranking_impact": "zero",
+    "carry_forward_from": "v0.7.1",
+    "packaging_fix": {
+        "id": "PKG-1",
+        "description": "v0.7.1 published dist double-nested the extension directory (pgmnemo-0.7.1/extension/extension/), making CREATE EXTENSION fail with 'could not open extension control file'. v0.7.2 ships a single-level pgmnemo-0.7.2/extension/ dir.",
+        "verification": "clean-room install of the BUILT zip into pgvector/pgvector:pg17; CREATE EXTENSION vector; CREATE EXTENSION pgmnemo; SELECT pgmnemo.version() => 0.7.2"
+    }
+}
