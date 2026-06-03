@@ -43,17 +43,21 @@ node_modules/
 benchmarks/data/
 benchmarks/results/
 
-# pg_regress outputs
+# pg_regress outputs (root-level and under extension/)
+regression.diffs
+regression.out
 extension/regression.diffs
 extension/regression.out
+results/
 
-# Internal working documents (process, WG, agent prompts, early ADRs)
-spec/*
-!spec/competitive/
-!spec/v060/
-!spec/v061/
-!spec/v062/
-!spec/v063/
+# Python build/packaging artifacts (egg-info etc. — never commit)
+*.egg-info/
+
+# Internal working documents (process, WG, agent prompts, ADRs, audits,
+# delivery/operator/mentor reports). The public OSS repo ships ONLY user-facing
+# content. spec/, research/, design/ are reserved for Agency-private working docs
+# and must NEVER be tracked here — do not add `!` negations to re-include subdirs.
+spec/
 research/
 design/
 *.zip
