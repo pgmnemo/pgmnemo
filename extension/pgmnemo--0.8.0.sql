@@ -4173,7 +4173,7 @@ BEGIN
         WHERE gw.depth > 0
         GROUP BY gw.reached_id
     ),
-    -- Step 7: final score = rrf_sparse + aux + graph
+    -- Step 7: final score = rrf_sparse + aux + graph; safety cap at 200 rows
     final_ranked AS (
         SELECT
             s.id,
@@ -4200,6 +4200,25 @@ BEGIN
             ) AS final_score
         FROM scored s
         LEFT JOIN graph_proximity gp ON gp.lesson_id = s.id
+        ORDER BY (
+                s.rrf_sparse
+              + _aux_scale * (
+                    0.05 * (s.importance::DOUBLE PRECISION / 5.0)
+                  + 0.05 * GREATEST(0.0,
+                               1.0 - LEAST(
+                                   EXTRACT(EPOCH FROM (NOW() - s.created_at)) / (90.0 * 86400.0),
+                                   1.0
+                               )
+                           )::DOUBLE PRECISION
+                  + 0.05 * (CASE
+                              WHEN s.commit_sha IS NOT NULL AND s.verified_at IS NOT NULL THEN 1.0
+                              WHEN s.commit_sha IS NOT NULL                               THEN 0.4
+                              ELSE                                                             0.0
+                            END)::DOUBLE PRECISION
+                )
+              + _graph_weight * COALESCE(gp.proximity, 0.0)
+            ) DESC
+        LIMIT 200  -- safety cap: prevents unbounded result sets for large corpora
     ),
     -- Step 8: budget window — cumulative char sum over score-descending order
     budget_window AS (
@@ -4354,12 +4373,12 @@ BEGIN
         ORDER BY ge.node_id, ge.depth ASC          -- prefer shallower depth
     )
     -- Step 4: union seed + expanded, seed takes priority on id collision
-    SELECT sr.id, sr.lesson_text, sr.expand_detail, sr.navigation_path
+    SELECT sr.id, sr.lesson_text AS content, sr.expand_detail, sr.navigation_path
     FROM seed_rows sr
 
     UNION ALL
 
-    SELECT er.id, er.lesson_text, er.expand_detail, er.navigation_path
+    SELECT er.id, er.lesson_text AS content, er.expand_detail, er.navigation_path
     FROM expanded_rows er
 
     ORDER BY id ASC;
