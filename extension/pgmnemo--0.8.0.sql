@@ -3997,6 +3997,7 @@ CREATE OR REPLACE FUNCTION pgmnemo.navigate_locate(
 )
 RETURNS TABLE (
     id              BIGINT,
+    preview         TEXT,
     score           FLOAT8,
     tokens_consumed INT,
     navigation_path TEXT
@@ -4237,6 +4238,7 @@ BEGIN
     )
     SELECT
         bw.id                                                                         AS id,
+        left(al.lesson_text, 50)                                                      AS preview,
         bw.final_score::FLOAT8                                                        AS score,
         bw.cum_chars::INT                                                             AS tokens_consumed,
         -- navigation_path: jsonb_gate if filter was applied, else dominant retrieval signal
@@ -4246,6 +4248,7 @@ BEGIN
             ELSE 'bm25'
         END                                                                           AS navigation_path
     FROM budget_window bw
+    JOIN pgmnemo.agent_lesson al ON al.id = bw.id
     WHERE bw.rn = 1                                    -- always return first row
        OR (bw.cum_chars - bw.text_len) < token_budget_chars   -- include while under budget
     ORDER BY bw.final_score DESC, bw.id ASC;
@@ -4255,7 +4258,7 @@ $$;
 COMMENT ON FUNCTION pgmnemo.navigate_locate(vector, TEXT, INT, JSONB) IS
     'Token-economy navigation LOCATE (v0.8.0). '
     'Ranks lessons using the same hybrid RRF+aux+graph formula as recall_hybrid v0.6.2. '
-    'Returns ONLY id/score/tokens_consumed/navigation_path — no content. '
+    'Returns id/preview/score/tokens_consumed/navigation_path — preview is first ~50 chars. '
     'token_budget_chars: cumulative char limit; first row always returned. '
     'jsonb_filter: WHERE metadata @> jsonb_filter pushed into candidate scan (uses GIN index). '
     'navigation_path: ''jsonb_gate'' when filter applied; ''vector'' when vec dominant; ''bm25'' otherwise. '
@@ -4280,10 +4283,13 @@ CREATE OR REPLACE FUNCTION pgmnemo.navigate_expand(
     graph_expand_threshold FLOAT            DEFAULT 0.7
 )
 RETURNS TABLE (
-    id              BIGINT,
-    content         TEXT,
-    expand_detail   JSONB,
-    navigation_path TEXT
+    id                      BIGINT,
+    content                 TEXT,
+    expand_detail           JSONB,
+    graph_neighbor_ids      BIGINT[],
+    graph_neighbor_previews TEXT[],
+    tokens_consumed         INT,
+    navigation_path         TEXT
 )
 LANGUAGE plpgsql
 STABLE
@@ -4371,27 +4377,75 @@ BEGIN
         WHERE ge.depth > 0                         -- only expansion rows, not seeds
           AND NOT (ge.node_id = ANY(ids))          -- exclude original input IDs
         ORDER BY ge.node_id, ge.depth ASC          -- prefer shallower depth
+    ),
+    -- Step 4b: deduplicated BFS neighbors per seed (all depths)
+    distinct_neighbors AS (
+        SELECT DISTINCT ON (ge.path[1], ge.node_id)
+            ge.path[1]                                     AS seed_id,
+            ge.node_id,
+            ge.depth,
+            left(ge.lesson_text, 50)                       AS neighbor_preview
+        FROM graph_expand ge
+        WHERE ge.depth > 0
+          AND NOT (ge.node_id = ANY(ids))
+        ORDER BY ge.path[1], ge.node_id, ge.depth ASC
+    ),
+    -- Step 4c: aggregate neighbors per seed — positional correspondence guaranteed
+    neighbor_summary AS (
+        SELECT
+            dn.seed_id,
+            array_agg(dn.node_id ORDER BY dn.depth, dn.node_id)          AS neighbor_ids,
+            array_agg(dn.neighbor_preview ORDER BY dn.depth, dn.node_id) AS neighbor_previews
+        FROM distinct_neighbors dn
+        GROUP BY dn.seed_id
+    ),
+    -- Step 5: union seed + expanded, seed takes priority on id collision
+    combined AS (
+        SELECT sr.id,
+               sr.lesson_text                                  AS content,
+               sr.expand_detail,
+               ns.neighbor_ids                                 AS graph_neighbor_ids,
+               ns.neighbor_previews                            AS graph_neighbor_previews,
+               sr.navigation_path
+        FROM seed_rows sr
+        LEFT JOIN neighbor_summary ns ON ns.seed_id = sr.id
+
+        UNION ALL
+
+        SELECT er.id,
+               er.lesson_text                                  AS content,
+               er.expand_detail,
+               NULL::BIGINT[]                                  AS graph_neighbor_ids,
+               NULL::TEXT[]                                     AS graph_neighbor_previews,
+               er.navigation_path
+        FROM expanded_rows er
     )
-    -- Step 4: union seed + expanded, seed takes priority on id collision
-    SELECT sr.id, sr.lesson_text AS content, sr.expand_detail, sr.navigation_path
-    FROM seed_rows sr
-
-    UNION ALL
-
-    SELECT er.id, er.lesson_text AS content, er.expand_detail, er.navigation_path
-    FROM expanded_rows er
-
-    ORDER BY id ASC;
+    -- Step 6: attach cumulative tokens_consumed
+    SELECT
+        c.id,
+        c.content,
+        c.expand_detail,
+        c.graph_neighbor_ids,
+        c.graph_neighbor_previews,
+        SUM(length(c.content)) OVER (
+            ORDER BY c.id ASC
+            ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+        )::INT                                                 AS tokens_consumed,
+        c.navigation_path
+    FROM combined c
+    ORDER BY c.id ASC;
 END;
 $$;
 
 COMMENT ON FUNCTION pgmnemo.navigate_expand(BIGINT[], TEXT[], INT, FLOAT) IS
     'Token-economy navigation EXPAND (v0.8.0). '
-    'Returns full lesson_text + optional JSONB field projection for caller-chosen IDs. '
+    'Returns full lesson_text + optional JSONB field projection + graph neighbor info for caller-chosen IDs. '
     'ids: IDs returned by navigate_locate (or any source). '
     'expand_fields: keys to project from metadata JSONB into expand_detail (empty = NULL). '
     'graph_expand_depth: BFS depth for causal+temporal edge traversal (0 = no expansion). '
     'graph_expand_threshold: minimum edge weight [0,1] to traverse (default 0.7). '
+    'graph_neighbor_ids/previews: all BFS-discovered neighbors of each seed row (NULL for expanded rows). '
+    'tokens_consumed: cumulative char count across all rows (running sum of length(lesson_text)). '
     'navigation_path: ''content'' for requested IDs; ''graph_expand'' for BFS neighbours. '
     'Typically called after navigate_locate(); use navigate_locate() to discover IDs '
     'within a token budget, then navigate_expand() to retrieve content for chosen subset.';

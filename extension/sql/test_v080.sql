@@ -105,6 +105,8 @@ WHERE role = 'tc_v080' AND topic = 'lesson_a';
 
 SELECT
     id IS NOT NULL          AS t3_has_id,
+    preview IS NOT NULL     AS t3_has_preview,
+    length(preview) <= 50   AS t3_preview_max50,
     score >= 0.0            AS t3_score_nonneg,
     tokens_consumed > 0     AS t3_tokens_positive,
     navigation_path IS NOT NULL AS t3_has_nav_path
@@ -195,6 +197,8 @@ LIMIT 1;
 SELECT
     ne.content IS NOT NULL          AS t8_has_content,
     length(ne.content) > 0          AS t8_content_nonempty,
+    ne.tokens_consumed > 0          AS t8_has_tokens_consumed,
+    ne.tokens_consumed >= length(ne.content) AS t8_tokens_ge_len,
     ne.navigation_path = 'content'  AS t8_nav_path_content
 FROM (
     SELECT id FROM pgmnemo.agent_lesson
@@ -266,6 +270,29 @@ CROSS JOIN LATERAL pgmnemo.navigate_expand(
     1,     -- depth=1: traverse one hop
     0.8    -- threshold < 0.9 edge weight → edge is traversed
 ) ne;
+
+-- =============================================================================
+-- T10b: navigate_expand — graph_neighbor_ids populated for seed rows
+--       The seed (lesson_a) has a causal edge to lesson_b → neighbor_ids non-null.
+-- =============================================================================
+
+SELECT
+    ne.graph_neighbor_ids IS NOT NULL                  AS t10b_has_neighbor_ids,
+    array_length(ne.graph_neighbor_ids, 1) >= 1        AS t10b_at_least_one_neighbor,
+    ne.graph_neighbor_previews IS NOT NULL              AS t10b_has_neighbor_previews,
+    ne.tokens_consumed > 0                             AS t10b_has_tokens
+FROM (
+    SELECT id FROM pgmnemo.agent_lesson
+    WHERE role = 'tc_v080' AND topic = 'lesson_a'
+    LIMIT 1
+) seed
+CROSS JOIN LATERAL pgmnemo.navigate_expand(
+    ARRAY[seed.id],
+    '{}',
+    1,
+    0.8
+) ne
+WHERE ne.navigation_path = 'content';
 
 -- =============================================================================
 -- T11: reembed() — updates embedding + embedding_at, preserves lesson_text
