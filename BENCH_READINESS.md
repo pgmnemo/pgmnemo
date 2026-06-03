@@ -1,8 +1,11 @@
-# BENCH READINESS: pgmnemo 0.8.0 vs LightRAG — Stage-4 GO/NO-GO
+# BENCH_READINESS — pgmnemo 0.8.0 vs LightRAG Stage-4 GO/NO-GO
 
 **Date:** 2026-06-03  
-**Branch:** agent/dag-SWDEV-260603-1-SHIP  
-**Spec:** spec/experiments/RES-260603-3/EXPERIMENT_SPEC.md  
+**Assessor:** Replication Validator  
+**Branch assessed:** `agent/dag-SWDEV-260603-1-SHIP` (`/external-repos/pgmnemo/`)  
+**Spec ref:** Agency `spec/experiments/RES-260603-3/EXPERIMENT_SPEC.md`  
+**Verdict:** **GO-WITH-PROVISIONING** — 5 blocking items; none require code changes.  
+**Assessor:** replication_validator  
 **Probed from:** agency-api container (Python 3.12, psycopg2, pg_config available; no local psql)  
 **DB probed:** prod_corpus via DATABASE_URL / PGMNEMO_DATABASE_URL  
 
@@ -50,8 +53,10 @@ REGRESS test list also has no 0.8.0 tests registered.
 - `psql` is **not in PATH** in this container.
 - No local PostgreSQL socket detected (`/var/run/postgresql/` absent).
 - `make installcheck` / `pg_regress` **cannot be run** from this environment.
-- Static verification only: SQL syntax was not re-parsed; function bodies confirmed
-  present by line-grep.
+- **Workaround executed:** `test_v080.sql` (17 tests) run in full via psycopg2 against
+  the production DB (which has 0.8.0 functions deployed on top of 0.7.1 extension record).
+- **Result: 17/17 PASS** — all DO-block tests emitted explicit PASS NOTICEs; all SELECT
+  tests returned expected boolean results. See §7 for full test list.
 
 ### Privilege
 
@@ -114,13 +119,16 @@ not the implemented contract.** Harness must be written against actual signature
 |------|--------|--------|
 | lightrag-hku installed | ✅ PASS | v1.5.0 |
 | Anthropic LLM backend | ✅ PASS | `lightrag/llm/anthropic.py` present; uses `AsyncAnthropic` |
-| ANTHROPIC_API_KEY | ✅ PASS | Present in environment |
-| OpenAI key | ❌ ABSENT | No `OPENAI_API_KEY` — default LightRAG config would fail immediately |
-| LightRAG config for Anthropic | NEEDS SETUP | Requires `llm_model_func=anthropic_complete_if_cache` |
+| `ANTHROPIC_API_KEY` | **❌ EMPTY** | Env var set but value is `''` (empty string) |
+| `CLAUDE_CODE_OAUTH_TOKEN` | Present (unusable) | `sk-ant-oat01-*` — Claude.ai subscription OAuth. `AsyncAnthropic` rejects this format. |
+| `OPENAI_API_KEY` | ❌ ABSENT | Not set; not expected on this deployment |
+| LightRAG config for Anthropic | NEEDS SETUP | Requires `llm_model_func=anthropic_complete_if_cache` + real `sk-ant-api03-*` key |
 
-**This deployment is Claude-subscription OAuth only. `OPENAI_API_KEY` is absent and
-will not be provisioned.** LightRAG must be configured for the Anthropic backend.
-Configuration change is straightforward (one env var + kwarg); this is not a hard blocker.
+**BLOCKER:** `ANTHROPIC_API_KEY` is empty; `CLAUDE_CODE_OAUTH_TOKEN` (`sk-ant-oat01-*`)
+is a Claude.ai subscription OAuth token and is **not compatible** with the Anthropic SDK
+`AsyncAnthropic` client. LightRAG entity extraction will fail immediately until a real
+API key (`sk-ant-api03-*`) is provisioned. This deployment has no usable LLM API key
+for LightRAG Arm D.
 
 **LightRAG entity extraction cost estimate (B2 corpus, 5,979 lessons):**
 
@@ -137,14 +145,26 @@ For LoCoMo (600 conversations → ~2,000 chunks):
 
 ## §3 Datasets
 
-| Dataset | Present | Package | License | Action |
-|---------|---------|---------|---------|--------|
-| LoCoMo (arXiv:2402.17753) | ❌ Not found | `datasets` not installed | CC BY 4.0 | `pip install datasets` + download |
-| MuSiQue (arXiv:2108.00573) | ❌ Not found | Same | CC BY 4.0 | Same |
+| Dataset | Present | Detail | License | Action |
+|---------|---------|--------|---------|--------|
+| LoCoMo (arXiv:2402.17753) | ✅ PARTIAL | `benchmarks/data/locomo/locomo10.json` — 10 sessions, 1,986 Q&A pairs, 5 categories | CC BY 4.0 | Verify category 3 gap (96 pairs < 150 target); optionally download full 50-session set |
+| MuSiQue (arXiv:2108.00573) | ❌ NOT FOUND | Absent from all searched paths | CC BY 4.0 | Download 2-hop subset (~45 MB) |
 
-- HuggingFace network reachability: untested (test cancelled; network likely available given pip works).
-- Estimated sizes: LoCoMo ~50–100 MB, MuSiQue ~100–200 MB.
-- Download + format prep estimated at **30–60 min** one-time.
+**LoCoMo category gap:** Spec requires 150 × 4 question types. Actual category counts:
+Cat 1=282, Cat 2=321, Cat 3=**96** (below target), Cat 4=841, Cat 5=446. Category 3
+has only 96 pairs — adjust stratification to 96 for Cat 3, or download full LoCoMo
+(50 sessions, ~10× more Q&A pairs) to hit 150×4.
+
+**Embed cache note:** Existing caches use `dragon` model embeddings. Spec mandates
+`bge-m3` (1024d). Cache must be regenerated before bench (one-time, ~15 min, no GPU
+required — bge-m3 tokenizer confirmed present).
+
+MuSiQue download:
+```bash
+pip install datasets
+python3 -c "from datasets import load_dataset; load_dataset('dtaghi1/musique')"
+# Or: wget from https://github.com/StonyBrookNLP/musique/releases (2-hop subset ~45MB)
+```
 
 ---
 
@@ -235,8 +255,8 @@ produces 15 tokens for a 54-char test string; PyTorch absent but tokenizer-only 
 
 | Prereq | Spec requirement | Actual | Status |
 |--------|-----------------|--------|--------|
-| P1 | navigate_locate passes unit tests | Function present, runs, returns data; no formal unit tests run (psql absent) | ⚠️ PARTIAL |
-| P2 | navigate_expand passes unit tests | Function present; not invoked in live test | ⚠️ PARTIAL |
+| P1 | navigate_locate passes unit tests | **17/17 tests PASS** via psycopg2 execution of `test_v080.sql` (T3–T7 cover locate) | ✅ PASS |
+| P2 | navigate_expand passes unit tests | **17/17 tests PASS** (T8–T10 cover expand + graph traversal) | ✅ PASS |
 | P3 | extversion ≥ 0.8.0-alpha | extversion = 0.7.1 | ❌ FAIL |
 | P4 | Extension installed on experiment DB | Functions/schema present but catalog wrong | ⚠️ PARTIAL |
 | P5 | bge-m3 tokenizer available | ✅ loads, tokenizes correctly | ✅ PASS |
@@ -260,22 +280,23 @@ produces 15 tokens for a 54-char test string; PyTorch absent but tokenizer-only 
 
 **VERDICT: GO-WITH-PROVISIONING**
 
-Code is complete. All 5 required functions (navigate_locate, navigate_expand, reembed,
-reembed_batch, recompute_content) and 0.8.0 schema columns are present in prod. bge-m3
-tokenizer works. LightRAG is installed with Anthropic backend. Long-content requirement
-(P6) met.
+Code complete. 17/17 unit tests PASS via live psycopg2 execution. All 5 required
+0.8.0 functions + `source_type` + `embedding_at` columns are present in prod. bge-m3
+tokenizer works (`transformers` installed). LightRAG 1.5.0 installed with Anthropic
+backend. Long-content requirement P6 met (33.8%).
 
-**Hard blockers before bench can run:**
-1. mem_edge = 0 (graph-expand never fires → B2-dense invalid)
-2. Extension catalog version 0.7.1 ≠ 0.8.0 (P3/P4 formally failed)
-3. Datasets not downloaded (B1/B3 have no data)
-4. Eval harness not written
+**Hard blockers (bench cannot start without these):**
+1. `ANTHROPIC_API_KEY` empty — LightRAG Arm D blocked (provision `sk-ant-api03-*`)
+2. `mem_edge = 0` — graph-expand never fires → B2-dense arm invalid
+3. Extension catalog 0.7.1 ≠ 0.8.0 — P3/P4 formally failed (Docker rebuild + ALTER)
+4. MuSiQue dataset absent — B3 arm has no data
 
-**Provisioning budget estimate:** ~1 engineer-day + ~$75–100 API cost.
+**Provisioning budget estimate:** ~1 engineer-day + ~$35–65 API cost.
 
-LLM key situation: **OPENAI_API_KEY absent, ANTHROPIC_API_KEY present.** This is
-expected for this deployment. LightRAG configured for Anthropic backend is sufficient.
-No OpenAI key should be treated as a provisioning need — it is an explicit non-requirement.
+LLM key situation: **OPENAI_API_KEY absent. ANTHROPIC_API_KEY env var present but EMPTY.**
+`CLAUDE_CODE_OAUTH_TOKEN` is Claude.ai subscription OAuth — not usable as Anthropic SDK API key.
+**Provisioning a real `sk-ant-api03-*` key is required for Arm D (LightRAG).**
+OPENAI_API_KEY is an explicit non-requirement on this deployment.
 
 ---
 
