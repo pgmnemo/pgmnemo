@@ -5,6 +5,63 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [0.8.0] — 2026-06-03
+
+### Theme
+
+**Token-economy navigation API + production maintenance primitives.**
+Introduces a two-phase locate/expand pattern for cost-aware retrieval:
+`navigate_locate()` returns only IDs within a token budget; `navigate_expand()`
+fetches content and optional graph neighbours on demand. Adds `reembed()`,
+`reembed_batch()`, and `recompute_content()` for safe in-place updates that
+coexist with live ingestion. Adds `source_type` column for origin classification.
+
+### Added
+
+- **`navigate_locate(query_embedding, query_text, token_budget_chars, jsonb_filter)`**
+  Budget-bounded LOCATE. Uses the same hybrid RRF+aux+graph ranking formula as
+  `recall_hybrid` but stops returning rows once the cumulative char sum of
+  results exceeds `token_budget_chars`. JSONB predicate (`metadata @>
+  jsonb_filter`) is pushed into the candidate scan to use the existing GIN
+  index. Returns only `id`, `score`, `tokens_consumed`, and `navigation_path`
+  (`'vector'`, `'bm25'`, or `'jsonb_gate'`) — no content.
+
+- **`navigate_expand(ids, expand_fields, graph_expand_depth, graph_expand_threshold)`**
+  On-demand content retrieval for caller-chosen IDs. Returns `lesson_text` plus
+  optional `expand_detail` JSONB (selected keys from `metadata`). When
+  `graph_expand_depth >= 1`, follows `causal`/`temporal` edges with
+  `weight >= graph_expand_threshold` up to the specified depth, adding
+  discovered neighbours with `navigation_path='graph_expand'`.
+
+- **`reembed(lesson_id, new_vector)`** — Refreshes the embedding of a single
+  active lesson. UPDATE-only: does not trigger the bitemporal `close+create`
+  cycle. Updates `embedding_at` timestamp.
+
+- **`reembed_batch(lesson_ids, new_vectors)`** — Batch version of `reembed`.
+  Uses `FOR UPDATE SKIP LOCKED` to coexist safely with concurrent ingest.
+  Returns the count of rows actually updated.
+
+- **`recompute_content(lesson_id, new_text)`** — Updates `lesson_text` in
+  place without creating a new bitemporal row. `content_hash`, `lesson_tsv`,
+  and `updated_at` are refreshed automatically by PG cascades; `id`, edges,
+  provenance, and `confidence` are preserved.
+
+- **`agent_lesson.source_type TEXT`** — Origin classification column with
+  `CHECK (source_type IN ('agent_authored','auto_captured','imported','system'))`,
+  default `'auto_captured'`.
+
+- **`agent_lesson.embedding_at TIMESTAMPTZ`** — Tracks the timestamp of the
+  most recent embedding refresh. Backfilled to `updated_at` on upgrade.
+
+### Notes
+
+- All existing function signatures unchanged (additive release).
+- No compiled code; trusted PL/pgSQL throughout.
+- `navigate_locate` + `navigate_expand` are designed to work together:
+  locate IDs within budget first, then expand only the IDs you need.
+
+---
+
 ## [0.7.2] — 2026-06-01
 
 ### Theme
