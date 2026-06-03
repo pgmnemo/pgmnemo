@@ -101,7 +101,7 @@ DECLARE
     _has_text           BOOLEAN;
     _has_vec            BOOLEAN;
     _graph_weight       DOUBLE PRECISION;
-    _max_depth          CONSTANT INT := 5;
+    _max_depth          CONSTANT INT := 2;  -- proximity scoring: 2-hop sufficient; deeper = navigate_expand
     _rrf_k_f            DOUBLE PRECISION;
     _aux_scale          CONSTANT DOUBLE PRECISION := (0.8 / 61.0) / 0.76;
     _as_of_ts           TIMESTAMPTZ;
@@ -242,23 +242,24 @@ BEGIN
     anchors AS (
         SELECT id FROM scored ORDER BY rrf_sparse DESC LIMIT 5
     ),
-    -- Step 5: BFS on causal + temporal edges from top-5 anchors
-    graph_walk (anchor_id, depth, reached_id) AS (
-        SELECT id, 0, id FROM anchors
+    -- Step 5: BFS on causal + temporal edges from top-5 anchors (depth-capped, cycle-safe)
+    graph_walk (depth, reached_id) AS (
+        SELECT 0, id FROM anchors
         UNION ALL
-        SELECT gw.anchor_id, gw.depth + 1, me.target_id
+        SELECT gw.depth + 1, me.target_id
         FROM graph_walk gw
         JOIN pgmnemo.mem_edge me ON me.source_id = gw.reached_id
         WHERE me.edge_kind IN ('causal', 'temporal')
           AND gw.depth < _max_depth
-    ),
+          AND NOT gw.is_cycle
+    ) CYCLE reached_id SET is_cycle USING _gw_path,
     -- Step 6: proximity score from BFS depth
     graph_proximity AS (
         SELECT
             gw.reached_id AS lesson_id,
             MAX(1.0 - gw.depth::DOUBLE PRECISION / _max_depth::DOUBLE PRECISION) AS proximity
         FROM graph_walk gw
-        WHERE gw.depth > 0
+        WHERE gw.depth > 0 AND NOT gw.is_cycle
         GROUP BY gw.reached_id
     ),
     -- Step 7: final score = rrf_sparse + aux + graph; safety cap at 200 rows

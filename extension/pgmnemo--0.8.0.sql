@@ -4014,7 +4014,7 @@ DECLARE
     _has_text           BOOLEAN;
     _has_vec            BOOLEAN;
     _graph_weight       DOUBLE PRECISION;
-    _max_depth          CONSTANT INT := 5;
+    _max_depth          CONSTANT INT := 2;  -- proximity scoring: 2-hop sufficient; deeper = navigate_expand
     _rrf_k_f            DOUBLE PRECISION;
     _aux_scale          CONSTANT DOUBLE PRECISION := (0.8 / 61.0) / 0.76;
     _as_of_ts           TIMESTAMPTZ;
