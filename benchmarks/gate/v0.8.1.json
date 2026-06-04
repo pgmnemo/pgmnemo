@@ -1,0 +1,13 @@
+{
+    "version": "v0.8.1",
+    "date": "2026-06-04",
+    "pgmnemo_version": "0.8.1",
+    "gate_status": "PASS",
+    "gate_type": "analytical_carry_forward",
+    "note": "Documentation + adoption release. No schema change and no scoring/ranking change. The only code change is a function-body refresh of _enforce_provenance_gate(): the rejection message now names both relaxation modes ('warn' and 'off') and recommends supplying provenance — message text only, gate behaviour and recall ranking are byte-identical in effect to v0.8.0. Adds AGENTS.md (agent integration guide), positioning reframe across README/POSITIONING/WHY_PGMNEMO/ROADMAP, a 'Disabling the provenance gate' FAQ in SQL_REFERENCE.md, and resolves adoption issues #18/#19/#20/#24. Recall@k carries forward from v0.8.0 unchanged.",
+    "schema_change": false,
+    "scoring_impact": "none",
+    "recall_ranking_impact": "zero",
+    "carry_forward_from": "v0.8.0",
+    "verification": "Full pg_regress extension suite 21/21 PASS on PostgreSQL 17; fresh CREATE EXTENSION at default_version 0.8.1 via the 0.8.0 + 0.8.0->0.8.1 chain verified; ALTER EXTENSION UPDATE TO '0.8.1' applies the function-body refresh; gate rejection message confirmed to name 'warn' and 'off'."
+}
