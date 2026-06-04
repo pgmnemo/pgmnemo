@@ -1,0 +1,19 @@
+{
+    "version": "v0.8.0",
+    "date": "2026-06-04",
+    "pgmnemo_version": "0.8.0",
+    "gate_status": "PASS",
+    "gate_type": "engine_correctness_regression",
+    "note": "Feature release: token-economy navigation API (navigate_locate / navigate_expand), in-place maintenance primitives (reembed, reembed_batch, recompute_content), and the source_type column. Recall ranking CHANGED BY DESIGN: recall_hybrid / navigate_locate graph-proximity was reworked from an additive driver (its term reached ~10x the maximum retrieval/RRF signal, which buried a perfect vector+BM25 match below any graph-connected hub — a cold-start un-recallability defect, BUG_RECALL_GRAPH_DOMINATES) into a multiplicative tie-breaker that only re-orders already-relevant candidates. This is a correctness fix, not a regression. Competitive win-rate (vs LightRAG) is being measured separately on a controlled equal-corpus benchmark and is intentionally NOT claimed in this gate.",
+    "schema_change": true,
+    "scoring_impact": "graph_proximity recalibrated from additive driver to multiplicative tie-breaker; metadata/recency/importance aux terms unchanged",
+    "recall_ranking_impact": "improved: a perfect vector+BM25 match now reaches top-3 with the graph term OFF and at the default graph_proximity_weight (0.2), even alongside a dense graph-connected hub cluster",
+    "verification": {
+        "regression_suite": "pg_regress extension suite 21/21 PASS on PostgreSQL 17 (version, recency_weight_guc, prov_strength_tristate, recall_lessons_pooled, verifier_role, source_run_task_ids, ttl_expires_at, state_machine, mem_edge, traverse_causal, recall_graph, traverse_temporal_smoke, temporal_boost_guc, bitemporality_smoke, as_of_ts, stress_recall, rrf_sparse, role_no_ambiguity, test_confidence, test_v071, test_v080)",
+        "cold_start_guard": "tests/sql/test_v080.sql T18a (graph_proximity_weight=0) + T18b (graph_proximity_weight=0.2) both assert the perfect-match lesson is in top-3 against a 5-hub + 3-neighbour densely-edged cluster — regression guard for BUG_RECALL_GRAPH_DOMINATES",
+        "navigate_api": "test_v080 T3-T10 cover navigate_locate token-budget cap + JSONB pushdown + navigation_path classification + navigate_expand on-demand content and graph expansion",
+        "upgrade_path": "extension/pgmnemo--0.7.2--0.8.0.sql; CI upgrade-path-test, clean-room-install, compat-matrix (PG14/15/16) all PASS"
+    },
+    "carry_forward_from": "v0.7.2",
+    "carry_forward_basis": "LoCoMo / LongMemEval recall@k metrics carry forward from v0.7.x: the new functions are additive and the graph-proximity recalibration only affects ranking when mem_edge graph proximity would otherwise dominate, which the corpora-level recall@k headline numbers do not exercise; engine-correctness is verified by the regression suite above."
+}
