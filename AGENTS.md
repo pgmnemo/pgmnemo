@@ -142,7 +142,7 @@ and is returned as `match_confidence` in recall output.
 
 ```sql
 -- Single lesson — returns new confidence REAL [0,1]
-SELECT pgmnemo.reinforce(lesson_id := 42, p_outcome := 'success');
+SELECT pgmnemo.reinforce(p_lesson_id := 42, p_outcome := 'success');
 -- 'success' → confidence += 0.10, increments success_count
 -- 'failure' → confidence -= 0.15, increments fail_count
 -- 'neutral' → no-op, returns current confidence
