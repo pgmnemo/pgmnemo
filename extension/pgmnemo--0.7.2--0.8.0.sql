@@ -107,6 +107,7 @@ DECLARE
     _as_of_ts           TIMESTAMPTZ;
     _vec_weight         CONSTANT DOUBLE PRECISION := 0.4;
     _bm25_weight        CONSTANT DOUBLE PRECISION := 0.4;
+    _raw_blend_weight   DOUBLE PRECISION;  -- v0.8.1 F2: cardinal raw score blend
 BEGIN
     -- Validate: need at least one retrieval signal
     _has_vec  := query_embedding IS NOT NULL;
@@ -116,6 +117,7 @@ BEGIN
     END IF;
 
     _rrf_k_f := 60.0;
+    _raw_blend_weight := 1.0 / (_rrf_k_f + 1.0);  -- same order as max RRF per signal
 
     -- ef_search GUC
     BEGIN
@@ -185,10 +187,13 @@ BEGIN
                 THEN (1.0 - (al.embedding <=> query_embedding))::DOUBLE PRECISION
                 ELSE 0.0::DOUBLE PRECISION
             END AS raw_vec_score,
-            -- BM25 score (ts_rank_cd norm=32 → bounded [0,1])
+            -- v0.8.1 F3: topic in BM25 — setweight(topic, 'A') || lesson_tsv
             CASE
-                WHEN _has_text AND al.lesson_tsv @@ _tsquery
-                THEN ts_rank_cd(al.lesson_tsv, _tsquery, 32)::DOUBLE PRECISION
+                WHEN _has_text AND (al.lesson_tsv @@ _tsquery
+                     OR to_tsvector('english', COALESCE(al.topic, '')) @@ _tsquery)
+                THEN ts_rank_cd(
+                    setweight(to_tsvector('english', COALESCE(al.topic, '')), 'A') || al.lesson_tsv,
+                    _tsquery, 32)::DOUBLE PRECISION
                 ELSE 0.0::DOUBLE PRECISION
             END AS raw_bm25_score
         FROM pgmnemo.agent_lesson al
@@ -200,10 +205,11 @@ BEGIN
           AND (_as_of_ts IS NULL
                OR (al.t_valid_from <= _as_of_ts AND al.t_valid_to > _as_of_ts))
           AND (_as_of_ts IS NOT NULL OR al.t_valid_to = 'infinity'::TIMESTAMPTZ)
-          -- union: matched by vector OR BM25
+          -- union: matched by vector OR BM25 (including topic match)
           AND (
               (_has_vec  AND al.embedding  IS NOT NULL)
-           OR (_has_text AND al.lesson_tsv @@ _tsquery)
+           OR (_has_text AND (al.lesson_tsv @@ _tsquery
+               OR to_tsvector('english', COALESCE(al.topic, '')) @@ _tsquery))
           )
     ),
     -- Step 2: sparse-safe RRF ranks (Cormack 2009)
@@ -231,10 +237,13 @@ BEGIN
             COALESCE(r.bm25_rank_sparse, r.n_candidates + 1) AS bm25_rank_eff,
             r.raw_vec_score,
             r.raw_bm25_score,
-            -- rrf_sparse primary score
+            -- v0.8.1 F2: ordinal RRF + cardinal raw score blend (absolute match strength survives)
             (_vec_weight  / (_rrf_k_f + r.vec_rank::DOUBLE PRECISION)
            + _bm25_weight / (_rrf_k_f + COALESCE(r.bm25_rank_sparse,
-                                                   r.n_candidates + 1)::DOUBLE PRECISION))
+                                                   r.n_candidates + 1)::DOUBLE PRECISION)
+           + _raw_blend_weight * (
+                 _vec_weight  * r.raw_vec_score
+               + _bm25_weight * r.raw_bm25_score))
                 AS rrf_sparse
         FROM rrf_ranked r
     ),
@@ -262,7 +271,8 @@ BEGIN
         WHERE gw.depth > 0 AND NOT gw.is_cycle
         GROUP BY gw.reached_id
     ),
-    -- Step 7: final score = rrf_sparse + aux + graph; safety cap at 200 rows
+    -- Step 7: final score = (rrf_sparse + aux) * (1 + graph); safety cap at 200 rows
+    -- v0.8.1 F1: graph is multiplicative re-rank (tie-breaker, not driver)
     final_ranked AS (
         SELECT
             s.id,
@@ -285,8 +295,8 @@ BEGIN
                               ELSE                                                             0.0
                             END)::DOUBLE PRECISION
                 )
-              + _graph_weight * COALESCE(gp.proximity, 0.0)
-            ) AS final_score
+            ) * (1.0 + _graph_weight * COALESCE(gp.proximity, 0.0))
+              AS final_score
         FROM scored s
         LEFT JOIN graph_proximity gp ON gp.lesson_id = s.id
         ORDER BY (
@@ -305,8 +315,8 @@ BEGIN
                               ELSE                                                             0.0
                             END)::DOUBLE PRECISION
                 )
-              + _graph_weight * COALESCE(gp.proximity, 0.0)
-            ) DESC
+            ) * (1.0 + _graph_weight * COALESCE(gp.proximity, 0.0))
+            DESC
         LIMIT 200  -- safety cap: prevents unbounded result sets for large corpora
     ),
     -- Step 8: budget window — cumulative char sum over score-descending order
