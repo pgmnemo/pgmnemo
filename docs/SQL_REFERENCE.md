@@ -220,6 +220,35 @@ Provenance gate behavior set by GUC `pgmnemo.gate_strict`:
 - `warn`: succeed, emit WARNING, leave `verified_at` NULL
 - `off`: no check (development only)
 
+#### Disabling the provenance gate
+
+If `ingest()` / `INSERT` is rejected with `pgmnemo provenance gate [enforce]:
+INSERT rejected`, the gate is doing its job — it requires every lesson to carry a
+`commit_sha` or `artifact_hash`. You can relax or disable it via the
+`pgmnemo.gate_strict` GUC at the scope you need:
+
+```sql
+-- Current connection only:
+SET pgmnemo.gate_strict = 'off';
+
+-- Current transaction only:
+SET LOCAL pgmnemo.gate_strict = 'off';
+
+-- Persistently for a whole database (applies to new connections):
+ALTER DATABASE mydb SET pgmnemo.gate_strict = 'off';
+
+-- Persistently for a specific role:
+ALTER ROLE myuser SET pgmnemo.gate_strict = 'off';
+```
+
+Use `'warn'` instead of `'off'` to keep writes flowing while still logging an
+audit warning for each unprovenanced row.
+
+**Recommended:** rather than turning the gate off, pass `commit_sha` or
+`artifact_hash` when you ingest. The write then succeeds in **any** mode and the
+lesson keeps its provenance (and stays eligible for recall — unprovenanced rows
+are "ghost" lessons with `verified_at IS NULL`, excluded from recall by default).
+
 **Bitemporal dedup NOTICE (v0.6.0, RFC Q5):** When an `INSERT` triggers
 the `trg_agent_lesson_bitemporal_close` trigger (same `content_hash` as an active
 row), `ingest()` emits:
