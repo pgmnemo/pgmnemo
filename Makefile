@@ -1,12 +1,12 @@
 EXTENSION    = pgmnemo
-EXTVERSION   = 0.7.2
+EXTVERSION   = 0.8.0
 
 DATA         = $(wildcard extension/*--*.sql)
 DOCS         = $(wildcard doc/*.md)
 # List only tests that have matching expected/*.out files.
 # Historical tests (v060, v070) are kept in tests/sql/ for reference
 # but excluded from REGRESS until expected files are authored.
-REGRESS      = test_v071
+REGRESS      = test_v071 test_v080
 REGRESS_OPTS = --inputdir=tests --load-extension=vector --load-extension=$(EXTENSION)
 
 PG_CONFIG    = pg_config
