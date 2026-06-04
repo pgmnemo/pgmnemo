@@ -1,17 +1,17 @@
 {
    "name": "pgmnemo",
-   "abstract": "Provenance-gated, vector-hybrid memory for LLM agents in PostgreSQL",
-   "description": "pgmnemo adds a first-class memory layer to PostgreSQL for LLM-based agents. Every ingest() call requires a commit_sha or artifact_hash provenance token; rows without provenance are blocked or warned. Hybrid recall combines cosine similarity (HNSW via pgvector), BM25 full-text search, recency decay, and importance weighting in a single SQL call. Includes RLS-based multi-tenant isolation, causal-chain traversal, temporal windowed recall, and graph-proximity scoring.",
-   "version": "0.8.0",
+   "abstract": "Single-plan multimodal agent memory for PostgreSQL \u2014 token-budget navigation, provenance-gated writes, outcome-learning",
+   "description": "pgmnemo is a PostgreSQL extension that fuses HNSW vector search (pgvector), BM25 full-text, graph-edge proximity, and JSONB metadata filtering into one SQL query plan inside your existing database. No new service, no data egress, no LLM cost per write. Features: provenance-gated writes (enforce/warn/off), token-economy navigation (navigate_locate + navigate_expand), outcome-learning (reinforce/confidence), bitemporal point-in-time recall, ACID in-place embedding updates, and multi-tenant RLS. Apache-2.0.",
+   "version": "0.8.1",
    "maintainer": [
       "Alex Gaydabura <asistentgaidaburas@gmail.com>"
    ],
    "license": "apache_2_0",
    "provides": {
       "pgmnemo": {
-         "abstract": "Provenance-gated, vector-hybrid memory for LLM agents in PostgreSQL",
-         "version": "0.8.0",
-         "file": "extension/pgmnemo--0.8.0.sql",
+         "abstract": "Single-plan multimodal agent memory for PostgreSQL \u2014 token-budget navigation, provenance-gated writes, outcome-learning",
+         "version": "0.8.1",
+         "file": "extension/pgmnemo--0.8.1.sql",
          "docfile": "README.md"
       }
    },

@@ -1,11 +1,10 @@
 # pgmnemo Positioning
-**REVISED — Stage 2 Gate-Modes Reframe (WG-RESTRATEGY-260519-v3)**
 
-**Postgres extension for agent memory: hybrid recall, zero-cost writes, optional provenance enforcement.**
+**Postgres extension for agent memory: single-plan multimodal recall, token-budget navigation, zero-cost writes, optional provenance enforcement.**
 
-*One `CREATE EXTENSION` command. Hybrid vector + BM25 recall. Zero LLM inference per write. Provenance gate configurable via GUC: `enforce` / `warn` / `off`.*
+*One `CREATE EXTENSION` command. Vector + BM25 + graph proximity + JSONB pushdown in one SQL query plan. Zero LLM inference per write. Token-economy navigation: locate IDs within a budget, expand content on demand. Provenance gate configurable via GUC: `enforce` / `warn` / `off`.*
 
-> In-database agent memory substrate. Self-hosted. No new service. No vendor lock-in.
+> In-database agent memory substrate. Self-hosted. No new service. No vendor lock-in. EXPLAIN-able ranking.
 
 ---
 
@@ -56,7 +55,7 @@ Agents need persistent memory in their control — not in a third-party API. pgm
 
 **Who this is *not* designed for:** If you want a fully managed SaaS product with pre-built agent integrations, Mem0 Cloud or Letta Cloud is the right choice. pgmnemo is for teams who want to own their agent infrastructure.
 
-**The differentiator claim:** pgmnemo is the only Postgres extension that combines hybrid in-database recall (vectors + BM25) with optional write-time compliance enforcement via database constraints — making it simultaneously the simplest agent memory layer for conversational agents AND the only provenance-gated option for citation-grounded agents.
+**The differentiator claim:** pgmnemo is the only Postgres extension that fuses vector (HNSW), BM25 full-text, graph-edge proximity, and JSONB metadata filtering into a **single SQL query plan** — with optional write-time provenance enforcement at the database constraint layer. The execution plan is inspectable via EXPLAIN, ranking is regression-testable with SQL, and no data leaves your database. This makes it simultaneously the simplest agent memory layer for conversational agents AND the only provenance-gated, EXPLAIN-able, token-economy-aware option for production agent systems.
 
 ---
 
@@ -66,7 +65,7 @@ Agents need persistent memory in their control — not in a third-party API. pgm
 
 | Dimension | **pgmnemo** | Mem0 | Zep / Graphiti | Letta | Constructive AgenticDB |
 |---|---|---|---|---|---|
-| **Recall substrate** | ✅ **In-database.** HNSW vectors + BM25 full-text + recency + graph proximity, all in SQL. No service call. | ❌ **Separate cloud service.** API ingests queries, returns scores. Vendor-hosted embeddings. | ⚠️ **Graphiti:** self-hosted graph service (Python). **Zep:** default SaaS cloud, self-hosted option. | ⚠️ **Separate service.** Python runtime; memory is a component, not the substrate. | ✅ **In-database.** pgvector HNSW + optional Ollama embeddings, all in SQL. |
+| **Recall substrate** | ✅ **Single-plan multimodal fusion.** HNSW vectors + BM25 + graph proximity + JSONB pushdown + relational, all in one SQL query plan. EXPLAIN-able. No service call. | ❌ **Separate cloud service.** API ingests queries, returns scores. Vendor-hosted embeddings. | ⚠️ **Graphiti:** self-hosted graph service (Python). **Zep:** default SaaS cloud, self-hosted option. | ⚠️ **Separate service.** Python runtime; memory is a component, not the substrate. | ✅ **In-database.** pgvector HNSW + optional Ollama embeddings, all in SQL. |
 | **Install model** | ✅ `CREATE EXTENSION pgmnemo` in your existing Postgres (14–17). Fully portable, no lock-in. | ❌ SaaS API endpoint (`https://api.mem0.com`). Proprietary vendor dependency. | ⚠️ **Graphiti:** `pip install graphiti-core` + graph DB (self-hosted). **Zep:** Cloud SaaS or self-hosted. | ⚠️ `pip install letta-core` (self-hosted Python) or Letta Cloud SaaS. | ✅ `pgpm install constructive_agenticdb` in your Postgres. Native extension. |
 | **LLM cost per write** | ✅ **$0.** Provenance gate is a SQL constraint check (zero model inference). | ❌ **~$0.17 per 1,000 writes.** GPT-3.5-mini fact extraction on every ingest. | ❌ **~$0.36 per 1,000 writes** (post-v0.29). LLM-powered contradiction detection on graph updates. | ✅ **$0 incremental.** Memory write cost is bundled with the agent turn already paying for inference. | ✅ **$0.** Local Ollama embeddings; no API calls. |
 | **Data residency / self-hosted** | ✅ **Your Postgres, your VPC.** No data egress. HIPAA-aligned by architecture (single-tenant, encrypted at rest, unmatched audit trail). | ❌ **Mem0 infrastructure.** Data hosted on `us-west-2`. Egress fees, latency, no zero-trust model. | ⚠️ **Zep Cloud:** vendor; **Graphiti:** self-hosted. Graphiti gives you data control, Zep does not. | ⚠️ **Self-hosted:** your infrastructure. **Letta Cloud:** vendor infrastructure. You choose. | ✅ **Your Postgres.** Encryption at rest, backup, disaster recovery fully under your control. |
@@ -100,10 +99,12 @@ Agents need persistent memory in their control — not in a third-party API. pgm
 ### Decision Framework
 
 **Use pgmnemo if:**
-- Your Postgres is your primary datastore, and you want memory in the same database (zero new service).
+- Your Postgres is your primary datastore and you want memory in the same database (zero new service).
 - You need to avoid per-write LLM costs (critical for high-velocity agents).
 - You have compliance requirements (HIPAA, GDPR, litigation hold) — set `gate_strict='enforce'` for write-time provenance gates.
-- You want hybrid recall (vectors + BM25 + recency + graph proximity in one SQL query).
+- You want single-plan multimodal recall (vectors + BM25 + graph proximity + JSONB pushdown in one SQL query plan), EXPLAIN-able and regression-testable.
+- You need token-budget-aware retrieval — `navigate_locate()` + `navigate_expand()` let you control exactly how many characters your agent receives.
+- You want outcome-learning feedback — `reinforce()` adjusts per-lesson confidence and `match_confidence` gives your agent an interpretable quality signal.
 - You want data residency under your control (no vendor lock-in).
 
 **Use Mem0 if:**
@@ -152,7 +153,7 @@ pgmnemo publishes numbers with confidence intervals and mandatory negative cells
 | Corpus | recall@10 | Honest note |
 |---|---|---|
 | LoCoMo (ACL 2024) | 0.8409 | Session-level; 22× smaller search space than paper Table 3 |
-| LongMemEval-S (ICLR 2025) | 0.9334 | **Loses to BM25 baseline (0.982) by ~5pp** — gap targeted for v0.5.0 |
+| LongMemEval-S (ICLR 2025) | 0.9604 | Gap to BM25 baseline (0.982) narrowed from −5pp (v0.5.x) to −2.2pp (v0.6.2 RRF Fix-A, p=0.017) |
 | Production corpus (N=1,060, external adopter) | 0.5745 | Real-world agent memory; leave-one-out self-retrieval |
 
 We publish where we lose. A benchmark that shows only wins is indistinguishable from cherry-picking.

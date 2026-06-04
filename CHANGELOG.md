@@ -5,6 +5,56 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [0.8.1] — 2026-06-04
+
+### Theme
+
+**Documentation sprint + adoption-issue resolution.** No schema changes. The
+extension SQL is identical to v0.8.0. Upgrade via
+`ALTER EXTENSION pgmnemo UPDATE TO '0.8.1'`.
+
+### Added
+
+- **`AGENTS.md`** — new top-level canonical agent integration guide covering every
+  user-facing function with working SQL examples and adoption recipes.
+- **`docs/USAGE.md`** — new sections: `navigate_locate` / `navigate_expand`
+  (v0.8.0 token-economy pattern), `reinforce()` / outcome-learning (v0.7.0),
+  `reembed()` / `reembed_batch()` / `recompute_content()` (v0.8.0), `stats()`
+  19-column reference, and GUC quick reference. Removes stale EXPERIMENTAL label
+  from `recall_hybrid()`.
+- **`docs/INSTALL.md`** — version references updated to v0.8.1 throughout (Paths
+  1–4); no content changes to the Docker/COPY/GUC patterns (those were correct).
+
+### Fixed (documentation)
+
+- **#18** — GUC access pattern documented: `SHOW pgmnemo.*` fails on pure-SQL
+  extensions; correct pattern is `current_setting('pgmnemo.X', TRUE)`. See
+  `docs/INSTALL.md §"Reading the GUCs"` and the new GUC table in `docs/USAGE.md`.
+- **#19** — Docker production install without a compiler: `docs/INSTALL.md` Path 3
+  (custom Dockerfile with `ADD` + `COPY`) and Path 4 (vendored dir with `COPY`)
+  both demonstrate zero-build-tool installation.
+- **#20** — `pgmnemo.stats()` diagnostic SP: already shipped in v0.4.1 (14 cols)
+  and v0.7.0 (19 cols incl. confidence distribution). Full 19-column reference now
+  in `docs/USAGE.md §"Health check"`.
+- **#24** — Orphan recovery: `docs/MIGRATION.md §B.5` documents detection via
+  `SELECT orphan_count FROM pgmnemo.stats()` and recovery via
+  `ALTER EXTENSION pgmnemo ADD FUNCTION`. Cross-referenced from `docs/USAGE.md`.
+- **#41** — Stale automated issue from v0.7.1 release failure. Superseded by
+  v0.7.2 packaging fix (clean-room CI install gate) and v0.8.0. No action needed.
+
+### Positioning
+
+- `README.md` tagline updated: single-plan multimodal fusion framing; version badge
+  bumped to 0.8.1; navigate_locate/expand and outcome-learning added to Features.
+- `POSITIONING.md`: differentiator claim expanded to include JSONB pushdown and
+  graph proximity in one SQL plan; LME benchmark updated to 0.9604.
+- `docs/WHY_PGMNEMO.md`: problem statement rewritten; navigate_locate quickstart
+  example added; honest current state updated to v0.8.0.
+- `ROADMAP.md`: internal strategy language removed; all shipped versions marked;
+  v0.8.0 token-economy section added.
+
+---
+
 ## [0.8.0] — 2026-06-03
 
 ### Theme
