@@ -1,14 +1,14 @@
 # pgmnemo
 
-**Multi-agent memory substrate for PostgreSQL — provenance-gated, vector-hybrid recall.**
+**In-your-Postgres agent memory — single-plan multimodal recall, token-budget navigation, provenance-gated writes.**
 
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.8.0-green.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.8.1-green.svg)](CHANGELOG.md)
 [![PGXN](https://badge.pgxn.org/stable/pgmnemo.svg)](https://pgxn.org/dist/pgmnemo/)
 [![CI](https://github.com/pgmnemo/pgmnemo/actions/workflows/ci.yml/badge.svg)](https://github.com/pgmnemo/pgmnemo/actions/workflows/ci.yml)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-17-4169E1.svg)](https://www.postgresql.org/)
 [![LoCoMo recall@10](https://img.shields.io/badge/LoCoMo_recall%4010-0.8409-success.svg)](docs/img/all_metrics_history.md)
-[![LongMemEval recall@10](https://img.shields.io/badge/LongMemEval_recall%4010-0.9334-brightgreen.svg)](docs/img/all_metrics_history.md)
+[![LongMemEval recall@10](https://img.shields.io/badge/LongMemEval_recall%4010-0.9604-brightgreen.svg)](docs/img/all_metrics_history.md)
 
 > **v0.7.2 (2026-06-01):** **Packaging fix.** The v0.7.1 distribution double-nested the extension directory (`extension/extension/`), making it uninstallable from PGXN and GitHub release zips (`could not open extension control file`). v0.7.2 ships a correctly-structured dist and adds a CI **clean-room install gate** that installs the built zip into a pristine `pgvector/pgvector:pg17` container before any publish. **No schema changes** — SQL is identical to v0.7.1. See [CHANGELOG.md](CHANGELOG.md).
 >
@@ -28,9 +28,9 @@
 >
 > **Breaking changes (v0.5.0):** 4-argument `traverse_causal_chain(start, max_depth, role, project)` removed — use 2-argument form + `WHERE` clause. `mem_edge` columns renamed: `lesson_a_id` → `source_id`, `lesson_b_id` → `target_id`. Use `pgmnemo.add_edge()` to avoid direct column references. See [docs/MIGRATION.md](docs/MIGRATION.md).
 >
-> **What's next:** v0.7 outcome-learning loop (reinforcement-from-outcome recall weighting). Full plan: [ROADMAP.md](ROADMAP.md).
+> **v0.8.0 (2026-06-03):** **Token-economy navigation API.** `navigate_locate()` returns ranked lesson IDs within a configurable character budget; `navigate_expand()` fetches full content + graph neighbors on demand. Locate cheaply — expand only what you need. Also: `reembed()` / `reembed_batch()` for in-place embedding refresh, `recompute_content()` for in-place text updates, `source_type` column. See [CHANGELOG.md](CHANGELOG.md).
 
-## Benchmarks (v0.5.1, retrieval-only)
+## Benchmarks (v0.8.0, retrieval-only)
 
 > **Read this before the numbers below:** [docs/COMPETITIVE_REALITY.md](docs/COMPETITIVE_REALITY.md)
 > explains exactly what these recall@K figures mean, what they don't, and where
@@ -42,10 +42,10 @@ Real numbers vs published academic benchmarks. **Canonical protocol:** [docs/BEN
 |---|---|---|---|---|
 | **LoCoMo** ([Maharana ACL 2024](https://arxiv.org/abs/2402.17753)) | **session-level** (paper-canonical headline) | DRAGON | **0.7994** / **0.5569** | Easier task than paper Table 3 (272 sessions vs 5882 turns search space) |
 | **LoCoMo** same paper, turn-level (apples-to-apples with paper baseline) | **turn-level** (retrieval primitive) | DRAGON | recall@5 = **0.302** / MRR = **0.237** | Paper DRAGON dense recall@5 ≈ 0.225 → pgmnemo +7.7pp |
-| **LongMemEval-S** ([Wu ICLR 2025](https://arxiv.org/abs/2410.10813)) | retrieval-only, full session | bge-m3 (subst. for Stella V5)¹ | **0.9334** / **0.8472** | **Loses to BM25 baseline² 0.982** by ~5pp |
+| **LongMemEval-S** ([Wu ICLR 2025](https://arxiv.org/abs/2410.10813)) | retrieval-only, full session | bge-m3 (subst. for Stella V5)¹ | **0.9604** / **0.8472** | Hybrid RRF Fix-A (v0.6.2) closed gap to BM25 baseline² 0.982 from −5pp to −2.2pp |
 
 ¹ Stella V5 paper-canonical incompatible with transformers 5.8 — substituted bge-m3 (1024d, MTEB-strong).
-² Pure-Python BM25 baseline included for reference: [run_nollm.py](benchmarks/longmemeval/run_nollm.py). On the keyword-heavy LongMemEval workload it currently outperforms our dense vector path. **Fixing this is the explicit gate for v0.4.0** — see [ROADMAP.md](ROADMAP.md).
+² Pure-Python BM25 baseline included for reference: [run_nollm.py](benchmarks/longmemeval/run_nollm.py). Gap narrowed from −5pp (v0.5.x) to −2.2pp (v0.6.2 RRF Fix-A, p=0.017). Full numbers: [benchmarks/METRICS_BY_VERSION.md](benchmarks/METRICS_BY_VERSION.md).
 
 > **The "we beat everyone" framing is wrong.** Our headline session-level
 > LoCoMo number compares to a 22× smaller search space than the paper baseline.
@@ -60,15 +60,24 @@ Real numbers vs published academic benchmarks. **Canonical protocol:** [docs/BEN
 
 ## Why this exists
 
-- **One differentiator none of Pinecone, Letta, Mem0, or Zep have:** a write-time provenance gate. Every `ingest()` call must carry a `commit_sha` or `artifact_hash`; rows without provenance are blocked (or warned) by default. Hallucinated agent memories cannot silently accumulate.
-- **No new service.** `CREATE EXTENSION pgmnemo;` in your existing PostgreSQL — no separate API server, no SaaS endpoint, no vendor lock-in.
-- **Hybrid recall in-database.** Cosine similarity (HNSW) + BM25 full-text + recency decay + importance weighting, scored in one SQL call.
-- **Role isolation built in.** First-class `role + project_id` composite scoping; no hand-rolled RLS.
+**Single-plan multimodal fusion inside your existing Postgres.** pgmnemo ranks across four retrieval channels — HNSW vector (pgvector), graph-edge proximity (`mem_edge` BFS), JSONB metadata predicate pushdown (GIN index), and relational filters (`role`, `project_id`, `state`) — inside a **single SQL query plan**. The PostgreSQL optimizer manages the join, filter, and sort. You call one function; the database handles everything else.
+
+- **No new service.** `CREATE EXTENSION pgmnemo CASCADE` in your existing PostgreSQL — no sidecar, no API server, no vendor lock-in. `pg_dump` backs it up. Logical replication replicates it.
+- **Zero data egress.** Embeddings, graph edges, metadata, and scoring never leave your database at retrieval or ingestion time.
+- **$0 LLM cost per write.** `ingest()` is a SQL constraint check + indexed INSERT. No model API call on the write path.
+- **EXPLAIN-able ranking.** Run `EXPLAIN (ANALYZE, BUFFERS)` on any recall query and see the full plan — impossible with any external RAG service.
+- **Provenance-gated writes.** `gate_strict = 'enforce'` blocks writes without a `commit_sha` or `artifact_hash` at the Postgres constraint layer. Hallucinated memories cannot silently accumulate.
+- **Token-economy navigation.** `navigate_locate()` returns ranked IDs within a character budget. `navigate_expand()` fetches content + graph neighbors for the IDs you choose. Locate cheaply — expand only what you need.
+- **Outcome-learning.** `reinforce(lesson_id, 'success')` or `reinforce(lesson_id, 'failure')` adjusts per-lesson confidence. `recall_hybrid()` returns `match_confidence [0,1]` as an interpretable quality signal.
+- **Role isolation built in.** First-class `role + project_id` composite scoping with optional RLS enforcement via `pgmnemo.tenant_id` GUC.
 
 | Aspect | pgmnemo | Generic Vector DB | Cloud Memory API |
 |---|---|---|---|
-| Provenance enforcement | ✅ Mandatory | ❌ | ❌ |
+| Single-plan multimodal recall | ✅ Vector + BM25 + graph + JSONB in one SQL plan | ❌ Vector only | ❌ Opaque service |
 | Zero data egress | ✅ In-database | ❌ | ❌ |
+| EXPLAIN-able ranking | ✅ Full query plan visible | ❌ | ❌ |
+| $0 LLM write cost | ✅ Pure SQL | Varies | ❌ ~$0.17–$0.36 / 1K writes |
+| Provenance enforcement | ✅ DB-layer constraint | ❌ | ❌ |
 | Install model | `CREATE EXTENSION` | External service | SaaS API |
 | Self-hosted price | Free (Apache 2.0) | $$$$ | $$$$$ |
 
@@ -76,9 +85,9 @@ Real numbers vs published academic benchmarks. **Canonical protocol:** [docs/BEN
 
 | pgmnemo | PostgreSQL | pgvector | CI status |
 |---|---|---|---|
-| **0.5.x** (current) | 14 – 17 | ≥ 0.7.0 | 17 ✅ blocking · 14/15/16 ⚠️ aspirational (see below) |
-| 0.4.x | 14 – 17 | ≥ 0.7.0 | 17 ✅ blocking · 14/15/16 ⚠️ aspirational |
-| 0.3.x | 14 – 17 | ≥ 0.7.0 | 17 ✅ blocking · 14/15/16 ⚠️ aspirational |
+| **0.8.x** (current) | 14 – 17 | ≥ 0.7.0 | 17 ✅ blocking · 14/15/16 ⚠️ aspirational (see below) |
+| 0.7.x | 14 – 17 | ≥ 0.7.0 | 17 ✅ blocking · 14/15/16 ⚠️ aspirational |
+| 0.6.x | 14 – 17 | ≥ 0.7.0 | 17 ✅ blocking · 14/15/16 ⚠️ aspirational |
 | 0.2.x | 14 – 17 | ≥ 0.7.0 | 17 ✅ (legacy CI) |
 | ≤ 0.1.x | end-of-life | — | — |
 
@@ -88,7 +97,7 @@ Real numbers vs published academic benchmarks. **Canonical protocol:** [docs/BEN
   `bench-gate` on PG 17. A failure here blocks the tag.
 - **14/15/16 ⚠️ aspirational** — every CI run also fires a `compat-matrix` job
   against PG 14/15/16 with `continue-on-error: true`. This is **visibility, not
-  enforcement** as of v0.5.0; we haven't yet validated every release on
+  enforcement** as of v0.8.x; we haven't yet validated every release on
   every PG version. If you run pgmnemo on PG < 17 and hit a bug, file an
   issue — we'll prioritise fixing or downgrading the support claim honestly.
 - **0.1.x EOL** — no security fixes, no compatibility commitment.
@@ -108,7 +117,7 @@ into a recent green run to see which PG versions the latest build passed on.
 **PGXN install (if `pgxnclient` is available):**
 
 ```bash
-pgxn install pgmnemo==0.7.2
+pgxn install pgmnemo==0.8.1
 ```
 
 **Docker (production):** pgmnemo is **pure SQL** — no compilation. Bake files
@@ -116,21 +125,21 @@ into your image with a 3-line Dockerfile:
 
 ```dockerfile
 FROM pgvector/pgvector:pg17
-ADD https://github.com/pgmnemo/pgmnemo/releases/download/v0.7.2/pgmnemo-0.7.2.zip /tmp/
+ADD https://github.com/pgmnemo/pgmnemo/releases/download/v0.8.1/pgmnemo-0.8.1.zip /tmp/
 RUN apt-get update && apt-get install -y --no-install-recommends unzip \
-    && unzip /tmp/pgmnemo-0.7.2.zip -d /tmp/ \
-    && cp -r /tmp/pgmnemo-0.7.2/extension/* \
+    && unzip /tmp/pgmnemo-0.8.1.zip -d /tmp/ \
+    && cp -r /tmp/pgmnemo-0.8.1/extension/* \
           /usr/share/postgresql/17/extension/ \
-    && apt-get remove -y unzip && rm -rf /tmp/pgmnemo-0.7.2* /var/lib/apt/lists/*
+    && apt-get remove -y unzip && rm -rf /tmp/pgmnemo-0.8.1* /var/lib/apt/lists/*
 ```
 
 **Dev / laptop one-liner (NOT for production — state lost on container rebuild):**
 
 ```bash
 docker run --name pgmnemo-dev -e POSTGRES_PASSWORD=pass -p 5432:5432 -d pgvector/pgvector:pg17
-curl -L https://github.com/pgmnemo/pgmnemo/releases/download/v0.7.2/pgmnemo-0.7.2.zip -o /tmp/pg.zip
+curl -L https://github.com/pgmnemo/pgmnemo/releases/download/v0.8.1/pgmnemo-0.8.1.zip -o /tmp/pg.zip
 docker cp /tmp/pg.zip pgmnemo-dev:/tmp/
-docker exec pgmnemo-dev bash -c "cd /tmp && unzip -q pg.zip && cp -r pgmnemo-0.7.2/extension/* /usr/share/postgresql/17/extension/"
+docker exec pgmnemo-dev bash -c "cd /tmp && unzip -q pg.zip && cp -r pgmnemo-0.8.1/extension/* /usr/share/postgresql/17/extension/"
 ```
 
 ```sql
@@ -158,12 +167,16 @@ FROM pgmnemo.recall_lessons(
 
 ## Features
 
-- **HNSW vector search** — fast approximate nearest-neighbour recall via `pgvector` HNSW indexes
-- **Provenance gate** — `enforce` / `warn` / `off` modes; controlled by `pgmnemo.gate_strict` GUC
-- **Recency-weighted scoring** — `0.5×cosine + 0.2×importance + γ×recency(90d) + 0.1×prov_strength`; γ tunable via `pgmnemo.recency_weight`
-- **Role scoping** — `role + project_id` composite isolation; `role_filter=NULL` pools across roles
-- **Graph traversal** — `traverse_causal_chain()` and `traverse_temporal_window()` walk typed `mem_edge` relationships between lessons
-- **MAGMA edge taxonomy** (v0.3.0, **EXPERIMENTAL**) — `edge_kind` ENUM (`semantic | temporal | causal | entity`) with per-kind partial indexes; `recall_lessons()` BFS graph-proximity now correctly uses `edge_kind` instead of the broken v0.2.x `relation_type` string matching. MAGMA §4 (adaptive traversal policy) and §5 (dual-stream consolidation) are not yet implemented.
+- **Single-plan multimodal recall** — HNSW vector + BM25 full-text + graph-edge proximity + JSONB metadata pushdown, all ranked in one SQL query plan. `EXPLAIN (ANALYZE)` the full execution plan at any time.
+- **Token-economy navigation** — `navigate_locate()` returns ranked IDs within a configurable character budget; `navigate_expand()` fetches full content + graph neighbors on demand. Locate cheaply; expand only what you need.
+- **Provenance gate** — `enforce` / `warn` / `off` modes via `pgmnemo.gate_strict` GUC. `enforce` (default) rejects writes at the Postgres constraint layer when `commit_sha` and `artifact_hash` are both absent.
+- **Outcome-learning** — `reinforce(lesson_id, 'success' | 'failure' | 'neutral')` adjusts per-lesson confidence. `recall_hybrid()` returns `confidence` in scoring and `match_confidence [0,1]` as an interpretable quality signal.
+- **Hybrid RRF scoring** (Fix-A, v0.6.2) — sparse-safe Reciprocal Rank Fusion over vector + BM25; plus aux terms for importance, recency decay, and provenance strength.
+- **Bitemporal point-in-time recall** — `recall_lessons(..., as_of_ts)` restricts to the validity window `t_valid_from ≤ as_of_ts < t_valid_to`. Time-travel your agent's memory.
+- **In-place maintenance** — `reembed()` / `reembed_batch()` refresh embeddings without new bitemporal rows; `recompute_content()` updates lesson text in-place with automatic `content_hash` + TSV cascade.
+- **Graph traversal** — `traverse_causal_chain()` and `traverse_temporal_window()` walk typed `mem_edge` relationships (edge_kind: `semantic | temporal | causal | entity`).
+- **Role scoping** — `role + project_id` composite isolation; `role_filter=NULL` pools across roles; optional RLS enforcement via `pgmnemo.tenant_id` GUC.
+- **Diagnostic observability** — `pgmnemo.stats()` (19 columns including confidence distribution); `pgmnemo.recall_stats` view for call-count tracking.
 
 ## Compatibility
 

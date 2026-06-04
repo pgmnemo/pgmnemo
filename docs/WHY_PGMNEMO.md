@@ -7,13 +7,21 @@
 
 ## The problem
 
-Your AI agents accumulate "memories" — lessons, observations, summaries —
-to use across runs. The agent that wrote them was sometimes wrong. When
-the next agent reads them, it trusts the wrong memory as fact, and the
-error compounds across runs.
+AI agents accumulate memories — lessons, observations, summaries — to use
+across runs. Three failure modes compound as the corpus grows:
 
-Mem0, Zep, and pgvector all store whatever the agent says. None of them
-ask **"where did this come from?"** at write time. We do.
+1. **Hallucinated memories accumulate silently.** Vector stores and cloud
+   memory APIs store whatever the agent says. None enforce that a memory
+   was derived from a verifiable artifact at write time. Broken agent runs
+   produce plausible-but-wrong memories that poison every future recall.
+
+2. **Retrieval quality is opaque.** Score = some float from a black box
+   or a separate service. You cannot EXPLAIN why a memory ranked first.
+   You cannot regression-test the ranking with SQL.
+
+3. **Context-token bloat.** Without budget discipline, retrieval returns
+   full lesson texts for everything above a threshold. Agents receive
+   8,000 tokens of memory and act on 200.
 
 ---
 
@@ -22,27 +30,52 @@ ask **"where did this come from?"** at write time. We do.
 A PostgreSQL extension — `CREATE EXTENSION pgmnemo CASCADE` — no separate
 service, no API key, no SaaS endpoint.
 
-Four things you get:
+**Single-plan multimodal fusion inside your existing Postgres.** pgmnemo
+ranks across four retrieval channels in one SQL query plan: HNSW vector
+(pgvector), BM25 full-text (tsvector/GIN), graph-edge proximity (`mem_edge`
+BFS), and JSONB metadata predicate pushdown (GIN index). The PostgreSQL
+optimizer manages the join, filter, and sort. You call one function.
+
+What you get:
 
 1. **Provenance gate.** Every `pgmnemo.ingest(...)` requires a `commit_sha`
    or `artifact_hash`. Without one, the write is blocked (or warned, your
    choice). Enforced inside SQL — your application code cannot bypass it.
    Phantom memories from broken agent runs cannot enter long-term storage.
 
-2. **Hybrid retrieval.** Cosine similarity (HNSW via pgvector) + BM25
-   (tsvector) + recency decay + importance weighting, in a single SQL call:
+2. **Single-plan hybrid retrieval.** Vector + BM25 + graph proximity + JSONB
+   pushdown in one SQL call. EXPLAIN-able — run `EXPLAIN (ANALYZE, BUFFERS)`
+   on any recall query and see the full execution plan:
 
    ```sql
-   SELECT lesson_id, score, lesson_text
-   FROM pgmnemo.recall_lessons(my_embedding, k := 10, query_text := 'JWT rotation');
+   SELECT lesson_id, score, lesson_text, match_confidence
+   FROM pgmnemo.recall_hybrid(my_embedding, 'JWT rotation', k := 10);
    ```
 
-3. **Multi-tenant scoping.** Row-Level Security at the database layer, not
-   your application layer. `SET pgmnemo.tenant_id = '42'` and the rest of
-   the session sees only that tenant's data — enforced by Postgres, not by
-   your code remembering to add `WHERE tenant_id=...` everywhere.
+3. **Token-economy navigation.** `navigate_locate()` returns ranked IDs
+   within a configurable character budget. `navigate_expand()` fetches
+   full content + graph neighbors only for the IDs you choose:
 
-4. **Apache-2.0 source.** PGXN-distributed. Backup with `pg_dump`.
+   ```sql
+   -- Step 1: locate cheaply (no full text returned)
+   SELECT id, preview, score, tokens_consumed
+   FROM pgmnemo.navigate_locate(my_embedding, 'JWT rotation', 4000);
+
+   -- Step 2: expand only what you need
+   SELECT id, content, graph_neighbor_ids
+   FROM pgmnemo.navigate_expand(ARRAY[42, 99]);
+   ```
+
+4. **Outcome-learning.** `reinforce(lesson_id, 'success')` raises confidence;
+   `reinforce(lesson_id, 'failure')` lowers it. `recall_hybrid()` returns
+   `match_confidence [0,1]` — use it to gate whether a retrieved memory is
+   worth passing to your agent's context.
+
+5. **Multi-tenant scoping.** Row-Level Security at the database layer. `SET
+   pgmnemo.tenant_id = '42'` restricts the session to that project —
+   enforced by Postgres, not by your application code.
+
+6. **Apache-2.0 source.** PGXN-distributed. Backup with `pg_dump`.
    Replicate with logical replication. Same operational model as the rest
    of your stack.
 
@@ -51,8 +84,12 @@ Four things you get:
 ## Why us, specifically
 
 - **You already run PostgreSQL.** Install is one SQL command. No new container.
-- **You already pay for a database.** We add zero per-call cost.
-- **You hate that Mem0/Zep want your data in their cloud.** We're never in their cloud.
+- **You already pay for a database.** We add zero per-call cost and zero data egress.
+- **You want EXPLAIN-able ranking.** Every recall query is a SQL function — run
+  `EXPLAIN (ANALYZE, BUFFERS)` and see the full plan. Impossible with any external
+  RAG service.
+- **You care about context-token budget.** `navigate_locate()` + `navigate_expand()`
+  give you a two-step pattern that bounds exactly how much text reaches your agent.
 - **You've watched a hallucinated memory poison a downstream run.** You want a
   structural fix (block-at-write) not an after-the-fact filter.
 - **You care that benchmarks reproduce.** We publish `raw_retrievals.jsonl` so
@@ -63,7 +100,7 @@ Four things you get:
 ## Don't choose us if
 
 - You need a managed SaaS with a polished web UI today → **use Mem0 or Zep**
-- You need entity-relation-temporal reasoning over months of history → **use Zep**
+- You need LLM-driven, real-time contradiction resolution across a continuously-growing global knowledge graph → **use a purpose-built graph service**
 - You need billion-row vector retrieval at sub-10ms p99 → **use a dedicated vector DB**
 - You're not on PostgreSQL and don't want to be → **anything else**
 
@@ -74,13 +111,12 @@ Four things you get:
 ```bash
 # 1. Add to your Dockerfile (or run on host with pg_config)
 FROM pgvector/pgvector:pg17
-ADD https://github.com/pgmnemo/pgmnemo/releases/download/v0.4.1/pgmnemo-0.4.1.zip /tmp/
+ADD https://github.com/pgmnemo/pgmnemo/releases/download/v0.8.1/pgmnemo-0.8.1.zip /tmp/
 RUN apt-get update && apt-get install -y --no-install-recommends unzip \
-    && unzip /tmp/pgmnemo-0.4.1.zip -d /tmp/ \
-    && cp /tmp/pgmnemo-0.4.1/extension/pgmnemo.control \
-          /tmp/pgmnemo-0.4.1/extension/pgmnemo--*.sql \
+    && unzip /tmp/pgmnemo-0.8.1.zip -d /tmp/ \
+    && cp -r /tmp/pgmnemo-0.8.1/extension/* \
           /usr/share/postgresql/17/extension/ \
-    && rm -rf /tmp/pgmnemo-0.4.1*
+    && rm -rf /tmp/pgmnemo-0.8.1*
 ```
 
 ```sql
@@ -96,17 +132,27 @@ SELECT pgmnemo.ingest(
     p_commit_sha  := 'a3f9b12'  -- ← provenance token, this is the gate
 );
 
--- 4. Replace your memory-read
-SELECT lesson_text, score
-FROM pgmnemo.recall_lessons(
+-- 4a. Standard hybrid recall
+SELECT lesson_id, score, lesson_text, match_confidence
+FROM pgmnemo.recall_hybrid(
     my_query_embedding,
-    k          := 10,
-    query_text := 'token rotation policy'
+    'token rotation policy',
+    k := 10
 );
 
+-- 4b. Token-economy pattern: locate IDs within budget, then expand only what you need
+SELECT id, preview, score, tokens_consumed
+FROM pgmnemo.navigate_locate(my_query_embedding, 'token rotation', 4000);
+-- → returns ranked IDs + 50-char previews; total chars ≤ 4000
+
+SELECT id, content, graph_neighbor_ids
+FROM pgmnemo.navigate_expand(ARRAY[42, 99]);
+-- → full lesson_text + graph neighbors for chosen IDs only
+
 -- 5. Verify install
-SELECT * FROM pgmnemo.stats();
--- → version, lesson_count, embedding_coverage_pct, hybrid_enabled, etc.
+SELECT version, lesson_count, embedding_coverage_pct,
+       hybrid_enabled, ghost_count, confidence_mean
+FROM pgmnemo.stats();
 ```
 
 Full install guide (Docker / PGXN / vendored): [docs/INSTALL.md](INSTALL.md).
@@ -115,16 +161,11 @@ Full install guide (Docker / PGXN / vendored): [docs/INSTALL.md](INSTALL.md).
 
 ## Honest current state
 
-- **Production user count:** 1 (an internal production deployment, 1081 lessons, 6 months)
-- **Latest release:** v0.4.1 (2026-05-17)
-- **Bench numbers:** LoCoMo session recall@10 = 0.84 (paper-canonical, +4pp vs v0.4.0 vector-only); LongMemEval-S = 0.93 (loses to BM25 baseline 0.98 — see [COMPETITIVE_REALITY.md](COMPETITIVE_REALITY.md))
-- **Open issues:** 10 (all tagged with target version)
+- **Latest release:** v0.8.0 (2026-06-03)
+- **Bench numbers:** LoCoMo session recall@10 = 0.8409 (paper-canonical, session-level, 22× smaller search space than paper Table 3); LongMemEval-S = 0.9604 (hybrid RRF Fix-A v0.6.2 — gap to BM25 baseline 0.982 narrowed from −5pp to −2.2pp, p=0.017)
 - **License:** Apache-2.0, no CLA
 
-We will not pretend more adoption than we have. We will not claim numbers we
-cannot reproduce. We will not hide that BM25 outperforms us on one of two
-benchmarks — see [COMPETITIVE_REALITY.md](COMPETITIVE_REALITY.md) for the
-full honest assessment.
+We will not claim numbers we cannot reproduce. Full benchmark methodology and per-version history: [docs/BENCHMARK_PROTOCOL.md](BENCHMARK_PROTOCOL.md) and [benchmarks/METRICS_BY_VERSION.md](../benchmarks/METRICS_BY_VERSION.md). The honest competitive position: [docs/COMPETITIVE_REALITY.md](COMPETITIVE_REALITY.md).
 
 ---
 
