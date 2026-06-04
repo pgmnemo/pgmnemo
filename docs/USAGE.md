@@ -253,15 +253,7 @@ VALUES (1003, 1004, 'temporal', 'CO_OCCURRED');
 
 ---
 
-## Hybrid retrieval — `pgmnemo.recall_hybrid()` ⚠ EXPERIMENTAL
-
-> **EXPERIMENTAL — opt-in only.** `recall_hybrid()` is NOT the default retrieval path.
-> Call it directly when you need it. `recall_lessons()` is unchanged.
->
-> Bench status (2026-05-10, simulation): LoCoMo recall@10 +12.7pp vs vector-only (all
-> question types positive, statistically significant). LongMemEval MRR +5.8pp (p=0.005,
-> significant); recall@10 +1.5pp (p=0.308, not significant). Numbers are simulation
-> (TF-IDF proxy for dense retrieval); real-DB confirmation pending.
+## Hybrid retrieval — `pgmnemo.recall_hybrid()` (v0.2.2+, default path since v0.4.0)
 
 Combines dense cosine retrieval with BM25-class sparse matching. Best suited for tasks
 where the correct memory is lower in the top-K ranking (MRR improvement) or where
@@ -677,3 +669,268 @@ SET pgmnemo.temporal_boost = '0';
 `COALESCE(as_of_ts, NOW())` as the reference point. When querying a historical
 `as_of_ts`, recency decay is computed relative to that timestamp (not wall-clock
 `NOW()`), so very old `as_of_ts` queries produce historically-consistent scores.
+
+---
+
+## Token-economy navigation — `navigate_locate` + `navigate_expand` (v0.8.0)
+
+Use this two-step pattern when your agent has a context-token budget or you want
+to avoid transmitting full lesson bodies before deciding which ones to read.
+
+### Step 1: `navigate_locate()` — ranked IDs within a character budget
+
+```sql
+pgmnemo.navigate_locate(
+    query_embedding    vector(1024),  -- NULL if query_text is provided
+    query_text         TEXT,          -- NULL if query_embedding is provided
+    token_budget_chars INT    DEFAULT 2000,   -- cumulative char limit
+    jsonb_filter       JSONB  DEFAULT NULL    -- pushed to GIN index on metadata
+) RETURNS TABLE (
+    id               BIGINT,
+    preview          TEXT,   -- first ~50 chars of lesson_text
+    score            FLOAT8,
+    tokens_consumed  INT,    -- cumulative chars INCLUDING this row
+    navigation_path  TEXT    -- 'vector' | 'bm25' | 'jsonb_gate'
+)
+```
+
+The first row is always returned even if it exceeds the budget.
+`jsonb_filter` uses `metadata @> jsonb_filter` — leverages the GIN index on `metadata`.
+
+```sql
+-- Locate lessons about JWT rotation within a 4000-char budget,
+-- pre-filtering to a specific agent via metadata
+SELECT id, preview, score, tokens_consumed
+FROM pgmnemo.navigate_locate(
+    $1::vector(1024),
+    'JWT rotation',
+    4000,
+    '{"agent": "security-agent"}'::jsonb
+)
+ORDER BY score DESC;
+```
+
+### Step 2: `navigate_expand()` — full content for chosen IDs
+
+```sql
+pgmnemo.navigate_expand(
+    ids                    BIGINT[],
+    expand_fields          TEXT[]  DEFAULT '{}',  -- metadata keys to project
+    graph_expand_depth     INT     DEFAULT 1,      -- BFS hops; 0 = none
+    graph_expand_threshold FLOAT   DEFAULT 0.7     -- min edge weight
+) RETURNS TABLE (
+    id                      BIGINT,
+    content                 TEXT,    -- full lesson_text
+    expand_detail           JSONB,   -- projected metadata fields (NULL if expand_fields empty)
+    graph_neighbor_ids      BIGINT[],
+    graph_neighbor_previews TEXT[],
+    tokens_consumed         INT,     -- cumulative chars (running sum)
+    navigation_path         TEXT     -- 'content' | 'graph_expand'
+)
+```
+
+```sql
+-- Fetch full content for the IDs chosen from navigate_locate
+SELECT id, content, graph_neighbor_ids, tokens_consumed
+FROM pgmnemo.navigate_expand(
+    ARRAY[42, 99, 137]::BIGINT[],
+    ARRAY['run_id', 'model'],  -- extract these keys from metadata
+    1,                         -- follow 1-hop causal/temporal neighbors
+    0.7                        -- only traverse edges with weight ≥ 0.7
+);
+```
+
+**Why use this instead of `recall_lessons()`?**
+
+`recall_lessons()` returns full `lesson_text` for every result row. On a large corpus
+this can overflow a context window before you've decided which lessons to use.
+`navigate_locate()` returns only IDs and 50-char previews — you evaluate rank and
+relevance before fetching content. `navigate_expand()` then fetches content only for
+the IDs you selected, with an optional graph traversal to pull in causally or
+temporally linked neighbors.
+
+---
+
+## Outcome-learning — `reinforce()` (v0.7.0)
+
+Record what happened after a lesson was used. Confidence feeds back into recall
+scoring and is returned as `match_confidence` in `recall_hybrid()` output.
+
+```sql
+-- Single lesson — returns new confidence REAL [0,1]
+SELECT pgmnemo.reinforce(
+    p_lesson_id := 42,
+    p_outcome   := 'success'   -- 'success' | 'failure' | 'neutral'
+);
+-- 'success' → confidence += 0.10 (clamped 1.0); increments success_count
+-- 'failure' → confidence -= 0.15 (clamped 0.0); increments fail_count
+-- 'neutral' → no-op; returns current confidence
+
+-- Batch (v0.7.1) — returns count of rows updated
+SELECT pgmnemo.reinforce(
+    p_lesson_ids := ARRAY[42, 99, 137]::BIGINT[],
+    p_outcome    := 'failure'
+);
+-- Missing IDs skipped silently. Unknown outcome string RAISES EXCEPTION.
+```
+
+**Outcome string values are exact:** `'success'`, `'failure'`, `'neutral'`.
+
+**`match_confidence` in `recall_hybrid()` output:** After calling `reinforce()`,
+`recall_hybrid()` returns a `match_confidence REAL [0,1]` column that reflects the
+calibrated cosine similarity of the top result. Use it as a quality gate:
+
+```sql
+SELECT lesson_id, score, match_confidence, lesson_text
+FROM pgmnemo.recall_hybrid($1, 'JWT rotation', 5)
+WHERE match_confidence > 0.35   -- filter low-signal results
+ORDER BY score DESC;
+```
+
+---
+
+## In-place updates — `reembed()`, `reembed_batch()`, `recompute_content()` (v0.8.0)
+
+These functions update existing rows without creating new bitemporal versions —
+safe to call while `ingest()` is running concurrently.
+
+### `reembed()` — single-row embedding refresh
+
+```sql
+SELECT pgmnemo.reembed(
+    p_lesson_id  := 42,
+    p_new_vector := $1::vector(1024)
+);
+-- Updates embedding + embedding_at. Raises if lesson not found or not active.
+-- Does NOT change lesson_text, content_hash, lesson_tsv, or create a new row.
+```
+
+### `reembed_batch()` — batch embedding refresh
+
+```sql
+SELECT pgmnemo.reembed_batch(
+    p_lesson_ids  := ARRAY[10, 11, 42, 99]::BIGINT[],  -- ascending order prevents deadlocks
+    p_new_vectors := ARRAY[$1, $2, $3, $4]::vector[]
+);
+-- Returns INT: count of rows actually updated.
+-- Uses FOR UPDATE SKIP LOCKED — rows locked by concurrent ingest() are skipped.
+```
+
+**Pattern for model migrations:** query `agent_lesson` for rows where
+`embedding_at < <model_cutoff_date>` or `metadata->>'embedder' != '<new_model>'`,
+batch the IDs, re-embed in your application, and call `reembed_batch()`.
+Check coverage with `SELECT embedding_coverage_pct FROM pgmnemo.stats()`.
+
+### `recompute_content()` — in-place text correction
+
+```sql
+SELECT pgmnemo.recompute_content(
+    p_lesson_id := 42,
+    p_new_text  := 'Corrected: rotate JWT secrets within 12h of key-compromise.'
+);
+-- Cascades automatically: content_hash (GENERATED ALWAYS AS), lesson_tsv (trigger),
+-- updated_at (trigger). Preserves: id, embedding (now stale), edges, provenance.
+-- Follow up with reembed() if the semantic content changed significantly.
+```
+
+---
+
+## Health check — `pgmnemo.stats()` (v0.4.1+)
+
+One-row diagnostic snapshot. Safe to call from monitoring loops; typically < 100 ms
+on N = 10k corpus.
+
+```sql
+SELECT * FROM pgmnemo.stats();
+```
+
+19 columns (v0.8.0 / v0.7.0):
+
+| Column | Type | Description |
+|---|---|---|
+| `version` | TEXT | Installed extension version |
+| `lesson_count` | BIGINT | Total rows in `agent_lesson` |
+| `embedded_count` | BIGINT | Rows with `embedding IS NOT NULL` |
+| `embedding_coverage_pct` | FLOAT8 | `embedded_count / lesson_count × 100` |
+| `tsv_coverage_pct` | FLOAT8 | Rows with `lesson_tsv IS NOT NULL × 100` |
+| `mem_edge_count` | BIGINT | Total rows in `mem_edge` |
+| `recency_weight` | FLOAT8 | Current `pgmnemo.recency_weight` GUC |
+| `ef_search` | INT | Current `pgmnemo.ef_search` GUC |
+| `importance_weight` | FLOAT8 | Current `pgmnemo.importance_weight` GUC |
+| `hybrid_enabled` | BOOLEAN | NOT `pgmnemo.disable_hybrid` |
+| `recall_hybrid_available` | BOOLEAN | TRUE if `recall_hybrid()` is installed |
+| `oldest_lesson_age_days` | INT | Days since oldest `created_at` |
+| `orphan_count` | BIGINT | Functions in pgmnemo schema not owned by extension |
+| `ghost_count` | BIGINT | Active lessons with `verified_at IS NULL` (provenance debt) |
+| `confidence_mean` | REAL | Corpus-wide mean confidence (v0.7.0+) |
+| `confidence_p10` | REAL | 10th-percentile confidence (v0.7.0+) |
+| `confidence_p50` | REAL | Median confidence (v0.7.0+) |
+| `confidence_p90` | REAL | 90th-percentile confidence (v0.7.0+) |
+| `confidence_below_threshold_count` | INT | Lessons with `confidence < 0.3` (v0.7.0+) |
+
+**Common uses:**
+
+```sql
+-- Quick health snapshot
+SELECT version, lesson_count, embedding_coverage_pct, hybrid_enabled,
+       ghost_count, orphan_count
+FROM pgmnemo.stats();
+
+-- Check provenance debt (ghost lessons without verified_at)
+SELECT ghost_count, lesson_count,
+       ROUND(100.0 * ghost_count / NULLIF(lesson_count, 0), 1) AS ghost_pct
+FROM pgmnemo.stats();
+-- Target: ghost_pct < 5% before enabling gate_strict=enforce
+
+-- Check confidence health after outcome-learning
+SELECT confidence_mean, confidence_p50, confidence_below_threshold_count
+FROM pgmnemo.stats();
+
+-- Detect upgrade-blocking orphans (see MIGRATION.md §B.5)
+SELECT orphan_count FROM pgmnemo.stats();
+-- Non-zero → run orphan recovery before ALTER EXTENSION pgmnemo UPDATE
+```
+
+**Orphan recovery:** if `orphan_count > 0` and you need to upgrade, see
+[docs/MIGRATION.md §B.5](MIGRATION.md#b5-recovery-from-extension-orphan-objects-v041)
+for the detection query and `ALTER EXTENSION pgmnemo ADD FUNCTION` recovery procedure.
+
+---
+
+## GUC reference (v0.8.0)
+
+> **Important:** pgmnemo is a pure-SQL extension — `SHOW pgmnemo.*` fails with
+> `unrecognized configuration parameter`. Use `current_setting()` or `pgmnemo.stats()`.
+>
+> Full guide: [docs/INSTALL.md §"Reading the GUCs"](INSTALL.md#reading-the-gucs-read-this-if-you-came-from-show)
+
+```sql
+-- Read a GUC (returns NULL if unset → function falls back to its compiled default):
+SELECT current_setting('pgmnemo.recency_weight', TRUE);
+
+-- Set for current session:
+SET pgmnemo.recency_weight = '0.05';
+
+-- Persist across sessions (requires superuser):
+ALTER SYSTEM SET pgmnemo.recency_weight = '0.05';
+SELECT pg_reload_conf();
+
+-- Inspect all active GUC values in one call:
+SELECT recency_weight, ef_search, importance_weight, hybrid_enabled,
+       graph_proximity_weight
+FROM pgmnemo.stats();  -- returns current_setting() values, not defaults
+```
+
+| GUC | Default | Range | Effect |
+|---|---|---|---|
+| `pgmnemo.gate_strict` | `enforce` | `enforce`/`warn`/`off` | Provenance gate mode |
+| `pgmnemo.include_unverified` | `false` | bool | Include ghost lessons in recall |
+| `pgmnemo.recency_weight` | `0.05` | 0.0–0.3 | γ on 90-day recency decay |
+| `pgmnemo.temporal_boost` | `1.0` | 0.0–20.0 | Multiplier on recency: effective_γ = recency_weight × temporal_boost |
+| `pgmnemo.ef_search` | `100` | 10–500 | SET LOCAL pgvector.hnsw.ef_search at recall entry |
+| `pgmnemo.graph_proximity_weight` | `0.2` | 0.0–0.5 | δ on graph-edge BFS proximity term |
+| `pgmnemo.disable_hybrid` | `false` | bool | Force vector-only path even when query_text provided |
+| `pgmnemo.importance_weight` | `0.15` | 0.0–0.3 | Coefficient on importance/5 term |
+| `pgmnemo.max_query_text_chars` | `2000` | 0–any | Max input length; 0 = unlimited |
+| `pgmnemo.tenant_id` | `''` | any text | RLS scoping by project_id; empty = bypass |
+
