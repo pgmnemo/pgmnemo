@@ -8,7 +8,7 @@
 --   T4:  navigate_locate — token budget cap (cumulative chars <= budget + last row)
 --   T5:  navigate_locate — JSONB pushdown (jsonb_filter restricts to matching rows only)
 --   T6:  navigate_locate — navigation_path = 'vector' when no filter
---   T7:  navigate_locate — navigation_path = 'jsonb_gate' when filter supplied
+--   T7:  navigate_locate — navigation_path = 'jsonb_gate' when jsonb_filter supplied
 --   T8:  navigate_expand — returns lesson_text for given IDs
 --   T9:  navigate_expand — expand_fields projects metadata keys into expand_detail
 --   T10: navigate_expand — graph expansion adds causal/temporal neighbour rows
@@ -67,7 +67,7 @@ VALUES (
 SELECT source_type = 'auto_captured' AS t1_source_type_default
 FROM pgmnemo.agent_lesson
 WHERE role = 'tc_v080' AND topic = 'lesson_a';
- t1_source_type_default
+ t1_source_type_default 
 ------------------------
  t
 (1 row)
@@ -93,8 +93,8 @@ NOTICE:  T1 PASS: CHECK constraint rejects invalid source_type
 SELECT embedding_at IS NULL AS t2_embedding_at_null_before_reembed
 FROM pgmnemo.agent_lesson
 WHERE role = 'tc_v080' AND topic = 'lesson_a';
- t2_embedding_at_null_before_reembed
---------------------------------------
+ t2_embedding_at_null_before_reembed 
+-------------------------------------
  t
 (1 row)
 
@@ -113,7 +113,7 @@ FROM pgmnemo.navigate_locate(
     NULL
 )
 LIMIT 1;
- t3_has_id | t3_score_nonneg | t3_tokens_positive | t3_has_nav_path
+ t3_has_id | t3_score_nonneg | t3_tokens_positive | t3_has_nav_path 
 -----------+-----------------+--------------------+-----------------
  t         | t               | t                  | t
 (1 row)
@@ -135,7 +135,7 @@ FROM pgmnemo.navigate_locate(
     80,
     NULL
 );
- t4_at_least_one_result | t4_tokens_within_budget_plus_one | t4_first_tokens_positive
+ t4_at_least_one_result | t4_tokens_within_budget_plus_one | t4_first_tokens_positive 
 ------------------------+----------------------------------+--------------------------
  t                      | t                                | t
 (1 row)
@@ -161,7 +161,7 @@ FROM pgmnemo.navigate_locate(
     '{"env": "prod"}'::jsonb
 ) nl
 WHERE nl.navigation_path <> 'graph_expand'; -- only base rows
- t5_has_results | t5_all_results_match_filter
+ t5_has_results | t5_all_results_match_filter 
 ----------------+-----------------------------
  t              | t
 (1 row)
@@ -179,7 +179,7 @@ FROM pgmnemo.navigate_locate(
 )
 ORDER BY score DESC
 LIMIT 1;
- t6_nav_path_is_signal_based
+ t6_nav_path_is_signal_based 
 -----------------------------
  t
 (1 row)
@@ -197,7 +197,7 @@ FROM pgmnemo.navigate_locate(
 )
 ORDER BY score DESC
 LIMIT 1;
- t7_nav_path_jsonb_gate
+ t7_nav_path_jsonb_gate 
 ------------------------
  t
 (1 row)
@@ -220,7 +220,7 @@ CROSS JOIN LATERAL pgmnemo.navigate_expand(
     0,    -- no graph expansion
     0.7
 ) ne;
- t8_has_content | t8_content_nonempty | t8_nav_path_content
+ t8_has_content | t8_content_nonempty | t8_nav_path_content 
 ----------------+---------------------+---------------------
  t              | t                   | t
 (1 row)
@@ -243,7 +243,7 @@ CROSS JOIN LATERAL pgmnemo.navigate_expand(
     0,
     0.7
 ) ne;
- t9_has_expand_detail | t9_has_env_key | t9_has_priority_key
+ t9_has_expand_detail | t9_has_env_key | t9_has_priority_key 
 ----------------------+----------------+---------------------
  t                    | t              | t
 (1 row)
@@ -284,7 +284,7 @@ CROSS JOIN LATERAL pgmnemo.navigate_expand(
     1,     -- depth=1: traverse one hop
     0.8    -- threshold < 0.9 edge weight → edge is traversed
 ) ne;
- t10_two_rows_returned | t10_has_content_row | t10_has_graph_expand_row
+ t10_two_rows_returned | t10_has_content_row | t10_has_graph_expand_row 
 -----------------------+---------------------+--------------------------
  t                     | t                   | t
 (1 row)
@@ -491,6 +491,78 @@ END;
 $$;
 NOTICE:  T17 PASS: recompute_content() rejects empty text
 -- =============================================================================
+-- T18: recall_hybrid — cold-start guarantee (graph-domination regression guard)
+--   A lesson that is a PERFECT vec+BM25 match must reach top-3 BOTH at
+--   graph_proximity_weight=0 AND at the production default (0.2), even when a
+--   densely graph-connected hub cluster is present. Guards the graph-domination
+--   bug (BUG_RECALL_GRAPH_DOMINATES, fix 950f5fa): graph proximity must be a
+--   tie-breaker, not an additive driver that buries a perfect retrieval match.
+-- =============================================================================
+-- Target: perfect match (cosine 1.0 with query, owns the rare lexical token),
+-- ZERO graph edges (cold-start).
+INSERT INTO pgmnemo.agent_lesson (role, topic, lesson_text, embedding)
+VALUES ('tc_cs', 'cs_target',
+    'coldstartanchorzq navigate recall hybrid signal exact match anchor',
+    ('[1,' || repeat('0,', 1022) || '0]')::vector(1024));
+-- Hub cluster h1..h5: just below target on vector (cosine 0.98), generic lexical
+-- overlap WITHOUT the rare token → retrieval anchors ranked under the target.
+INSERT INTO pgmnemo.agent_lesson (role, topic, lesson_text, embedding)
+SELECT 'tc_cs', 'cs_hub' || g,
+    'navigate recall hybrid generic cluster member ' || g,
+    ('[0.98,0.199,' || repeat('0,', 1021) || '0]')::vector(1024)
+FROM generate_series(1, 5) g;
+-- Neighbours n1..n3: near-zero retrieval (orthogonal embedding, no lexical
+-- overlap) but graph-reachable from the hub anchors. Under the additive bug the
+-- graph boost lifts these above the target; under the fix it cannot.
+INSERT INTO pgmnemo.agent_lesson (role, topic, lesson_text, embedding)
+SELECT 'tc_cs', 'cs_nbr' || g,
+    'unrelated neighbour content row ' || g,
+    ('[' || repeat('0,', 1023) || '1]')::vector(1024)
+FROM generate_series(1, 3) g;
+-- Dense causal edges: every hub anchor → every neighbour (high graph proximity
+-- for the neighbour cluster when the graph term is additive).
+INSERT INTO pgmnemo.mem_edge (source_id, target_id, edge_kind, relation_type, weight)
+SELECT h.id, n.id, 'causal', 'causal', 1.0
+FROM pgmnemo.agent_lesson h
+JOIN pgmnemo.agent_lesson n ON n.role = 'tc_cs' AND n.topic LIKE 'cs_nbr%'
+WHERE h.role = 'tc_cs' AND h.topic LIKE 'cs_hub%';
+-- T18a: target in top-3 with graph term OFF (pure-retrieval sanity).
+SET pgmnemo.graph_proximity_weight = '0';
+SELECT bool_or(topic = 'cs_target') AS t18a_target_top3_graph_off
+FROM (
+    SELECT topic FROM pgmnemo.recall_hybrid(
+        ('[1,' || repeat('0,', 1022) || '0]')::vector(1024),
+        'coldstartanchorzq navigate recall hybrid signal',
+        10, 'tc_cs')
+    ORDER BY score DESC LIMIT 3
+) top3;
+ t18a_target_top3_graph_off 
+----------------------------
+ t
+(1 row)
+
+-- T18b: target STILL in top-3 at the production default graph weight (0.2).
+-- Regression guard: pre-fix the target fell out of the top-50.
+SET pgmnemo.graph_proximity_weight = '0.2';
+SELECT bool_or(topic = 'cs_target') AS t18b_target_top3_graph_default
+FROM (
+    SELECT topic FROM pgmnemo.recall_hybrid(
+        ('[1,' || repeat('0,', 1022) || '0]')::vector(1024),
+        'coldstartanchorzq navigate recall hybrid signal',
+        10, 'tc_cs')
+    ORDER BY score DESC LIMIT 3
+) top3;
+ t18b_target_top3_graph_default 
+--------------------------------
+ t
+(1 row)
+
+RESET pgmnemo.graph_proximity_weight;
+-- =============================================================================
 -- Cleanup
 -- =============================================================================
+DELETE FROM pgmnemo.mem_edge
+WHERE source_id IN (SELECT id FROM pgmnemo.agent_lesson WHERE role = 'tc_cs')
+   OR target_id IN (SELECT id FROM pgmnemo.agent_lesson WHERE role = 'tc_cs');
+DELETE FROM pgmnemo.agent_lesson WHERE role = 'tc_cs';
 DELETE FROM pgmnemo.agent_lesson WHERE role = 'tc_v080';

@@ -474,7 +474,77 @@ END;
 $$;
 
 -- =============================================================================
+-- T18: recall_hybrid — cold-start guarantee (graph-domination regression guard)
+--   A lesson that is a PERFECT vec+BM25 match must reach top-3 BOTH at
+--   graph_proximity_weight=0 AND at the production default (0.2), even when a
+--   densely graph-connected hub cluster is present. Guards the graph-domination
+--   bug (BUG_RECALL_GRAPH_DOMINATES, fix 950f5fa): graph proximity must be a
+--   tie-breaker, not an additive driver that buries a perfect retrieval match.
+-- =============================================================================
+
+-- Target: perfect match (cosine 1.0 with query, owns the rare lexical token),
+-- ZERO graph edges (cold-start).
+INSERT INTO pgmnemo.agent_lesson (role, topic, lesson_text, embedding)
+VALUES ('tc_cs', 'cs_target',
+    'coldstartanchorzq navigate recall hybrid signal exact match anchor',
+    ('[1,' || repeat('0,', 1022) || '0]')::vector(1024));
+
+-- Hub cluster h1..h5: just below target on vector (cosine 0.98), generic lexical
+-- overlap WITHOUT the rare token → retrieval anchors ranked under the target.
+INSERT INTO pgmnemo.agent_lesson (role, topic, lesson_text, embedding)
+SELECT 'tc_cs', 'cs_hub' || g,
+    'navigate recall hybrid generic cluster member ' || g,
+    ('[0.98,0.199,' || repeat('0,', 1021) || '0]')::vector(1024)
+FROM generate_series(1, 5) g;
+
+-- Neighbours n1..n3: near-zero retrieval (orthogonal embedding, no lexical
+-- overlap) but graph-reachable from the hub anchors. Under the additive bug the
+-- graph boost lifts these above the target; under the fix it cannot.
+INSERT INTO pgmnemo.agent_lesson (role, topic, lesson_text, embedding)
+SELECT 'tc_cs', 'cs_nbr' || g,
+    'unrelated neighbour content row ' || g,
+    ('[' || repeat('0,', 1023) || '1]')::vector(1024)
+FROM generate_series(1, 3) g;
+
+-- Dense causal edges: every hub anchor → every neighbour (high graph proximity
+-- for the neighbour cluster when the graph term is additive).
+INSERT INTO pgmnemo.mem_edge (source_id, target_id, edge_kind, relation_type, weight)
+SELECT h.id, n.id, 'causal', 'causal', 1.0
+FROM pgmnemo.agent_lesson h
+JOIN pgmnemo.agent_lesson n ON n.role = 'tc_cs' AND n.topic LIKE 'cs_nbr%'
+WHERE h.role = 'tc_cs' AND h.topic LIKE 'cs_hub%';
+
+-- T18a: target in top-3 with graph term OFF (pure-retrieval sanity).
+SET pgmnemo.graph_proximity_weight = '0';
+SELECT bool_or(topic = 'cs_target') AS t18a_target_top3_graph_off
+FROM (
+    SELECT topic FROM pgmnemo.recall_hybrid(
+        ('[1,' || repeat('0,', 1022) || '0]')::vector(1024),
+        'coldstartanchorzq navigate recall hybrid signal',
+        10, 'tc_cs')
+    ORDER BY score DESC LIMIT 3
+) top3;
+
+-- T18b: target STILL in top-3 at the production default graph weight (0.2).
+-- Regression guard: pre-fix the target fell out of the top-50.
+SET pgmnemo.graph_proximity_weight = '0.2';
+SELECT bool_or(topic = 'cs_target') AS t18b_target_top3_graph_default
+FROM (
+    SELECT topic FROM pgmnemo.recall_hybrid(
+        ('[1,' || repeat('0,', 1022) || '0]')::vector(1024),
+        'coldstartanchorzq navigate recall hybrid signal',
+        10, 'tc_cs')
+    ORDER BY score DESC LIMIT 3
+) top3;
+
+RESET pgmnemo.graph_proximity_weight;
+
+-- =============================================================================
 -- Cleanup
 -- =============================================================================
 
+DELETE FROM pgmnemo.mem_edge
+WHERE source_id IN (SELECT id FROM pgmnemo.agent_lesson WHERE role = 'tc_cs')
+   OR target_id IN (SELECT id FROM pgmnemo.agent_lesson WHERE role = 'tc_cs');
+DELETE FROM pgmnemo.agent_lesson WHERE role = 'tc_cs';
 DELETE FROM pgmnemo.agent_lesson WHERE role = 'tc_v080';

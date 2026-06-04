@@ -53,6 +53,21 @@ coexist with live ingestion. Adds `source_type` column for origin classification
 - **`agent_lesson.embedding_at TIMESTAMPTZ`** — Tracks the timestamp of the
   most recent embedding refresh. Backfilled to `updated_at` on upgrade.
 
+### Fixed
+
+- **`recall_hybrid` / `navigate_locate` graph-proximity is now a multiplicative
+  tie-breaker, not an additive driver.** Previously the graph-proximity term
+  could contribute ~10× the maximum retrieval (RRF) signal, so a lesson one
+  causal/temporal hop from any top-5 anchor out-ranked a *perfect* vector+BM25
+  match — new or unconnected lessons were effectively un-recallable regardless
+  of relevance (rich-get-richer cold-start failure). Graph proximity now only
+  re-orders already-relevant candidates. A perfect retrieval match reaches the
+  top-3 both with the graph term off and at the default
+  `graph_proximity_weight`, even alongside a dense connected hub cluster
+  (regression-tested: `tests/sql/test_v080.sql` T18a/T18b).
+- **BFS cycle guard + depth cap (5→2)** in the `navigate_locate` graph walk —
+  bounds traversal cost and prevents revisiting nodes on cyclic graphs.
+
 ### Notes
 
 - All existing function signatures unchanged (additive release).
