@@ -3,7 +3,7 @@
 **In-your-Postgres agent memory — single-plan multimodal recall, token-budget navigation, provenance-gated writes.**
 
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.8.1-green.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.8.2-green.svg)](CHANGELOG.md)
 [![PGXN](https://badge.pgxn.org/stable/pgmnemo.svg)](https://pgxn.org/dist/pgmnemo/)
 [![CI](https://github.com/pgmnemo/pgmnemo/actions/workflows/ci.yml/badge.svg)](https://github.com/pgmnemo/pgmnemo/actions/workflows/ci.yml)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-17-4169E1.svg)](https://www.postgresql.org/)

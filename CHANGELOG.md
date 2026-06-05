@@ -5,6 +5,51 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [0.8.2] — 2026-06-05
+
+### Theme
+
+**Bug-fix release.** No schema changes. Fixes three real-adopter pain points
+(agentplatform.ru/RZD: ghost rows, silent empty recall). Upgrade via
+`ALTER EXTENSION pgmnemo UPDATE TO '0.8.2'`.
+
+### Fixed
+
+- **F1 — `traverse_temporal_window` include_unverified parsing** (#bug): the
+  function compared `current_setting('pgmnemo.include_unverified', true) = 'on'`
+  (string compare), rejecting `'true'` / `'1'` / `'yes'`. Fixed to
+  `COALESCE(current_setting(...)::BOOLEAN, FALSE)`, matching every other recall
+  function. Now accepts `on`, `true`, `1`, `yes` uniformly.
+
+- **F2 — Silent empty recall when ghost lessons exist**: `recall_lessons()` and
+  `recall_hybrid()` now emit a `NOTICE` when returning 0 rows and ghost lessons
+  (`verified_at IS NULL`, ingested without provenance) exist in the same
+  role/project scope:
+  ```
+  NOTICE: pgmnemo: N matching lesson(s) are unverified (ingested without
+  commit_sha/artifact_hash) and excluded by default. SET
+  pgmnemo.include_unverified = 'on' for this session, or pass provenance on ingest.
+  ```
+  The check is a single `COUNT(*)` on empty result only — no ranking or row
+  changes.
+
+- **F3 — Docs: `ALTER DATABASE SET` connection-pool footgun**: added explicit
+  note in `docs/SQL_REFERENCE.md §"Disabling the provenance gate"` that
+  `ALTER DATABASE ... SET pgmnemo.include_unverified` applies only to **new**
+  connections; existing MCP/pooler connections must run
+  `SET pgmnemo.include_unverified='on'` in their own session. Also documents
+  that recall accepts `on/true/1/yes` for this GUC.
+
+### Upgrade
+
+```sql
+ALTER EXTENSION pgmnemo UPDATE TO '0.8.2';
+```
+
+No migration steps. The upgrade is body-only function replacements.
+
+---
+
 ## [0.8.1] — 2026-06-04
 
 ### Theme
