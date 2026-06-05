@@ -57,6 +57,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   }}}}
   ```
 
+- **`pgmnemo-mcp` Docker image** (adopter request): a `pgmnemo_mcp/Dockerfile`
+  lets the MCP run in a container so its `psycopg2`/`mcp` deps don't conflict with
+  other libraries in Linux agent environments (where `pip install pgmnemo-mcp` was
+  breaking). Build `docker build -t pgmnemo-mcp:0.8.2 pgmnemo_mcp/` and launch via
+  `docker run -i --rm` in the MCP client config (see README §"Run via Docker").
+
 ### Upgrade
 
 ```sql

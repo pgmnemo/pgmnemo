@@ -220,6 +220,39 @@ pgmnemo-mcp
 DATABASE_URL=postgresql://user:pass@host/db python -m pgmnemo_mcp --smoke
 ```
 
+### Run via Docker (Linux / dependency isolation) — v0.8.2
+
+If `pip install pgmnemo-mcp` conflicts with other libraries in your agent
+environment (common on Linux agent workflows), run the MCP in a container so its
+`psycopg2`/`mcp` deps stay isolated from your host:
+
+```bash
+docker build -t pgmnemo-mcp:0.8.2 pgmnemo_mcp/      # or: docker pull <registry>/pgmnemo-mcp:0.8.2 once published
+```
+
+MCP client config (stdio via `docker run -i`):
+
+```json
+{
+  "mcpServers": {
+    "pgmnemo": {
+      "command": "docker",
+      "args": ["run", "-i", "--rm",
+               "-e", "DATABASE_URL", "-e", "EMBEDDING_SERVER", "-e", "EMBEDDING_MODEL",
+               "pgmnemo-mcp:0.8.2"],
+      "env": {
+        "DATABASE_URL": "postgresql://user:pass@host:5432/db",
+        "EMBEDDING_SERVER": "http://server:1234/v1/embeddings"
+      }
+    }
+  }
+}
+```
+
+The `-e VAR` flags forward the values from `env` into the container. If your DB or
+embedding server is on the Docker host, add `--add-host=host.docker.internal:host-gateway`
+(or `--network=host` on Linux) and point the URLs at `host.docker.internal`.
+
 ### Tools exposed
 
 | Tool | Arguments | Description |
