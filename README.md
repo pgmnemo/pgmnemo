@@ -206,6 +206,9 @@ pip install -e pgmnemo_mcp/
 |----------|---------|-------------|
 | `DATABASE_URL` | `postgresql://localhost/pgmnemo` | libpq connection string |
 | `MCP_PORT` | `8765` | Port for HTTP/SSE transport |
+| `EMBEDDING_SERVER` | _(unset)_ | OpenAI-compatible embeddings endpoint (e.g. `http://server:1234/v1/embeddings`). When set, `ingest`/`recall` embed text themselves for vector+BM25 hybrid recall. Unset → text-only (BM25) fallback. (v0.8.2) |
+| `EMBEDDING_MODEL` | _(unset)_ | Optional model name sent in the embeddings request. |
+| `EMBEDDING_DIM` | `1024` | Expected embedding dimension; mismatched dims are ignored (text-only fallback). Must match the extension's `vector(1024)` (e.g. bge-m3). |
 
 ### Usage
 

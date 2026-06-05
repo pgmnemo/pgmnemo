@@ -40,11 +40,29 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   `SET pgmnemo.include_unverified='on'` in their own session. Also documents
   that recall accepts `on/true/1/yes` for this GUC.
 
+### Added
+
+- **`pgmnemo-mcp` self-embedding via `EMBEDDING_SERVER`** (adopter request): the
+  MCP server can now embed text itself through an OpenAI-compatible embeddings
+  endpoint, so clients no longer need to supply vectors out of band. Set
+  `EMBEDDING_SERVER` (and optionally `EMBEDDING_MODEL`, `EMBEDDING_DIM`, default
+  1024) in the MCP env; `ingest` embeds the lesson text and `recall` embeds the
+  query → real vector+BM25 hybrid recall. When `EMBEDDING_SERVER` is unset or
+  unreachable, both fall back to the previous text-only (BM25) behaviour — never
+  raises. Pure stdlib (`urllib`), no new dependency.
+  ```json
+  {"mcpServers": {"pgmnemo": {"command": "pgmnemo-mcp", "env": {
+    "DATABASE_URL": "postgresql://user:pass@host:5432/db",
+    "EMBEDDING_SERVER": "http://server:1234/v1/embeddings"
+  }}}}
+  ```
+
 ### Upgrade
 
 ```sql
 ALTER EXTENSION pgmnemo UPDATE TO '0.8.2';
 ```
+The `EMBEDDING_SERVER` feature is in the `pgmnemo-mcp` package only — `pip install -U pgmnemo-mcp` and add the env var. Embeddings must match the extension's `vector(1024)` (e.g. bge-m3); other dimensions are ignored (text-only fallback).
 
 No migration steps. The upgrade is body-only function replacements.
 
