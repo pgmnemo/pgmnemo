@@ -227,7 +227,8 @@ environment (common on Linux agent workflows), run the MCP in a container so its
 `psycopg2`/`mcp` deps stay isolated from your host:
 
 ```bash
-docker build -t pgmnemo-mcp:0.8.2 pgmnemo_mcp/      # or: docker pull <registry>/pgmnemo-mcp:0.8.2 once published
+docker pull pgmnemo/pgmnemo-mcp:0.8.2              # published to Docker Hub on each release tag
+docker build -t pgmnemo-mcp:0.8.2 pgmnemo_mcp/        # ...or build locally
 ```
 
 MCP client config (stdio via `docker run -i`):
