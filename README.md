@@ -244,9 +244,11 @@ docker exec pgmem psql -U postgres -c "CREATE EXTENSION pgmnemo CASCADE;"
 # 2. (optional) an OpenAI-compatible embeddings endpoint (1024-dim, e.g. bge-m3 / LM Studio)
 #    — without it, recall is BM25-only.
 
-# 3. Smoke-test the MCP against that DB:
-docker run --rm --link pgmem --entrypoint pgmnemo-mcp gaidabura/pgmnemo-mcp:0.8.3 \
-  -e DATABASE_URL=postgresql://postgres:pass@pgmem:5432/postgres --smoke   # → "OK (recall_lessons returned N rows)"
+# 3. Smoke-test the MCP against that DB (note: -e BEFORE the image, and the --smoke
+#    flag lives in `python -m pgmnemo_mcp`, not the default `pgmnemo-mcp` entrypoint):
+docker run --rm --link pgmem -e DATABASE_URL=postgresql://postgres:pass@pgmem:5432/postgres \
+  --entrypoint python gaidabura/pgmnemo-mcp:0.8.3 -m pgmnemo_mcp --smoke
+  # → "pgmnemo-mcp smoke: OK (recall_lessons returned N rows)"
 ```
 
 MCP client config (stdio via `docker run -i`):
@@ -283,6 +285,9 @@ embedding server is on the Docker host, add `--add-host=host.docker.internal:hos
 `role="mcp_agent"`, `topic="general"`, `importance=3`, `project_id=1`, `metadata={}`.
 Pass `commit_sha` or `artifact_hash` to satisfy the provenance gate; without one the
 lesson is a "ghost" (excluded from recall by default unless `pgmnemo.include_unverified` is on).
+Note: `recall` searches **globally** (no `role`/`project_id` filter) even though `ingest`
+scopes by `project_id` — call `pgmnemo.recall_hybrid()` in SQL directly if you need
+project/role-scoped retrieval.
 
 ### MCP Registry
 
