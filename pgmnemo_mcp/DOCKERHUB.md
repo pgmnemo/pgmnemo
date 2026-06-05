@@ -1,8 +1,8 @@
 # pgmnemo-mcp
 
 Containerised [MCP](https://modelcontextprotocol.io/) server for **pgmnemo** — in-your-Postgres
-agent memory. Exposes `ingest` and `recall` tools so agents can write and retrieve lessons
-directly from PostgreSQL, with no second datastore and zero data egress.
+agent memory. Exposes the `pgmnemo.ingest` and `pgmnemo.recall` MCP tools so agents can write
+and retrieve lessons directly from PostgreSQL, with no second datastore and zero data egress.
 
 Run it in a container so its `psycopg2`/`mcp` dependencies stay isolated from your agent
 environment (a common pain on Linux where `pip install pgmnemo-mcp` conflicts with other libs).
