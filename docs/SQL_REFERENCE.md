@@ -249,6 +249,36 @@ audit warning for each unprovenanced row.
 lesson keeps its provenance (and stays eligible for recall — unprovenanced rows
 are "ghost" lessons with `verified_at IS NULL`, excluded from recall by default).
 
+**Allowing recall of ghost lessons (v0.8.2):** If you have ghost lessons
+already ingested and want to include them in recall, set
+`pgmnemo.include_unverified`. This GUC accepts `on`, `true`, `1`, or `yes`:
+
+```sql
+-- Current session only (takes effect immediately):
+SET pgmnemo.include_unverified = 'on';
+
+-- Current transaction only:
+SET LOCAL pgmnemo.include_unverified = 'on';
+
+-- Persist for a database — applies ONLY to NEW connections:
+ALTER DATABASE mydb SET pgmnemo.include_unverified = 'on';
+
+-- Persist for a role — applies ONLY to NEW connections:
+ALTER ROLE myuser SET pgmnemo.include_unverified = 'on';
+```
+
+> ⚠️ **Connection-pool / MCP footgun (v0.8.2):** `ALTER DATABASE SET` and
+> `ALTER ROLE SET` apply only when a connection is established — they do **not**
+> affect already-open connections. If you use a connection pool (PgBouncer,
+> RDS Proxy) or a long-lived MCP server, the existing connections will not pick
+> up the change. For those, run `SET pgmnemo.include_unverified = 'on'` directly
+> in each session, or restart the connection pool / MCP process so new
+> connections inherit the database default.
+>
+> To diagnose: if `recall_lessons()` returns 0 rows, pgmnemo will emit a
+> `NOTICE` telling you how many ghost lessons exist in your role/project scope
+> and are being excluded. Enable client_min_messages to `notice` to see it.
+
 **Bitemporal dedup NOTICE (v0.6.0, RFC Q5):** When an `INSERT` triggers
 the `trg_agent_lesson_bitemporal_close` trigger (same `content_hash` as an active
 row), `ingest()` emits:

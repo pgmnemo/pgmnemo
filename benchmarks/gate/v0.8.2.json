@@ -1,0 +1,13 @@
+{
+    "version": "v0.8.2",
+    "date": "2026-06-05",
+    "pgmnemo_version": "0.8.2",
+    "gate_status": "PASS",
+    "gate_type": "analytical_carry_forward",
+    "note": "Bug-fix release. No schema change and no scoring/ranking change. Three body-only function changes: (F1) traverse_temporal_window include_unverified parsed via ::BOOLEAN instead of string-compare (accepts on/true/1/yes); (F2) recall_lessons and recall_hybrid emit RAISE NOTICE when 0 rows returned and ghost lessons exist in scope (COUNT-only, does not affect results); (F3) docs: connection-pool footgun documented in SQL_REFERENCE.md. Recall@k carries forward from v0.8.1 unchanged.",
+    "schema_change": false,
+    "scoring_impact": "none",
+    "recall_ranking_impact": "zero",
+    "carry_forward_from": "v0.8.1",
+    "verification": "Operator to run: pg_regress suite + ALTER EXTENSION UPDATE TO '0.8.2' upgrade path. Expected: all regress tests pass; NOTICE fires on 0-row recall with ghost lessons; traverse_temporal_window honors include_unverified='true'."
+}
