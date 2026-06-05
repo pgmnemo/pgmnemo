@@ -1,0 +1,13 @@
+{
+    "version": "v0.8.3",
+    "date": "2026-06-05",
+    "pgmnemo_version": "0.8.3",
+    "gate_status": "PASS",
+    "gate_type": "analytical_carry_forward",
+    "note": "Documentation patch. NO schema, function-body, or scoring change — pgmnemo--0.8.3.sql is byte-identical to pgmnemo--0.8.2.sql and pgmnemo--0.8.2--0.8.3.sql is a documented no-op (version sentinel only). Fixes adopter-reported doc bugs found in a cold-adoption test: broken 'Verify install' smoke SQL (missing ::vector(1024)/::smallint casts + sub-20-char lesson_text), mis-documented MCP tool-arg contract (top-level args, not nested metadata), v0.8.1 version drift in install examples, and a fresh-DB MCP quickstart. Recall behaviour identical to v0.8.2.",
+    "schema_change": false,
+    "scoring_impact": "none",
+    "recall_ranking_impact": "zero",
+    "carry_forward_from": "v0.8.2",
+    "verification": "pgmnemo--0.8.3.sql == pgmnemo--0.8.2.sql (diff empty); full pg_regress extension suite 22/22 PASS on PostgreSQL 17; fresh CREATE EXTENSION at default_version 0.8.3 via the chain verified."
+}

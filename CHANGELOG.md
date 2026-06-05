@@ -5,6 +5,39 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [0.8.3] — 2026-06-05
+
+### Theme
+
+**Documentation patch.** No schema, function, or scoring change — SQL is
+byte-identical to v0.8.2. Fixes adopter-reported doc bugs surfaced by a cold
+first-time-setup test.
+
+### Fixed (docs)
+
+- **`docs/INSTALL.md` "Verify install" smoke SQL was broken** — the very first
+  command a new adopter runs failed twice: the bare `NULL` for the `vector(1024)`
+  argument couldn't resolve the `ingest()` overload, and the example `lesson_text`
+  (`'world'`) was under the 20-char minimum. Now uses `NULL::vector(1024)`,
+  `3::smallint`, and a valid-length lesson.
+- **MCP tool-argument contract was mis-documented** — `README.md` and
+  `pgmnemo_mcp/README.md` implied `ingest` took a nested `metadata` dict, but the
+  real schema exposes `text`/`role`/`topic`/`importance`/`project_id`/`commit_sha`/
+  `artifact_hash`/`metadata` as **top-level** arguments. An agent following the old
+  docs would silently mis-scope its lessons (`role="mcp_agent"` default). Documented
+  the real arguments and their defaults.
+- **Version drift** — install examples in `README.md` / `docs/INSTALL.md` pinned
+  `v0.8.1` zips/`pgxn install pgmnemo==0.8.1`; bumped to the current release.
+
+### Upgrade
+
+```sql
+ALTER EXTENSION pgmnemo UPDATE TO '0.8.3';
+```
+No-op at the SQL level (docs + `pgmnemo-mcp` package metadata only).
+
+---
+
 ## [0.8.2] — 2026-06-05
 
 ### Theme
