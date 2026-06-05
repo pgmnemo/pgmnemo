@@ -3,7 +3,7 @@
 **In-your-Postgres agent memory — single-plan multimodal recall, token-budget navigation, provenance-gated writes.**
 
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.8.1-green.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.8.2-green.svg)](CHANGELOG.md)
 [![PGXN](https://badge.pgxn.org/stable/pgmnemo.svg)](https://pgxn.org/dist/pgmnemo/)
 [![CI](https://github.com/pgmnemo/pgmnemo/actions/workflows/ci.yml/badge.svg)](https://github.com/pgmnemo/pgmnemo/actions/workflows/ci.yml)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-17-4169E1.svg)](https://www.postgresql.org/)
@@ -206,6 +206,9 @@ pip install -e pgmnemo_mcp/
 |----------|---------|-------------|
 | `DATABASE_URL` | `postgresql://localhost/pgmnemo` | libpq connection string |
 | `MCP_PORT` | `8765` | Port for HTTP/SSE transport |
+| `EMBEDDING_SERVER` | _(unset)_ | OpenAI-compatible embeddings endpoint (e.g. `http://server:1234/v1/embeddings`). When set, `ingest`/`recall` embed text themselves for vector+BM25 hybrid recall. Unset → text-only (BM25) fallback. (v0.8.2) |
+| `EMBEDDING_MODEL` | _(unset)_ | Optional model name sent in the embeddings request. |
+| `EMBEDDING_DIM` | `1024` | Expected embedding dimension; mismatched dims are ignored (text-only fallback). Must match the extension's `vector(1024)` (e.g. bge-m3). |
 
 ### Usage
 
@@ -216,6 +219,40 @@ pgmnemo-mcp
 # Smoke test: verify DB connectivity
 DATABASE_URL=postgresql://user:pass@host/db python -m pgmnemo_mcp --smoke
 ```
+
+### Run via Docker (Linux / dependency isolation) — v0.8.2
+
+If `pip install pgmnemo-mcp` conflicts with other libraries in your agent
+environment (common on Linux agent workflows), run the MCP in a container so its
+`psycopg2`/`mcp` deps stay isolated from your host:
+
+```bash
+docker pull gaidabura/pgmnemo-mcp:0.8.2              # published to Docker Hub on each release tag
+docker build -t pgmnemo-mcp:0.8.2 pgmnemo_mcp/        # ...or build locally
+```
+
+MCP client config (stdio via `docker run -i`):
+
+```json
+{
+  "mcpServers": {
+    "pgmnemo": {
+      "command": "docker",
+      "args": ["run", "-i", "--rm",
+               "-e", "DATABASE_URL", "-e", "EMBEDDING_SERVER", "-e", "EMBEDDING_MODEL",
+               "pgmnemo-mcp:0.8.2"],
+      "env": {
+        "DATABASE_URL": "postgresql://user:pass@host:5432/db",
+        "EMBEDDING_SERVER": "http://server:1234/v1/embeddings"
+      }
+    }
+  }
+}
+```
+
+The `-e VAR` flags forward the values from `env` into the container. If your DB or
+embedding server is on the Docker host, add `--add-host=host.docker.internal:host-gateway`
+(or `--network=host` on Linux) and point the URLs at `host.docker.internal`.
 
 ### Tools exposed
 
