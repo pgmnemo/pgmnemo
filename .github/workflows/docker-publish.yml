@@ -45,6 +45,12 @@ jobs:
             echo "::warning::DOCKERHUB_USERNAME/DOCKERHUB_TOKEN not set — building image without pushing."
             echo "push=false" >> "$GITHUB_OUTPUT"
           fi
+          if [ -n "${{ secrets.DOCKERHUB_PASSWORD }}" ]; then
+            echo "desc=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::DOCKERHUB_PASSWORD not set — skipping Docker Hub description update (PATs lack metadata scope; the account password is required for this endpoint)."
+            echo "desc=false" >> "$GITHUB_OUTPUT"
+          fi
 
       - uses: docker/setup-qemu-action@v3
       - uses: docker/setup-buildx-action@v3
@@ -66,3 +72,13 @@ jobs:
           tags: |
             ${{ vars.DOCKERHUB_IMAGE || 'pgmnemo/pgmnemo-mcp' }}:${{ steps.ver.outputs.version }}
             ${{ vars.DOCKERHUB_IMAGE || 'pgmnemo/pgmnemo-mcp' }}:latest
+
+      - name: Update Docker Hub description + README
+        if: steps.creds.outputs.desc == 'true'
+        uses: peter-evans/dockerhub-description@v4
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_PASSWORD }}
+          repository: ${{ vars.DOCKERHUB_IMAGE || 'pgmnemo/pgmnemo-mcp' }}
+          short-description: "Containerised pgmnemo MCP server — in-Postgres agent memory (ingest/recall) over MCP"
+          readme-filepath: pgmnemo_mcp/DOCKERHUB.md
