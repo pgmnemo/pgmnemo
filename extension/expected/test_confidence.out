@@ -177,6 +177,7 @@ FROM pgmnemo.recall_hybrid(
     NULL
 );
 NOTICE:  pgmnemo: query_embedding IS NULL -- falling back to text-only recall; no semantic similarity
+NOTICE:  pgmnemo: 8 matching lesson(s) are unverified (ingested without commit_sha/artifact_hash) and excluded by default. SET pgmnemo.include_unverified = 'on' for this session, or pass provenance on ingest.
  recall_hybrid_text_only_runs 
 ------------------------------
  t
