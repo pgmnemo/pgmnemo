@@ -15,7 +15,7 @@ from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 
-from .config import get_pool
+from .config import embed, get_pool, to_pgvector
 
 mcp = FastMCP("pgmnemo", port=8765)
 
@@ -38,6 +38,9 @@ def ingest(
     - verified_at is stamped automatically when commit_sha/artifact_hash are present.
     - Embedding dimension validation fires before the INSERT.
     """
+    # v0.8.2: embed the lesson text via EMBEDDING_SERVER if configured;
+    # falls back to NULL (text-only) when unset/unavailable.
+    embedding = to_pgvector(embed(text))
     p = get_pool()
     conn = p.getconn()
     try:
@@ -46,7 +49,7 @@ def ingest(
                 """
                 SELECT pgmnemo.ingest(
                     %s, %s, %s, %s, %s::smallint,
-                    NULL::vector(1024), %s, %s, %s::jsonb
+                    %s::vector(1024), %s, %s, %s::jsonb
                 )
                 """,
                 (
@@ -55,6 +58,7 @@ def ingest(
                     topic,
                     text,
                     importance,
+                    embedding,
                     commit_sha,
                     artifact_hash,
                     json.dumps(metadata) if metadata is not None else "{}",
@@ -74,20 +78,22 @@ def recall(query: str, top_k: int = 5) -> list[dict[str, Any]]:
     recall_lessons() RETURNS TABLE (lesson_id bigint, score, role, ...) — the output
     column is 'lesson_id' (an alias), not 'id' (the physical table column).
     """
+    # v0.8.2: embed the query via EMBEDDING_SERVER if configured → real
+    # vector+BM25 hybrid recall; falls back to NULL (BM25 keyword only) when unset.
+    query_vec = to_pgvector(embed(query))
     p = get_pool()
     conn = p.getconn()
     try:
         with conn.cursor() as cur:
             # recall_lessons(query_vec, top_k, role_filter, project_id_filter, query_text)
-            # Pass NULL vector — rely on query_text for BM25/hybrid keyword match.
             cur.execute(
                 """
                 SELECT lesson_id, role, topic, lesson_text, importance, created_at
                 FROM pgmnemo.recall_lessons(
-                    NULL::vector(1024), %s, NULL, NULL, %s
+                    %s::vector(1024), %s, NULL, NULL, %s
                 )
                 """,
-                (top_k, query),
+                (query_vec, top_k, query),
             )
             cols = [d[0] for d in cur.description]
             return [dict(zip(cols, row)) for row in cur.fetchall()]
