@@ -62,6 +62,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   other libraries in Linux agent environments (where `pip install pgmnemo-mcp` was
   breaking). Build `docker build -t pgmnemo-mcp:0.8.2 pgmnemo_mcp/` and launch via
   `docker run -i --rm` in the MCP client config (see README §"Run via Docker").
+  A `docker-publish.yml` workflow builds + pushes the image to Docker Hub
+  (multi-arch amd64/arm64) on every release tag (operator sets DOCKERHUB_USERNAME/
+  DOCKERHUB_TOKEN secrets; builds without pushing if unset).
 
 ### Upgrade
 
