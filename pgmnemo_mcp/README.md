@@ -56,12 +56,15 @@ Add to **Claude Desktop** (`~/Library/Application Support/Claude/claude_desktop_
 
 ## Tools exposed
 
-| Tool | Arguments | Description |
+| Tool | Arguments (all top-level) | Description |
 |------|-----------|-------------|
-| `pgmnemo.ingest` | `text: str, metadata?: dict` | Store a lesson in agent memory |
-| `pgmnemo.recall` | `query: str, top_k?: int` | Retrieve relevant lessons |
+| `pgmnemo.ingest` | `text` (req), `role`, `topic`, `importance`, `project_id`, `commit_sha`, `artifact_hash`, `metadata` | Store a lesson |
+| `pgmnemo.recall` | `query` (req), `top_k` | Retrieve relevant lessons |
 
-`metadata` keys for `pgmnemo.ingest`: `role`, `topic`, `importance` (1–5), `commit_sha`.
+`ingest` arguments are **top-level** — do not nest them under `metadata`. Defaults:
+`role="mcp_agent"`, `topic="general"`, `importance=3`, `project_id=1`. Pass `commit_sha`
+or `artifact_hash` to satisfy the provenance gate (without one the lesson is a "ghost",
+excluded from recall by default).
 
 ## Usage
 
