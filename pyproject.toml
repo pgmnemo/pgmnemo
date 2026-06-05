@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "pgmnemo-mcp"
-version = "0.8.1"
+version = "0.8.2"
 description = "MCP server wrapper for pgmnemo — exposes ingest and recall as MCP tools"
 readme = "README.md"
 license = { text = "Apache-2.0" }

@@ -5,6 +5,78 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [0.8.2] — 2026-06-05
+
+### Theme
+
+**Bug-fix release.** No schema changes. Fixes three real-adopter pain points
+(agentplatform.ru/RZD: ghost rows, silent empty recall). Upgrade via
+`ALTER EXTENSION pgmnemo UPDATE TO '0.8.2'`.
+
+### Fixed
+
+- **F1 — `traverse_temporal_window` include_unverified parsing** (#bug): the
+  function compared `current_setting('pgmnemo.include_unverified', true) = 'on'`
+  (string compare), rejecting `'true'` / `'1'` / `'yes'`. Fixed to
+  `COALESCE(current_setting(...)::BOOLEAN, FALSE)`, matching every other recall
+  function. Now accepts `on`, `true`, `1`, `yes` uniformly.
+
+- **F2 — Silent empty recall when ghost lessons exist**: `recall_lessons()` and
+  `recall_hybrid()` now emit a `NOTICE` when returning 0 rows and ghost lessons
+  (`verified_at IS NULL`, ingested without provenance) exist in the same
+  role/project scope:
+  ```
+  NOTICE: pgmnemo: N matching lesson(s) are unverified (ingested without
+  commit_sha/artifact_hash) and excluded by default. SET
+  pgmnemo.include_unverified = 'on' for this session, or pass provenance on ingest.
+  ```
+  The check is a single `COUNT(*)` on empty result only — no ranking or row
+  changes.
+
+- **F3 — Docs: `ALTER DATABASE SET` connection-pool footgun**: added explicit
+  note in `docs/SQL_REFERENCE.md §"Disabling the provenance gate"` that
+  `ALTER DATABASE ... SET pgmnemo.include_unverified` applies only to **new**
+  connections; existing MCP/pooler connections must run
+  `SET pgmnemo.include_unverified='on'` in their own session. Also documents
+  that recall accepts `on/true/1/yes` for this GUC.
+
+### Added
+
+- **`pgmnemo-mcp` self-embedding via `EMBEDDING_SERVER`** (adopter request): the
+  MCP server can now embed text itself through an OpenAI-compatible embeddings
+  endpoint, so clients no longer need to supply vectors out of band. Set
+  `EMBEDDING_SERVER` (and optionally `EMBEDDING_MODEL`, `EMBEDDING_DIM`, default
+  1024) in the MCP env; `ingest` embeds the lesson text and `recall` embeds the
+  query → real vector+BM25 hybrid recall. When `EMBEDDING_SERVER` is unset or
+  unreachable, both fall back to the previous text-only (BM25) behaviour — never
+  raises. Pure stdlib (`urllib`), no new dependency.
+  ```json
+  {"mcpServers": {"pgmnemo": {"command": "pgmnemo-mcp", "env": {
+    "DATABASE_URL": "postgresql://user:pass@host:5432/db",
+    "EMBEDDING_SERVER": "http://server:1234/v1/embeddings"
+  }}}}
+  ```
+
+- **`pgmnemo-mcp` Docker image** (adopter request): a `pgmnemo_mcp/Dockerfile`
+  lets the MCP run in a container so its `psycopg2`/`mcp` deps don't conflict with
+  other libraries in Linux agent environments (where `pip install pgmnemo-mcp` was
+  breaking). Build `docker build -t pgmnemo-mcp:0.8.2 pgmnemo_mcp/` and launch via
+  `docker run -i --rm` in the MCP client config (see README §"Run via Docker").
+  A `docker-publish.yml` workflow builds + pushes the image to Docker Hub
+  (multi-arch amd64/arm64) on every release tag (operator sets DOCKERHUB_USERNAME/
+  DOCKERHUB_TOKEN secrets; builds without pushing if unset).
+
+### Upgrade
+
+```sql
+ALTER EXTENSION pgmnemo UPDATE TO '0.8.2';
+```
+The `EMBEDDING_SERVER` feature is in the `pgmnemo-mcp` package only — `pip install -U pgmnemo-mcp` and add the env var. Embeddings must match the extension's `vector(1024)` (e.g. bge-m3); other dimensions are ignored (text-only fallback).
+
+No migration steps. The upgrade is body-only function replacements.
+
+---
+
 ## [0.8.1] — 2026-06-04
 
 ### Theme
