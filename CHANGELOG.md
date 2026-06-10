@@ -5,6 +5,72 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## [0.9.0] — 2026-06-10
+
+### Theme
+
+**Token-economy correctness + recall performance + schema extension.**
+Five patches: budget counter fix, project_id scoping for navigate_locate,
+NULL-embedding ghost-exclusion fix, content_type/blob_ref/doc_ref columns,
+and recall_hybrid O(n) rewrite to bounded CTEs.
+
+### Fixed
+
+- **#1 — `navigate_locate` budget counter** (#budget, #token-economy):
+  `token_budget_chars` previously counted full `length(lesson_text)` but
+  delivered only `left(lesson_text, 50)` as preview. Budget filled ~5x too
+  fast. Fix: `LEAST(length(lesson_text), 50)` — counter now matches delivered
+  payload. **Behavioral change:** callers with `token_budget_chars=2000` will
+  receive ~40 rows (previously ~8). The budget now counts preview characters
+  (<=50 chars/row). Reduce budget proportionally to preserve prior result
+  counts.
+
+- **#2 — `ingest()` NULL-embedding != ghost** (#ghost, #ingest):
+  All lessons passing quality gates (F1 min-length, F2 repetition, F3
+  near-dup) now have `verified_at = NOW()` unconditionally. Previously,
+  lessons without `commit_sha`/`artifact_hash` were ghost-excluded from
+  recall. `ingest()` IS the verification gate; provenance tier still
+  contributes to the aux ranking score but no longer gates visibility.
+
+- **#4 — `recall_hybrid` O(n) → O(k log n)** (#recall, #performance):
+  Rewrote single `raw_candidates` CTE into two bounded CTEs:
+  `vec_candidates` (HNSW index scan, `LIMIT GREATEST(k*4, ef_search)`) and
+  `bm25_candidates` (GIN index scan, `LIMIT GREATEST(k*4, 40)`).
+  RRF window functions now operate over <=2×fetch_k rows, not n.
+  Deterministic tie-breaker (`f.id ASC`) added to final ORDER BY.
+  **#4 inclusion gated on host BENCHMARK** (Recall@10 >= 0.55, delta <5pp
+  vs Python 2-phase, >=2000-row corpus). May revert to 0.9.1 by founder
+  decision.
+
+### Added
+
+- **#1b — `project_id_filter` on `navigate_locate`** (#navigate, #parity):
+  New 5th parameter `project_id_filter INT DEFAULT NULL`. Scopes candidates
+  to a single project using the existing B-tree index
+  (`pgmnemo_agent_lesson_project_idx`). Parity with `recall_hybrid` which
+  has had `project_id_filter` since v0.4.0. Old 4-arg signature is dropped
+  in migration.
+
+- **#3 — `agent_lesson` content_type/blob_ref/doc_ref columns** (#schema):
+  Three nullable columns: `content_type TEXT`, `blob_ref TEXT`,
+  `doc_ref TEXT`. Gates future per-type dispatch (#5) and typed expand (#6)
+  when G1 bench passes (>=50% coverage + >=3 distinct content_type values).
+
+### Upgrade
+
+```sql
+ALTER EXTENSION pgmnemo UPDATE TO '0.9.0';
+```
+
+### Breaking changes
+
+None. All changes are additive (new parameter with DEFAULT, corrected budget
+counter, new nullable columns). Existing callers are unaffected. However,
+`navigate_locate` callers should be aware that budget accounting is now
+correct — ~5x more IDs returned per equivalent budget.
+
+---
+
 ## [0.8.3] — 2026-06-05
 
 ### Theme
