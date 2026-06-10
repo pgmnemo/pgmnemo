@@ -1,147 +1,176 @@
-# ADR-0.9.0: pgmnemo 0.9.0 Release — Signature Change, Additive Columns, Bug Fixes
+# ADR-0.9.0: pgmnemo 0.9.0 — navigate_locate Signature Add, Additive Schema Columns, and Release Fork-Flow
 
-**Status:** PROPOSED — awaiting Founder gate before public-OSS push  
+**Status:** APPROVED — pending BENCHMARK C1 empirical gate for #4 only  
 **Date:** 2026-06-10  
-**Author:** chief_architect (assignee_id=86)  
+**Author:** chief_architect (86)  
 **Authority inputs:** DECISION_0.9_SQL.md · DECISION_0.9_RECALL_HYBRID.md · REVIEW_0.9.md  
-**Applies to:** pgmnemo 0.9.0 (upgrade from 0.8.3; migration file `pgmnemo--0.8.3--0.9.0.sql`)  
-**Source anchor:** All diff-line references use `pgmnemo--0.8.3.sql` (flat install). 0.8.3 is a docs-only patch over 0.8.2 — SQL is byte-identical. Line numbers are identical between 0.8.2 and 0.8.3.
+**Decision owner:** Founder (public commit / OSS push)  
+**Applies to:** pgmnemo 0.9.0, migration file `pgmnemo--0.8.3--0.9.0.sql`
 
 ---
 
-## 1. Scope
+## 1. Context
 
-### 1.1 Items included in 0.9.0
+pgmnemo 0.8.3 is a documentation-only patch; its SQL is byte-identical to 0.8.2. The 0.9.0 release addresses two source-confirmed bugs and adds three nullable columns required by the G1-gated dispatch items (#5/#6) that ship in a later release.
 
-| # | Description | Change class | Schema change? | Signature change? |
-|---|-------------|-------------|----------------|-------------------|
-| **#1** | Fix `navigate_locate` budget counter: `LEAST(length, 50)` | Body-only | No | No |
-| **#1b** | Add `project_id_filter INT DEFAULT NULL` to `navigate_locate` | Signature add | No | **Yes — DROP + CREATE OR REPLACE** |
-| **#2** | NULL-embedding ≠ ghost at ingest (additive guard in `ingest()`) | Body-only | No | No |
-| **#3** | `content_type`, `blob_ref`, `doc_ref` nullable columns on `agent_lesson` | DDL add | **Yes — ALTER TABLE ADD COLUMN** | No |
-| **#4** | `recall_hybrid` O(n) → O(k log n) two-CTE rewrite | Body-only | No | No |
+Four items are in scope for the migration file:
 
-### 1.2 Items excluded from 0.9.0 (gate-blocked)
+| # | Item | Change class | ADR section |
+|---|------|-------------|-------------|
+| **1** | Fix `navigate_locate` budget counter | Body-only (function rewrite) | §4 |
+| **1b** | Add `project_id_filter` to `navigate_locate` | **Schema-visible: signature add** | §5 (main gate) |
+| **2** | NULL-embedding ≠ ghost at ingest | Body-only (function rewrite) | §4 |
+| **3** | `content_type` + `blob_ref` + `doc_ref` nullable cols | **Schema-visible: DDL add** | §6 (main gate) |
+| **4** | Fix `recall_hybrid` O(n) scan | Body-only (function rewrite) | §7 (BENCHMARK gate) |
 
-| Item | Gate | Current state |
-|------|------|---------------|
-| #5 Per-type dispatch in `navigate_locate` | G1: `content_type` coverage ≥50%, ≥3 distinct types | Not met (columns added in #3 but unpopulated) |
-| #6 Typed `navigate_expand` deref | G1 (same) | Not met |
-| Auto-graph / rich relation-path | G3: `mem_edge` density > 0.5 | Not met (measured 0.0, 2026-06-05) |
-
-### 1.3 Items requiring this ADR
-
-**#1b** and **#3** require an ADR because:
-- **#1b** changes the public function signature (DROP required before CREATE OR REPLACE)
-- **#3** adds columns to the main `agent_lesson` table (DDL executed at install and upgrade)
-
-**#1, #2, #4** are body-only fixes — no schema change, no signature change. They are noted here for completeness and release traceability, but do not themselves require architectural review.
+Items **#1b** and **#3** are the schema-visible changes that require explicit sign-off before migration authoring; this ADR is their human gate. Items #1 and #2 are body-only rewrites with no signature or DDL change. Item #4 is body-only but gated on an empirical BENCHMARK (§7).
 
 ---
 
-## 2. Context
+## 2. Source Anchor
 
-### 2.1 Current state (0.8.3)
+All patches in 0.9.0 are authored against **`pgmnemo--0.8.3.sql`** (current HEAD). Prior decision documents (DECISION_0.9_SQL.md appendix, DECISION_0.9_RECALL_HYBRID.md appendix) cite line numbers from `pgmnemo--0.8.2.sql`. Since 0.8.3 is a docs-only patch with byte-identical SQL, the line references remain valid; however the implementor MUST confirm each hunk against the 0.8.3 flat file before writing the migration, not the 0.8.2 file.
 
-`navigate_locate` signature (4 parameters):
-```sql
-pgmnemo.navigate_locate(
-    query_embedding   vector(1024),
-    query_text        TEXT,
-    token_budget_chars INT   DEFAULT 2000,
-    jsonb_filter      JSONB  DEFAULT NULL
-)
+---
+
+## 3. DO-NOT Scope (hard boundary)
+
+| Excluded item | Reason |
+|---------------|--------|
+| Per-type dispatch in `navigate_locate` (#5) | Gated on G1 (content_type coverage ≥50%, ≥3 types). G1 not met. |
+| Typed `navigate_expand` deref (#6) | Same G1 gate. |
+| Auto-graph / rich relation-path | G3 density = 0.0 (measured 2026-06-05). Gate not met. |
+| Vision-pixel embedding | Breaks zero-egress constraint. |
+| `navigate_locate` O(n) two-CTE split | Deferred 0.9.1. `LIMIT 200` on `final_ranked` provides adequate mitigation; latency acceptable under current corpus size. |
+| Any change to `pgmnemo.mem_edge`, `pgmnemo.agent_lesson` PK/FK | Not required by any 0.9 item. |
+
+---
+
+## 4. Items #1 and #2 — Body-Only Bug Fixes
+
+These items have **no signature change and no DDL change**. The migration uses `CREATE OR REPLACE FUNCTION` without any prerequisite `DROP`. Existing callers are unaffected.
+
+### #1 — navigate_locate budget counter
+
+**Bug:** Line 4119 of `pgmnemo--0.8.3.sql` accumulates `length(al.lesson_text)` in the budget window, but line 4274 returns `left(al.lesson_text, 50)`. Budget fills ~5× too fast; `tokens_consumed` overstates by ~5× in character count.
+
+**Fix (1 line):**
+```diff
+-            length(al.lesson_text)                          AS text_len,
++            LEAST(length(al.lesson_text), 50)               AS text_len,
 ```
 
-`agent_lesson` table has no `content_type`, `blob_ref`, or `doc_ref` columns.
+**Expected effect:** `navigate_locate(budget=2000)` returns ~40 rows (up from ~8); `tokens_consumed` ≈ 2000 (down from ~2183).
 
-### 2.2 Motivation for #1b
+**Behavioral note for CHANGELOG:** Callers that calibrated `token_budget_chars` to receive ~8 IDs will receive ~40 after upgrade. Required CHANGELOG entry:
 
-`recall_hybrid` has had `project_id_filter INT DEFAULT NULL` since v0.4.0, routing queries through the B-tree index `pgmnemo_agent_lesson_project_idx`. `navigate_locate` lacks this parameter, creating a parity gap:
+> `navigate_locate` `token_budget_chars` accounting corrected. Budget now counts preview characters delivered (~50 chars/row). Callers will receive ~5× more IDs per equivalent budget after upgrade. Reduce `token_budget_chars` proportionally to restore prior result counts if needed.
 
-- Multi-tenant callers cannot scope `navigate_locate` to a single corpus
-- `jsonb_filter` does not reach the `project_id` base column — it filters only on the `metadata` JSONB field, which misses the B-tree index
-- Bench blocked: locate searched all ~6k lessons instead of the 300-doc target corpus
+### #2 — NULL-embedding ≠ ghost at ingest
 
-### 2.3 Motivation for #3
+**Bug:** `ingest()` treats a NULL-embedding row as a duplicate-ghost candidate, skipping creation. Rows without embeddings (e.g., initial sync before async embedding) are silently dropped.
 
-`content_type` is required by gated items #5 (per-type dispatch) and #6 (typed expand). Adding the nullable columns in 0.9.0 allows adopters to begin populating them; the dispatch logic ships later once G1 passes. `blob_ref` and `doc_ref` enable structured references to external storage without requiring adopters to embed binary content in `lesson_text`.
+**Fix:** Additive logic in `ingest()` body. No signature change, no DDL. Exact patch TBD by implementor; must be included in 0.9.0 migration as a `CREATE OR REPLACE FUNCTION pgmnemo.ingest(...)`.
 
 ---
 
-## 3. Decision: #1b Signature Change
+## 5. Item #1b — navigate_locate Signature Add (MAIN GATE: signature change)
 
-### 3.1 The architectural choice
+### 5.1 Decision
 
-**Add `project_id_filter INT DEFAULT NULL` as the 5th parameter to `navigate_locate`, with DEFAULT NULL.**
+**APPROVED.** Add `project_id_filter INT DEFAULT NULL` as the 5th parameter to `pgmnemo.navigate_locate`.
 
-Adding a parameter with `DEFAULT NULL` at the end of a function signature is a **non-breaking addition for all existing positional callers** — PostgreSQL resolves a 4-arg call to the new 5-arg function using the default. However, in PostgreSQL, `CREATE OR REPLACE FUNCTION` cannot change the number of parameters on an existing overload. The old 4-arg overload must be dropped first.
+### 5.2 Rationale
 
-### 3.2 Migration pattern
+`recall_hybrid` has had `project_id_filter` since v0.4.0 (lines 4912–4913 in the flat install). `navigate_locate` has no equivalent, forcing multi-tenant callers to use `jsonb_filter` on the `metadata` JSONB column — which does NOT reach the dedicated B-tree index on `agent_lesson.project_id` (`pgmnemo_agent_lesson_project_idx`). The Agency bench was blocked because `navigate_locate` searched all ~6k lessons instead of the 300-doc target corpus. This is a parity gap, not a new feature.
+
+### 5.3 Signature diff (against pgmnemo--0.8.3.sql lines 4015–4019)
+
+```diff
+ CREATE OR REPLACE FUNCTION pgmnemo.navigate_locate(
+     query_embedding   vector(1024),
+     query_text        TEXT,
+     token_budget_chars INT              DEFAULT 2000,
+-    jsonb_filter      JSONB             DEFAULT NULL
++    jsonb_filter      JSONB             DEFAULT NULL,
++    project_id_filter INT               DEFAULT NULL
+ )
+```
+
+```diff
+ -- WHERE clause addition (after jsonb_filter line, ~line 4139):
+           AND (jsonb_filter IS NULL OR al.metadata @> jsonb_filter)
++          AND (project_id_filter IS NULL OR al.project_id = project_id_filter)
+```
+
+```diff
+ -- COMMENT update (~line 4291):
+-COMMENT ON FUNCTION pgmnemo.navigate_locate(vector, TEXT, INT, JSONB) IS
++COMMENT ON FUNCTION pgmnemo.navigate_locate(vector, TEXT, INT, JSONB, INT) IS
+     'Token-economy navigation LOCATE (v0.9.0). '
++    'project_id_filter: scopes candidates to a single project (uses B-tree index). '
+```
+
+### 5.4 Migration pattern — DROP + CREATE OR REPLACE
+
+Adding a parameter to a PostgreSQL function creates a **new overloaded signature**. `CREATE OR REPLACE FUNCTION` only replaces a function with an **identical parameter list**. If the old 4-arg signature is not dropped first:
+- Both `navigate_locate/4` and `navigate_locate/5` will coexist.
+- Positional callers passing 4 args will continue to call the old bugged body.
+- The fix for #1 (budget counter) will be in `/5` only — the bugged `/4` remains live.
+
+**Required migration pattern:**
 
 ```sql
--- Step 1: Drop the old 4-arg overload (safe — no schema objects depend on this signature)
-DROP FUNCTION IF EXISTS pgmnemo.navigate_locate(vector, TEXT, INT, JSONB);
+-- Step 1: Drop old 4-arg signature (idempotent, IF EXISTS guards replay)
+DROP FUNCTION IF EXISTS pgmnemo.navigate_locate(
+    vector, TEXT, INT, JSONB
+);
 
--- Step 2: Create the 5-arg function (complete body with all 0.9.0 changes applied)
+-- Step 2: Create the new 5-arg function (with both #1 and #1b fixes in body)
 CREATE OR REPLACE FUNCTION pgmnemo.navigate_locate(
     query_embedding   vector(1024),
     query_text        TEXT,
-    token_budget_chars INT   DEFAULT 2000,
-    jsonb_filter      JSONB  DEFAULT NULL,
-    project_id_filter INT    DEFAULT NULL   -- NEW: scopes to project B-tree index
+    token_budget_chars INT    DEFAULT 2000,
+    jsonb_filter      JSONB   DEFAULT NULL,
+    project_id_filter INT     DEFAULT NULL
 )
-RETURNS TABLE(...) ...
+RETURNS TABLE (...)   -- full body from 0.8.3 with #1 + #1b patches applied
+...
 ```
 
-### 3.3 Why DROP is safe
+### 5.5 Backward compatibility
 
-PostgreSQL function overloading means a 4-arg and 5-arg version are two distinct catalog entries. There are no pg_depend dependents on the 4-arg signature:
+Adding a parameter with `DEFAULT NULL` at the end is safe for all existing callers:
 
-- No views reference it (verified: no view in pgmnemo schema calls `navigate_locate`)
-- No other stored functions call it by exact argument count (callers use named or positional 4-arg form, which the new 5-arg function satisfies via the DEFAULT)
-- No CHECK constraints, triggers, or domain expressions reference it
+| Caller pattern | Effect after migration |
+|---------------|----------------------|
+| `navigate_locate(embedding, text)` | Resolved to new 5-arg; 3rd–5th params use defaults. ✅ |
+| `navigate_locate(embedding, text, 2000)` | Resolved to new 5-arg; 4th–5th params use defaults. ✅ |
+| `navigate_locate(embedding, text, 2000, NULL)` | Resolved to new 5-arg; 5th param uses default. ✅ |
+| `navigate_locate(embedding, text, 2000, NULL, 9)` | New usage — project-scoped. ✅ |
+| Any caller invoking 4-arg by name | Old 4-arg overload is dropped; resolved to 5-arg with default. ✅ |
 
-`DROP FUNCTION IF EXISTS` (not `DROP FUNCTION`) is used so the migration is idempotent: running against a schema where the old 4-arg function was already dropped (e.g., fresh install) does not error.
+**Breaking change risk: NONE.** The DROP of the old 4-arg signature removes the overload; the new 5-arg overload with defaults satisfies all existing positional call sites. No dependency on the 4-arg overload exists within the pgmnemo schema.
 
-### 3.4 Backward-compatibility analysis
+### 5.6 Index utilization
 
-| Caller pattern | Compatible after DROP+CREATE? | Evidence |
-|----------------|-------------------------------|----------|
-| `navigate_locate($1, $2)` (2-arg positional) | ✅ Yes | Defaults fill args 3–5 |
-| `navigate_locate($1, $2, $3)` (3-arg positional) | ✅ Yes | Default fills args 4–5 |
-| `navigate_locate($1, $2, $3, $4)` (4-arg positional) | ✅ Yes | Default fills arg 5 |
-| `navigate_locate($1, $2, $3, $4, $5)` (5-arg, new) | ✅ Yes | Exact match |
-| Named-parameter call with `project_id_filter =>` | ✅ Yes | New callers post-0.9.0 |
-| `COMMENT ON FUNCTION ... (vector, TEXT, INT, JSONB)` | ❌ Must update | Old 4-arg signature no longer exists |
-
-The `COMMENT ON FUNCTION` in the migration must reference the new 5-arg signature:
-```sql
-COMMENT ON FUNCTION pgmnemo.navigate_locate(vector, TEXT, INT, JSONB, INT) IS
-    'Token-economy navigation LOCATE (v0.9.0). '
-    'project_id_filter: scopes candidates to a single project (uses B-tree index). '
-    'token_budget_chars counts Unicode code points of preview text delivered (~50/row).';
-```
-
-### 3.5 WHERE clause addition
-
-In the `raw_candidates` CTE, after the `jsonb_filter` guard:
-
-```sql
--- Source anchor: pgmnemo--0.8.3.sql line 4139
-AND (jsonb_filter IS NULL OR al.metadata @> jsonb_filter)
-AND (project_id_filter IS NULL OR al.project_id = project_id_filter)   -- NEW #1b
-```
-
-When `project_id_filter IS NOT NULL`, the planner uses `pgmnemo_agent_lesson_project_idx` (B-tree on `project_id`), limiting the scan to the target corpus.
+`pgmnemo_agent_lesson_project_idx` is a B-tree partial index on `agent_lesson.project_id`. PostgreSQL will use it when `project_id_filter IS NOT NULL` (equi-join). When `project_id_filter IS NULL` (the default), the condition short-circuits and no index scan occurs — planner cost is unchanged vs 0.8.3.
 
 ---
 
-## 4. Decision: #3 Additive Columns
+## 6. Item #3 — Additive Nullable Columns (MAIN GATE: DDL change)
 
-### 4.1 The architectural choice
+### 6.1 Decision
 
-**Add three nullable columns to `pgmnemo.agent_lesson` using `ALTER TABLE ... ADD COLUMN ... DEFAULT NULL`.**
+**APPROVED.** Add three nullable columns to `pgmnemo.agent_lesson`:
+
+| Column | Type | Default | Purpose |
+|--------|------|---------|---------|
+| `content_type` | `TEXT` | `NULL` | Content-type tag (e.g., `code`, `prose`, `config`, `log`). Gates per-type dispatch (#5) and typed expand (#6) when G1 passes. |
+| `blob_ref` | `TEXT` | `NULL` | Optional external blob reference (URI/path). NULL = inline `lesson_text` only. |
+| `doc_ref` | `TEXT` | `NULL` | Optional document reference (URI/path). NULL = standalone lesson. |
+
+### 6.2 DDL
 
 ```sql
 ALTER TABLE pgmnemo.agent_lesson
@@ -150,263 +179,239 @@ ALTER TABLE pgmnemo.agent_lesson
     ADD COLUMN IF NOT EXISTS blob_ref     TEXT DEFAULT NULL;
 ALTER TABLE pgmnemo.agent_lesson
     ADD COLUMN IF NOT EXISTS doc_ref      TEXT DEFAULT NULL;
+
+COMMENT ON COLUMN pgmnemo.agent_lesson.content_type IS
+    'Content type tag (e.g. code, prose, config, log). '
+    'Gates per-type dispatch (#5) and typed expand (#6) when G1 bench passes. '
+    'G1: content_type_coverage >= 0.50 AND distinct_types >= 3.';
+COMMENT ON COLUMN pgmnemo.agent_lesson.blob_ref IS
+    'Optional external blob reference (URI/path). NULL = inline lesson_text only.';
+COMMENT ON COLUMN pgmnemo.agent_lesson.doc_ref IS
+    'Optional document reference (URI/path). NULL = standalone lesson.';
 ```
 
-`ADD COLUMN IF NOT EXISTS` makes the DDL idempotent. Running the migration twice does not error.
+### 6.3 Backward compatibility
 
-### 4.2 Column definitions
+`ALTER TABLE ... ADD COLUMN ... DEFAULT NULL` is an additive, online-safe operation in PostgreSQL 14+. All existing rows receive `NULL` for each new column. No existing query is affected: `ADD COLUMN IF NOT EXISTS` makes the migration idempotent (safe to replay on a partially-upgraded DB).
 
-| Column | Type | Default | Nullable | Purpose |
-|--------|------|---------|----------|---------|
-| `content_type` | `TEXT` | `NULL` | Yes | Content classification tag (e.g. `code`, `prose`, `config`, `log`). Gates per-type dispatch (#5) and typed expand (#6) when G1 passes. |
-| `blob_ref` | `TEXT` | `NULL` | Yes | External blob reference (URI or path). `NULL` = lesson is inline `lesson_text` only. |
-| `doc_ref` | `TEXT` | `NULL` | Yes | Document reference (URI or path). `NULL` = standalone lesson with no parent document. |
+**Breaking change risk: NONE.**
 
-All three columns are TEXT (not JSONB, not enum) to preserve adopter flexibility and avoid migration churn when content-type vocabulary expands.
+### 6.4 Why these columns ship before the features that use them
 
-### 4.3 Backward-compatibility analysis
+`content_type` must be populated by adopters (via `ingest()` calls tagging new lessons) before G1 can be evaluated. Shipping the column before the dispatch logic allows the adoption signal to accumulate in the wild. Features #5 and #6 cannot ship until G1 passes; the column can and should ship now.
 
-`ALTER TABLE ... ADD COLUMN ... DEFAULT NULL` is:
-
-- **Non-locking on PostgreSQL 14+**: A column with a constant `DEFAULT NULL` is added via a catalog-only update (fast-path), without a table rewrite or `ACCESS EXCLUSIVE` lock held for the duration of the write
-- **Non-breaking for existing queries**: `SELECT *` queries will return additional columns; `INSERT` statements that do not mention the new columns receive `NULL` automatically
-- **Non-breaking for existing indexes**: No index changes; no constraint changes
-
-No existing `pgmnemo` function references `content_type`, `blob_ref`, or `doc_ref` — verified by inspection of `pgmnemo--0.8.3.sql`. The columns are inert until populated.
-
-### 4.4 No indexes added in 0.9.0
-
-Indexes on `content_type` are deferred to the release when #5 ships (post-G1). Adding an index on an unpopulated column in 0.9.0 would be dead cost. The G1 gate query (`WHERE content_type IS NOT NULL`) will use a sequential scan until G1 passes — acceptable given G1 requires ≥50% coverage before #5 is unlocked.
+`blob_ref` and `doc_ref` are structural placeholders for document-anchored lessons. Including them now avoids a second schema migration when multi-modal capture ships.
 
 ---
 
-## 5. Bug Fixes #1 and #4 (Body-Only)
+## 7. Item #4 — recall_hybrid O(n) Fix (BENCHMARK GATE)
 
-### 5.1 #1 — navigate_locate budget counter (body-only)
+### 7.1 Decision
 
-**Change:** In `raw_candidates` CTE, line 4119 of `pgmnemo--0.8.3.sql`:
+**APPROVED in principle; commit blocked on BENCHMARK C1.**
 
-```sql
--- Before (0.8.3):
-length(al.lesson_text) AS text_len
+The fix (FIX-IN-PLACE, Option A from DECISION_0.9_RECALL_HYBRID.md) replaces the single `raw_candidates` CTE with two bounded, index-friendly CTEs (`vec_candidates` using HNSW ORDER BY+LIMIT, `bm25_candidates` using GIN, merged via LEFT JOIN + anti-join UNION ALL). This is a body-only change; function signature is unchanged.
 
--- After (0.9.0):
-LEAST(length(al.lesson_text), 50) AS text_len
-```
+### 7.2 BENCHMARK C1 gate (HOST-executed, ≥2000 rows)
 
-No signature change. No schema change. `CREATE OR REPLACE` (which replaces the full body) handles this together with #1b.
+REVIEW_0.9.md §C1 (CRITICAL concern) confirmed no empirical quality numbers exist. The prior synthesis citing Recall@10=90%, Jaccard=1.00 on a "corpus 31337, 600 docs" is rejected as unverified. **Item #4 MUST NOT commit until BENCHMARK C1 passes.**
 
-**Behavioral impact (documented for CHANGELOG):** `navigate_locate(token_budget_chars => 2000)` previously returned ~8 rows (budget exhausted by full-length text counting). After fix: ~40 rows (budget counts ≤50 chars/row, matching the `left(lesson_text, 50)` preview actually delivered). Callers who calibrated `token_budget_chars` to receive ~8 IDs should reduce their budget to ~400 after upgrading.
+**Gate definition:**
 
-### 5.2 #4 — recall_hybrid O(n) rewrite (body-only, gated)
+| Metric | Threshold | Method |
+|--------|-----------|--------|
+| EXPLAIN plan: HNSW index scan active after fix | Required | `EXPLAIN ANALYZE` shows `Index Scan using pgmnemo_agent_lesson_embedding_idx` |
+| p50 latency after fix | < 100 ms | 5× median on ≥2000-row corpus |
+| Avg Jaccard vs Python 2-phase (10 queries) | ≥ 0.80 | `PGMNEMO_USE_NATIVE_HYBRID` toggle (REVIEW_0.9 §R4) |
+| recall@10 vs LoCoMo benchmark | ≥ 0.55 | `measure_recall_locomo.py` (REVIEW_0.9 §R5) |
+| LIMIT formula uses `GREATEST(k*4, _ef_search)` | Required | REVIEW_0.9 §C2 — HNSW arm must not discard ef_search candidates |
 
-**Change:** Replace single `raw_candidates` CTE with two bounded index-scan CTEs (`vec_candidates` + `bm25_candidates`) plus a dedup `all_candidates` UNION. Window functions in `rrf_ranked` then operate over ≤2×`_fetch_k` rows instead of all N active rows.
+**BENCHMARK execution owner:** HOST orchestrator (not an agent node). This is the modified 0.9.0 release fork-flow (§9 below). The orchestrator runs the verification script on the host Postgres, records numbers, and gates the #4 commit. An agent node does not have the latency/isolation context to run a valid corpus benchmark.
 
-**Signature:** Unchanged. `recall_hybrid(vector, TEXT, INT, TEXT, INT, DOUBLE PRECISION, DOUBLE PRECISION, INT)` — zero caller impact.
+**Escape hatch:** If BENCHMARK C1 is not completed before the 0.9.0 release window closes, #4 gates to 0.9.1. Items #1, #1b, #2, #3 are not blocked by #4.
 
-**LIMIT formula (REVIEW_0.9 C2 required fix):**
+### 7.3 LIMIT formula correction required before commit
+
+Per REVIEW_0.9.md §C2, the draft in DECISION_0.9_RECALL_HYBRID.md uses `LIMIT (k * 4)`. With k=5 and ef_search=100, this would discard 80% of HNSW's internal candidate set. The required formula:
 
 ```sql
 _fetch_k := GREATEST(k * 4, _ef_search, 40);
--- HNSW arm: LIMIT _fetch_k  (≥ ef_search=100 by default — does not discard HNSW candidates)
--- BM25 arm:  LIMIT _fetch_k  (same floor, no ef_search relevance for GIN)
+-- k=5, ef_search=100 → _fetch_k = 100
+-- k=10, ef_search=100 → _fetch_k = 100
+-- k=25, ef_search=100 → _fetch_k = 100
+-- k=30, ef_search=100 → _fetch_k = 120
 ```
 
-This addresses REVIEW_0.9 C2: without the `GREATEST(_, _ef_search)` floor, a k=5 call uses `LIMIT 20`, discarding 80 of 100 HNSW candidates when `ef_search=100`.
-
-**Tie-breaker (REVIEW_0.9 C7):** Add secondary sort `, f.id ASC` to final `ORDER BY f.final_score DESC LIMIT k`.
+Both the HNSW arm and BM25 arm use `LIMIT _fetch_k`. `_ef_search` is already in scope (declared at line ~4808 of the flat install).
 
 ---
 
-## 6. Release Fork-Flow
+## 8. Migration File Structure
 
-### 6.1 Modified flow for 0.9.0
+File: **`pgmnemo--0.8.3--0.9.0.sql`**
 
-```
-Items #1 + #1b + #2 + #3   ─── Code-complete ──→  REVIEW gate (this ADR)
-                                                           │
-                                                           ▼
-Item #4 (recall_hybrid)     ─── BENCHMARK C1 ──→  BLOCKED (HOST-exec)
-                                                           │
-                              ┌────────────────────────────┘
-                              │
-                    ┌─────────▼──────────┐
-                    │  Benchmark PASS?   │
-                    │  (≥2000 rows,      │
-                    │  Recall@10 ≥0.55,  │
-                    │  Jaccard ≥0.80,    │
-                    │  p50 < 100ms)      │
-                    └──┬──────────────┬──┘
-                  YES  │              │  NO
-                       ▼              ▼
-               #4 ships in      #4 gates to 0.9.1
-                  0.9.0             (#1-#3 unblocked)
-                       │
-                       ▼
-          FOUNDER gate: release_decision
-                       │
-                       ▼
-          FOUNDER gate: public-OSS push
-```
+Required header guard (prevents direct `\i` execution):
 
-### 6.2 BENCHMARK execution
-
-Per task directive: **BENCHMARK (#4 C1, ≥2000 rows) is HOST-executed by the orchestrator, not by an agent node.**
-
-Required outputs (REVIEW_0.9 R1–R6):
-
-| Check | Gate |
-|-------|------|
-| R1: EXPLAIN ANALYZE before fix shows Seq Scan | `Seq Scan on agent_lesson` present, time > 500ms |
-| R2: LIMIT formula uses `GREATEST(k*4, _ef_search)` | Code review of migration SQL |
-| R3: EXPLAIN ANALYZE after fix shows Index Scan | `Index Scan using pgmnemo_agent_lesson_embedding_idx` present, time < 100ms |
-| R4: Jaccard vs Python 2-phase on ≥2000-row corpus | avg Jaccard ≥ 0.80, no individual query < 0.50 |
-| R5: Recall@10 vs LoCoMo | ≥ 0.55, delta vs python_2phase < 5pp |
-| R6: p50 latency at ≥2000 rows | p50 < 100ms |
-
-The prior "Recall@10=90%, Jaccard=1.00" numbers cited in task 8887 are **not accepted** (REVIEW_0.9 §C1): corpus identifier non-standard, Jaccard=1.00 implausible for approximate-NN, corpus size mismatches production. New measurements required.
-
-### 6.3 Founder gates
-
-1. **release_decision**: Founder reviews this ADR + benchmark results, approves `pgmnemo--0.8.3--0.9.0.sql`, and authorises tagging `v0.9.0`.
-2. **public-OSS push**: Founder executes `git push` to the public repository. No agent or orchestrator pushes to main or creates tags.
-
-**Constraint:** Do not touch `benchmarks/*` uncommitted edits. Do not push. Do not touch main branch.
-
----
-
-## 7. Upgrade Path
-
-### 7.1 Migration file
-
-File: `extension/pgmnemo--0.8.3--0.9.0.sql`
-
-```
-pgmnemo--0.8.3--0.9.0.sql execution order:
-  1. #3 ALTER TABLE ADD COLUMN (DDL, catalog-only, non-locking)
-  2. DROP FUNCTION IF EXISTS pgmnemo.navigate_locate(vector, TEXT, INT, JSONB)
-  3. CREATE OR REPLACE FUNCTION pgmnemo.navigate_locate(5-arg) — includes #1 + #1b
-  4. CREATE OR REPLACE FUNCTION pgmnemo.ingest(...) — includes #2
-  5. CREATE OR REPLACE FUNCTION pgmnemo.recall_hybrid(...) — includes #4, IF benchmark passes
-  6. COMMENT ON COLUMN / COMMENT ON FUNCTION updates
-```
-
-Items 1, 2+3, 4 are independent and can be in any order relative to each other. The only ordering constraint: `DROP` before `CREATE OR REPLACE` for `navigate_locate`.
-
-### 7.2 Flat install file
-
-File: `extension/pgmnemo--0.9.0.sql` — regenerated from 0.8.3 flat install with all 0.9.0 changes applied. This is the file used for fresh installs (`CREATE EXTENSION pgmnemo VERSION '0.9.0'`). The implementor must apply all diff hunks to the 0.8.3 flat file and verify correctness.
-
-### 7.3 Source anchor (re-anchor from 0.8.2 to 0.8.3 refs)
-
-Prior decision documents (DECISION_0.9_SQL.md, DECISION_0.9_RECALL_HYBRID.md) reference `pgmnemo--0.8.2.sql` line numbers. Since 0.8.3 is a docs-only patch with SQL byte-identical to 0.8.2, all line numbers are valid against `pgmnemo--0.8.3.sql`. The migration file is anchored to **0.8.3** (not 0.8.2) in:
-- The migration filename: `pgmnemo--0.8.3--0.9.0.sql`
-- The `\echo` guard: `ALTER EXTENSION pgmnemo UPDATE TO '0.9.0'`
-- The `default_version` entry in `pgmnemo.control`
-
-### 7.4 ALTER EXTENSION path
-
-For existing installations:
 ```sql
-ALTER EXTENSION pgmnemo UPDATE TO '0.9.0';
+\echo Use "ALTER EXTENSION pgmnemo UPDATE TO '0.9.0'" to load this file. \quit
 ```
 
-This loads `pgmnemo--0.8.3--0.9.0.sql` via the extension update path. PostgreSQL verifies that the installed version is 0.8.3 before applying. If an older version is installed (e.g. 0.8.2), the user must first run `ALTER EXTENSION pgmnemo UPDATE TO '0.8.3'`.
+**Mandatory section order:**
 
-### 7.5 Rollback
+```sql
+-- §A: Header guard
+\echo Use "ALTER EXTENSION pgmnemo UPDATE TO '0.9.0'" to load this file. \quit
 
-| Change | Rollback procedure |
-|--------|-------------------|
-| #3 columns | `ALTER TABLE pgmnemo.agent_lesson DROP COLUMN IF EXISTS content_type, DROP COLUMN IF EXISTS blob_ref, DROP COLUMN IF EXISTS doc_ref;` |
-| #1b signature | `DROP FUNCTION IF EXISTS pgmnemo.navigate_locate(vector, TEXT, INT, JSONB, INT);` then restore 4-arg function from 0.8.3 source |
-| #1 body fix | `CREATE OR REPLACE` with 0.8.3 body (restore from source) |
-| #2 body fix | `CREATE OR REPLACE` with 0.8.3 body |
-| #4 body fix | `CREATE OR REPLACE` with 0.8.3 body |
+-- §B: #3 Additive columns (DDL before function rewrites — canonical pattern)
+ALTER TABLE pgmnemo.agent_lesson ADD COLUMN IF NOT EXISTS content_type TEXT DEFAULT NULL;
+ALTER TABLE pgmnemo.agent_lesson ADD COLUMN IF NOT EXISTS blob_ref     TEXT DEFAULT NULL;
+ALTER TABLE pgmnemo.agent_lesson ADD COLUMN IF NOT EXISTS doc_ref      TEXT DEFAULT NULL;
+COMMENT ON COLUMN ... (×3)
 
-No migration removes data. All DDL changes are additive. Rollback path exists for every change.
+-- §C: #1 + #1b navigate_locate — DROP old 4-arg + CREATE OR REPLACE new 5-arg
+DROP FUNCTION IF EXISTS pgmnemo.navigate_locate(vector, TEXT, INT, JSONB);
+CREATE OR REPLACE FUNCTION pgmnemo.navigate_locate(
+    query_embedding   vector(1024),
+    query_text        TEXT,
+    token_budget_chars INT    DEFAULT 2000,
+    jsonb_filter      JSONB   DEFAULT NULL,
+    project_id_filter INT     DEFAULT NULL
+)
+-- FULL BODY EMBEDDED (no "copy from 0.8.3" stubs — complete function required for OSS audit)
 
----
+-- §D: #2 NULL-embedding fix
+CREATE OR REPLACE FUNCTION pgmnemo.ingest(...)
+-- FULL BODY with NULL-embedding logic
 
-## 8. Verification Checklist
-
-### Schema / DDL review
-
-- [ ] `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` present for all three columns
-- [ ] All three columns are `TEXT DEFAULT NULL` (not enum, not NOT NULL)
-- [ ] `COMMENT ON COLUMN` entries present for all three new columns
-- [ ] `DROP FUNCTION IF EXISTS pgmnemo.navigate_locate(vector, TEXT, INT, JSONB)` before CREATE OR REPLACE
-- [ ] New 5-arg signature has `project_id_filter INT DEFAULT NULL` as 5th parameter
-- [ ] `COMMENT ON FUNCTION` references the new `(vector, TEXT, INT, JSONB, INT)` signature
-- [ ] Migration has `\echo` guard at top (`ALTER EXTENSION pgmnemo UPDATE TO '0.9.0'`)
-- [ ] `pgmnemo.control` updated: `default_version = '0.9.0'`, from_version entry added
-
-### Backward compatibility
-
-- [ ] 4-arg positional callers return correct results after `DROP + CREATE OR REPLACE` (test V5 below)
-- [ ] `project_id_filter IS NULL` path is functionally equivalent to 0.8.3 (no filter applied)
-- [ ] `project_id_filter IS NOT NULL` path uses B-tree index (EXPLAIN confirms)
-
-### Pre-commit verification (items #1, #1b, #2, #3)
-
-These are runnable now — no benchmark blocker:
-
-```bash
-# V1. Confirm bug lines in source
-grep -n "text_len\|left.*lesson_text" /external-repos/pgmnemo/extension/pgmnemo--0.8.3.sql | grep "4[12][0-9][0-9]\:"
-
-# V3. Confirm navigate_locate 4-arg signature (before migration)
-psql $EXECAS_DB_URL -c "\df pgmnemo.navigate_locate"
-# Expected: 4 parameters
-
-# V4. Confirm B-tree project_id index
-psql $EXECAS_DB_URL -c "SELECT indexname FROM pg_indexes WHERE schemaname='pgmnemo' AND tablename='agent_lesson' AND indexdef ILIKE '%project_id%';"
-# Expected: pgmnemo_agent_lesson_project_idx
-
-# V5. Backward-compat test (after applying migration)
-psql $EXECAS_DB_URL -c "SELECT id FROM pgmnemo.navigate_locate(NULL::vector(1024),'test',100) LIMIT 1;"
-psql $EXECAS_DB_URL -c "SELECT id FROM pgmnemo.navigate_locate(NULL::vector(1024),'test',100,NULL,9) LIMIT 1;"
-# Both must return without error
+-- §E: #4 recall_hybrid (conditional — include ONLY if BENCHMARK C1 passes)
+-- CREATE OR REPLACE FUNCTION pgmnemo.recall_hybrid(...)
+-- FULL BODY with vec_candidates + bm25_candidates two-CTE split
+-- LIMIT formula: GREATEST(k * 4, _ef_search, 40) applied to both arms
 ```
 
-### Benchmark gate (item #4 — HOST-executed by orchestrator)
-
-Run R1–R6 from REVIEW_0.9.md §Pre-Commit Verification Commands (Item #4 block) on a corpus of ≥2000 rows. Record output. Gate: R4 avg Jaccard ≥ 0.80, R5 Recall@10 ≥ 0.55 with delta < 5pp vs Python 2-phase, R6 p50 < 100ms. If any gate fails, #4 gates to 0.9.1.
-
-### CHANGELOG (required per REVIEW_0.9 C3)
-
-Entry required before any commit:
-
-> **navigate_locate `token_budget_chars` accounting corrected (v0.9.0).** Budget now counts preview characters delivered (~50 chars/row). Callers will receive approximately 5× more candidate IDs per equivalent budget after upgrading from 0.8.x. To preserve prior result counts, reduce `token_budget_chars` proportionally (e.g. `2000 → 400`).
+**Completeness requirement (REVIEW_0.9 §C6):** Each `CREATE OR REPLACE FUNCTION` block in the shipping file MUST embed the complete function body. No "copy from 0.8.3" instructions in the shipped migration. This is a hard requirement for OSS release auditability.
 
 ---
 
-## 9. Decision Record
+## 9. Release Fork-Flow for 0.9.0
 
-| Question | Decision | Rationale |
-|----------|----------|-----------|
-| Can `CREATE OR REPLACE` add a new parameter? | **No — DROP old signature first.** `DROP FUNCTION IF EXISTS (vector, TEXT, INT, JSONB)` required before CREATE OR REPLACE with 5-arg signature. | PostgreSQL catalog: function overloads are distinct. CREATE OR REPLACE can only replace same-signature overload. |
-| Is the DROP safe (no dependents)? | **Yes.** No views, stored functions, constraints, or triggers depend on the 4-arg overload. | Verified by inspection of pgmnemo--0.8.3.sql. |
-| Are existing callers unaffected? | **Yes.** 4-arg positional callers route to the new 5-arg function via DEFAULT on 5th param. | PostgreSQL DEFAULT resolution for positional calls. |
-| ADD COLUMN safe without lock? | **Yes.** `DEFAULT NULL` column addition is catalog-only on PostgreSQL 14+ (fast-path, no table rewrite). | PostgreSQL ALTER TABLE locking documentation. |
-| Why TEXT not enum for content_type? | **TEXT.** Vocabulary is undefined until G1 passes. Enum changes require DDL migration per new value. TEXT is lower churn for an evolving vocabulary. | Minimum blast radius principle. |
-| Should content_type have an index in 0.9.0? | **No.** Column will be NULL on all rows until adopters populate it. Index on unpopulated column is dead cost. Add when #5 ships (post-G1). | Gate-based feature development. |
-| #4 ships in 0.9.0 or 0.9.1? | **Conditional.** Ships in 0.9.0 if HOST benchmark R1–R6 pass. Gates to 0.9.1 if any gate fails. #1–#3 are not blocked by #4. | DECISION_0.9_SQL.md §D item 4; REVIEW_0.9.md §C1. |
-| Who executes benchmark? | **Orchestrator, HOST-side.** Not an agent node. | Task directive. |
-| Who gates release and push? | **Founder.** release_decision and public-OSS push are Founder gates. | Task directive. |
+The standard release fork-flow is modified for 0.9.0 as follows:
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│ 0.9.0 RELEASE FORK-FLOW                                                 │
+├─────────────────────────────────────────────────────────────────────────┤
+│                                                                         │
+│  A. Migration authored (SD)                                             │
+│     ├── pgmnemo--0.8.3--0.9.0.sql (items #1, #1b, #2, #3)             │
+│     └── pgmnemo--0.9.0.sql updated (flat install)                      │
+│                                                                         │
+│  B. Items #1, #1b, #2, #3 verified (SD + CA sign-off)                  │
+│     ├── V1–V5 commands from REVIEW_0.9.md §Pre-Commit                  │
+│     ├── CHANGELOG entry for token_budget_chars behavioral change        │
+│     └── Full function body present in migration (no stubs)              │
+│                                                                         │
+│  C. BENCHMARK C1 ← HOST-EXECUTED BY ORCHESTRATOR (not an agent node)   │
+│     ├── Corpus: Agency execas ≥2000 rows (execas: 5642 rows)           │
+│     ├── R1: EXPLAIN confirms Seq Scan BEFORE fix                        │
+│     ├── R3: EXPLAIN confirms Index Scan AFTER fix                       │
+│     ├── R4: Avg Jaccard ≥0.80 vs Python 2-phase (10 queries)           │
+│     ├── R5: recall@10 ≥0.55 vs LoCoMo benchmark                        │
+│     └── R6: p50 latency <100ms at ≥2000 rows                           │
+│                                                                         │
+│     ┌── C1 PASS ───────────────────────────────────────────────────┐   │
+│     │  Item #4 (recall_hybrid) added to migration                  │   │
+│     │  Agency workaround retirement queued (1 commit, ~50 LOC)     │   │
+│     └──────────────────────────────────────────────────────────────┘   │
+│     ┌── C1 FAIL / TIMEOUT ─────────────────────────────────────────┐   │
+│     │  #4 gates to 0.9.1                                           │   │
+│     │  0.9.0 ships with #1 + #1b + #2 + #3 only                   │   │
+│     └──────────────────────────────────────────────────────────────┘   │
+│                                                                         │
+│  D. release_decision ← FOUNDER GATE (not automated)                    │
+│     ├── Reviews BENCHMARK C1 output (or confirms #4 gated to 0.9.1)   │
+│     ├── Reviews CHANGELOG entry                                         │
+│     └── Approves public commit on release fork                          │
+│                                                                         │
+│  E. public-OSS push ← FOUNDER GATE                                      │
+│     ├── git tag v0.9.0 on release fork                                 │
+│     ├── GitHub release with migration notes                             │
+│     └── Docker Hub push (NEVER touch main branch)                      │
+│                                                                         │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+**Key modifications vs prior releases:**
+
+1. **BENCHMARK C1 is HOST-EXECUTED by the orchestrator.** An agent node cannot provide the latency and isolation guarantees needed for a valid corpus benchmark. The orchestrator runs R1–R6 directly against the Agency execas Postgres instance and records output as a structured artifact before release_decision is reached.
+
+2. **release_decision is a FOUNDER GATE.** No automated merge of the release fork to main. The Founder reviews BENCHMARK C1 output and CHANGELOG before approving.
+
+3. **public-OSS push is a FOUNDER GATE.** The git tag and Docker Hub push require explicit Founder action. This is made explicit because the 0.9.0 token-economy behavioral change (#1 fix) will be visible to OSS adopters.
+
+4. **Patches re-anchored to 0.8.3.** All diff hunks and line number references in implementation tickets MUST reference `pgmnemo--0.8.3.sql` (current HEAD), not `pgmnemo--0.8.2.sql`. The 0.8.3 flat file is byte-identical to 0.8.2's SQL; existing line references remain valid, but implementor must confirm before committing.
+
+5. **`benchmarks/*` files are pre-existing uncommitted edits.** The migration work MUST NOT stage, amend, or entangle any file under `benchmarks/`. These edits exist independently of 0.9.0 scope and must not appear in the 0.9.0 release commit.
 
 ---
 
-## 10. Rejected Alternatives
+## 10. Backward Compatibility Summary
 
-| Alternative | Rejected because |
-|-------------|-----------------|
-| `CREATE OR REPLACE` with 5-arg without `DROP` | Fails with `ERROR: cannot change return type of existing function` (PostgreSQL rejects changing arg count via OR REPLACE on different overload). |
-| Add `project_id_filter` as a GUC (`pgmnemo.project_id_filter`) | GUCs are session-global. Concurrent callers (different tenants) would corrupt each other's filter state. Not safe for multi-tenant use. |
-| Add `content_type` as `TEXT NOT NULL DEFAULT 'prose'` | Forces a default classification onto all existing lessons, polluting the coverage metric used by G1 gate (coverage ≥50% would be trivially satisfied by the default, not by actual tagging). |
-| Add `content_type` as a PostgreSQL ENUM | Each new vocabulary term requires a DDL migration. The vocabulary is unknown pre-G1. TEXT avoids this churn. |
-| Bundle #4 unconditionally in 0.9.0 | REVIEW_0.9 C1 CRITICAL: quality regression risk unquantified. No Recall@10 or Jaccard numbers measured. Prior numbers rejected as unverifiable (REVIEW_0.9 §Note). |
-| Push MCPRT before #1 | #1 bug makes navigate_locate token economy incorrect. MCPRT wrapping a broken function exposes the defect to all MCP callers. |
+| Change | Backward-compatible? | Evidence |
+|--------|---------------------|----------|
+| `LEAST(length, 50)` in `navigate_locate` body | **Behavioral change (bug fix)** — output volume increases ~5×. CHANGELOG required. | Budget counted wrong vs delivered payload; fix is correct. |
+| `project_id_filter INT DEFAULT NULL` (5th param) | **Compatible.** All existing positional callers unaffected. | PostgreSQL resolves 4-arg calls to new 5-arg with default. §5.5. |
+| `DROP FUNCTION navigate_locate(vector, TEXT, INT, JSONB)` | **Safe.** Old overload removed; only new 5-arg overload survives. | No schema dependency on 4-arg overload within pgmnemo. |
+| `ADD COLUMN IF NOT EXISTS content_type TEXT DEFAULT NULL` | **Additive, non-breaking.** All existing rows receive NULL. | ALTER TABLE ADD COLUMN DEFAULT NULL is instantaneous in PG14+ (no table rewrite). |
+| `ADD COLUMN IF NOT EXISTS blob_ref TEXT DEFAULT NULL` | Same as above. | Same. |
+| `ADD COLUMN IF NOT EXISTS doc_ref TEXT DEFAULT NULL` | Same as above. | Same. |
+| `recall_hybrid` two-CTE rewrite (if #4 ships) | **Approximate semantic equivalence.** Same signature; hybrid-sweet-spot docs may shift rank. | BENCHMARK C1 Jaccard ≥0.80 gate quantifies impact. |
 
 ---
 
-*Authority: DECISION_0.9_SQL.md (ratified 2026-06-05) · DECISION_0.9_RECALL_HYBRID.md (final 2026-06-05) · REVIEW_0.9.md (adversarial pass, 2026-06-05). Founder review required before public-OSS push.*
+## 11. Rollback Path
+
+| Scenario | Rollback |
+|----------|---------|
+| Post-migration rollback (#3 columns) | `ALTER TABLE pgmnemo.agent_lesson DROP COLUMN IF EXISTS content_type, DROP COLUMN IF EXISTS blob_ref, DROP COLUMN IF EXISTS doc_ref;` — safe while no application code reads these columns (none in 0.9.0). |
+| Post-migration rollback (#1b signature) | `DROP FUNCTION IF EXISTS pgmnemo.navigate_locate(vector, TEXT, INT, JSONB, INT); CREATE OR REPLACE FUNCTION pgmnemo.navigate_locate(...)` — restore 4-arg body from 0.8.3 flat install. |
+| Post-migration rollback (#4 if shipped) | `CREATE OR REPLACE FUNCTION pgmnemo.recall_hybrid(...)` — restore body from 0.8.3. Signature unchanged; rollback is a single `CREATE OR REPLACE`. |
+| Extension version rollback | `ALTER EXTENSION pgmnemo UPDATE TO '0.8.3'` — requires `pgmnemo--0.9.0--0.8.3.sql` downgrade file (must be authored by implementor alongside upgrade file). The `DROP FUNCTION` for old 4-arg `navigate_locate` is irreversible without the downgrade file; implementor must author both upgrade and downgrade. |
+
+---
+
+## 12. Gate Summary
+
+| Gate | Condition | Owner | Blocks |
+|------|-----------|-------|--------|
+| G1 (Content-Type Activation) | content_type_coverage ≥50% AND distinct_types ≥3 | Adopter corpus | #5, #6 (not 0.9.0) |
+| G3 (Graph Density) | edge_density > 0.5 | Agency corpus | Auto-graph (not 0.9.0) |
+| BENCHMARK C1 | R1–R6 pass on ≥2000-row corpus | Orchestrator (HOST) | #4 in 0.9.0 |
+| release_decision | Founder review of C1 output + CHANGELOG | Founder | OSS commit |
+| public-OSS push | Founder gate | Founder | Tag + Docker Hub |
+
+---
+
+## 13. Definition of Done (0.9.0 migration)
+
+- [ ] Migration file `pgmnemo--0.8.3--0.9.0.sql` exists with header guard
+- [ ] §C: `DROP FUNCTION IF EXISTS pgmnemo.navigate_locate(vector, TEXT, INT, JSONB)` present
+- [ ] §C: `CREATE OR REPLACE FUNCTION pgmnemo.navigate_locate(... project_id_filter INT DEFAULT NULL ...)` with full body embedded
+- [ ] Body contains `LEAST(length(al.lesson_text), 50) AS text_len` (#1 fix)
+- [ ] Body WHERE clause contains `AND (project_id_filter IS NULL OR al.project_id = project_id_filter)` (#1b)
+- [ ] `COMMENT ON FUNCTION pgmnemo.navigate_locate(vector, TEXT, INT, JSONB, INT)` updated (5-arg signature in comment)
+- [ ] §B: Three `ADD COLUMN IF NOT EXISTS` statements with `DEFAULT NULL` (#3)
+- [ ] §D: `ingest()` full body rewrite with NULL-embedding fix (#2)
+- [ ] §E: `recall_hybrid` body (only if BENCHMARK C1 passes; else absent — #4 gated to 0.9.1)
+- [ ] CHANGELOG entry for `token_budget_chars` behavioral change (REVIEW_0.9 §C3)
+- [ ] No "copy from 0.8.3" instructions in shipping file (REVIEW_0.9 §C6)
+- [ ] All patches reference `pgmnemo--0.8.3.sql` line numbers (not 0.8.2)
+- [ ] `benchmarks/*` files NOT staged in the 0.9.0 commit
+- [ ] V1–V5 verification commands from REVIEW_0.9 run and pass
+- [ ] BENCHMARK C1 output recorded (if #4 in scope) or escape noted in release notes
+- [ ] release_decision logged by Founder before OSS push
+
+---
+
+*ADR-0.9.0 · chief_architect (86) · 2026-06-10*  
+*Authority: DECISION_0.9_SQL.md (RATIFIED 2026-06-05) · DECISION_0.9_RECALL_HYBRID.md (FINAL 2026-06-05) · REVIEW_0.9.md (GO-WITH-CONDITIONS 2026-06-05)*
