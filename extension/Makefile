@@ -53,7 +53,9 @@ DATA = pgmnemo--0.0.1.sql \
        pgmnemo--0.8.1--0.8.2.sql \
        pgmnemo--0.8.2.sql \
        pgmnemo--0.8.2--0.8.3.sql \
-       pgmnemo--0.8.3.sql
+       pgmnemo--0.8.3.sql \
+       pgmnemo--0.8.3--0.9.0.sql \
+       pgmnemo--0.9.0.sql
 REGRESS = version recency_weight_guc prov_strength_tristate recall_lessons_pooled verifier_role source_run_task_ids ttl_expires_at state_machine mem_edge traverse_causal recall_graph traverse_temporal_smoke temporal_boost_guc bitemporality_smoke as_of_ts stress_recall rrf_sparse role_no_ambiguity test_confidence test_v071 test_v080 test_v082
 REGRESS_OPTS = --load-extension=vector --load-extension=pgmnemo
 PG_CONFIG = pg_config
