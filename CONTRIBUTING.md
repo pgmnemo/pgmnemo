@@ -86,4 +86,79 @@ will go through a community RFC once the community exists.
 - Bug reports → GitHub Issues
 - Security → security email above
 
+## Release checklist (maintainers)
+
+Run this checklist before every release tag. Items marked ⚠️ are preflight
+gaps that caused real problems during the v0.9.0 release cycle.
+
+### Pre-tag gates
+
+```
+[ ] 1. pgmnemo_mcp version bump ⚠️
+        pgmnemo_mcp/pyproject.toml [project].version must match the new tag.
+        v0.9.0 gap: MCP version was NOT bumped before the tag — PyPI publish
+        rejected the duplicate. Fix: grep for version mismatch before tagging:
+          grep -r "version" pgmnemo_mcp/pyproject.toml extension/pgmnemo.control META.json
+
+[ ] 2. extension/Makefile DATA line ⚠️
+        Every new SQL migration file must appear in the DATA = list in
+        extension/Makefile. v0.9.0 gap: new --0.9.0.sql file was missing from
+        DATA; PGXN zip built without the upgrade script.
+
+[ ] 3. pg_regress UPDATE TO version ⚠️
+        All pg_regress test files that run "ALTER EXTENSION pgmnemo UPDATE TO"
+        must reference the new version string. v0.9.0 gap: UPDATE TO '0.8.3'
+        was left in test fixtures; installcheck failed on the release candidate.
+        Fix: grep -r "UPDATE TO" test/
+
+[ ] 4. pg_regress NOTICE version string ⚠️
+        Expected output files (.out) that match NOTICE messages containing
+        version strings must be regenerated after a version bump.
+        v0.9.0 gap: expected/ files had old version in NOTICE assertions.
+        Fix: make installcheck && diff test/expected/ (compare actual vs expected)
+
+[ ] 5. Version strings consistent across all files
+        Verify these all match the new tag:
+          - pgmnemo_mcp/pyproject.toml
+          - extension/pgmnemo.control (default_version)
+          - META.json (version + provides.*.version)
+          - README.md (badge + install examples)
+          - docs/INSTALL.md (download URLs)
+
+[ ] 6. Gate file exists
+        benchmarks/gate/vX.Y.Z.json must exist before the tag.
+        CI bench-gate job will fail without it — this blocks the release.
+
+[ ] 7. CHANGELOG entry written for new version
+```
+
+### Tag + publish
+
+```bash
+# Tag
+git tag -a vX.Y.Z -m "vX.Y.Z"
+git push origin vX.Y.Z
+
+# CI jobs triggered by tag (all 4 must be green):
+#   installcheck   — pg_regress on PG 17
+#   bench-gate     — recall benchmark vs gate file
+#   release        — GitHub Release + PGXN zip upload
+#   publish-mcp    — PyPI wheel publish (Trusted Publisher, env=pypi)
+
+# tg-publish path (Trusted Publisher):
+#   PyPI account: Alex_Gaidabura (psychologistgbi@gmail.com)
+#   environment:  pypi
+#   workflow:     .github/workflows/release.yml
+#   No API token needed — OIDC token issued by GitHub Actions
+```
+
+### Post-release verification
+
+```
+[ ] pip install pgmnemo-mcp==X.Y.Z produces a non-empty wheel (>4 .py files)
+[ ] PyPI page https://pypi.org/project/pgmnemo-mcp/ renders description
+[ ] PGXN page https://pgxn.org/dist/pgmnemo/ shows new version
+[ ] GitHub Release page has zip asset attached
+```
+
 Thanks for contributing.
