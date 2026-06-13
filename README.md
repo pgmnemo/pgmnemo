@@ -21,34 +21,19 @@
 
 </div>
 
-<details>
-<summary>Recent release notes (v0.5.1–v0.8.0) — click to expand · <a href="CHANGELOG.md">full CHANGELOG</a></summary>
+**recall@10 = 0.9604 on LongMemEval-S · $0 LLM ingestion cost · `CREATE EXTENSION` install · fully `EXPLAIN`-able**  
+In production at [Agency](docs/case_studies/agency.md): agents used **−68% fewer turns** on runs where memory fired a relevant hit.
 
-> **v0.8.0 (2026-06-03):** **Token-economy navigation API.** `navigate_locate()` returns ranked lesson IDs within a configurable character budget; `navigate_expand()` fetches full content + graph neighbors on demand. Locate cheaply — expand only what you need. Also: `reembed()` / `reembed_batch()` for in-place embedding refresh, `recompute_content()` for in-place text updates, `source_type` column. See [CHANGELOG.md](CHANGELOG.md).
+<details>
+<summary>Recent releases (v0.9.0, v0.8.0) · <a href="CHANGELOG.md">full CHANGELOG</a></summary>
+
+> **v0.9.0 (2026-06-10):** **Token-economy correctness + recall performance.** `navigate_locate` budget counter fix (~5× more IDs returned per equivalent budget), `navigate_expand` project-scoping, NULL-embedding ghost-exclusion fix, `recall_hybrid` O(n) → O(k log n) rewrite, `content_type`/`blob_ref`/`doc_ref` columns. See [CHANGELOG.md](CHANGELOG.md).
 >
-> **v0.7.2 (2026-06-01):** **Packaging fix.** The v0.7.1 distribution double-nested the extension directory (`extension/extension/`), making it uninstallable from PGXN and GitHub release zips. v0.7.2 ships a correctly-structured dist and adds a CI **clean-room install gate**. **No schema changes.** See [CHANGELOG.md](CHANGELOG.md).
->
-> **v0.7.1 (2026-06-01):** `recall_hybrid()` `match_confidence` calibration fix (BUG-1) + batch `reinforce(BIGINT[], TEXT)` overload. ⚠️ Dist was uninstallable — use **v0.7.2**. See [CHANGELOG.md](CHANGELOG.md).
->
-> **v0.6.3 (2026-05-24):** `recall_lessons()` / `recall_hybrid()` now callable without `AmbiguousColumn`. Added `#variable_conflict use_column`. See [CHANGELOG.md](CHANGELOG.md).
->
-> **v0.6.1 (2026-05-23):** `recall_lessons(as_of_ts)` — 6th param for point-in-time bitemporal recall, propagates to `recall_hybrid()` via GUC. See [CHANGELOG.md](CHANGELOG.md).
->
-> **v0.6.0 (2026-05-23):** `pgmnemo.stats().ghost_count` provenance metric + `RAISE NOTICE` on content-hash dedup + `pgmnemo.recall_stats` view. See [CHANGELOG.md](CHANGELOG.md).
->
-> **v0.5.2.post1 (2026-05-22):** `pgmnemo-mcp` PyPI description fix. No code or SQL changes. See [CHANGELOG.md](CHANGELOG.md).
->
-> **v0.5.2 (2026-05-22):** `pgmnemo-mcp` wheel fix (empty package on `pip install` [#32](https://github.com/pgmnemo/pgmnemo/issues/32)) + `packaging-smoke` CI gate. No SQL schema change. See [CHANGELOG.md](CHANGELOG.md).
->
-> **v0.5.1 (2026-05-18):** MCP write path via `ingest()` SP (provenance gate honoured). See [CHANGELOG.md](CHANGELOG.md).
->
-> **Breaking changes (v0.5.0):** 4-arg `traverse_causal_chain` removed — use 2-arg + `WHERE`. `mem_edge` columns renamed: `lesson_a_id` → `source_id`, `lesson_b_id` → `target_id`. See [docs/MIGRATION.md](docs/MIGRATION.md).
+> **v0.8.0 (2026-06-03):** **Token-economy navigation API.** `navigate_locate()` returns ranked lesson IDs within a configurable character budget; `navigate_expand()` fetches full content + graph neighbors on demand. `reembed()` / `reembed_batch()` for in-place embedding refresh, `recompute_content()`, `source_type` column. See [CHANGELOG.md](CHANGELOG.md).
 
 </details>
 
-## Benchmarks (v0.8.0, retrieval-only)
-
-> ⚠️ **Read methodology and caveats first:** [docs/COMPETITIVE_REALITY.md](docs/COMPETITIVE_REALITY.md) — search-space asymmetries, BM25 baseline comparison, and what these numbers do and don't measure.
+## Benchmarks (v0.9.0, retrieval-only)
 
 | Benchmark | Methodology | Embedder | recall@10 / MRR | Honest comparison |
 |---|---|---|---|---|
@@ -57,6 +42,8 @@
 | **LongMemEval-S** ([Wu ICLR 2025](https://arxiv.org/abs/2410.10813)) | retrieval-only, full session | bge-m3 | **0.9604** / **0.8472** | BM25 baseline = 0.982; gap closed to −2.2pp (v0.6.2 RRF Fix-A) |
 
 Full per-version history: [benchmarks/METRICS_BY_VERSION.md](benchmarks/METRICS_BY_VERSION.md) · **Reproduce:** [docs/BENCHMARKS.md#reproducibility](docs/BENCHMARKS.md#reproducibility)
+
+> ⚠️ **Methodology and caveats:** [docs/COMPETITIVE_REALITY.md](docs/COMPETITIVE_REALITY.md) — search-space asymmetries, BM25 baseline comparison, and what these numbers do and don't measure.
 
 ## Why this exists
 
