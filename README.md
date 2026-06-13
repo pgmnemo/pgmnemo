@@ -1,10 +1,12 @@
 # pgmnemo
 
-**In-your-Postgres agent memory — single-plan multimodal recall, token-budget navigation, provenance-gated writes.**
+**Agent memory that learns which lessons worked — inspectable in plain SQL, no new service.**
 
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 [![Version](https://img.shields.io/badge/version-0.8.3-green.svg)](CHANGELOG.md)
+[![PyPI](https://img.shields.io/pypi/v/pgmnemo-mcp.svg)](https://pypi.org/project/pgmnemo-mcp/)
 [![PGXN](https://badge.pgxn.org/stable/pgmnemo.svg)](https://pgxn.org/dist/pgmnemo/)
+<!-- [![GitHub Stars](https://img.shields.io/github/stars/pgmnemo/pgmnemo.svg?style=social)](https://github.com/pgmnemo/pgmnemo) -->
 [![CI](https://github.com/pgmnemo/pgmnemo/actions/workflows/ci.yml/badge.svg)](https://github.com/pgmnemo/pgmnemo/actions/workflows/ci.yml)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-17-4169E1.svg)](https://www.postgresql.org/)
 [![LoCoMo recall@10](https://img.shields.io/badge/LoCoMo_recall%4010-0.8409-success.svg)](docs/img/all_metrics_history.md)
