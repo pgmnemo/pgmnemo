@@ -1,0 +1,61 @@
+name: Feature request
+description: Propose a new capability for pgmnemo
+title: "feat: "
+labels: ["enhancement", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Before opening: check [Discussions](https://github.com/pgmnemo/pgmnemo/discussions) for prior conversation and [ROADMAP.md](ROADMAP.md) for planned work.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem / motivation
+      description: What problem does this solve? What is the user pain or opportunity?
+      placeholder: "As an agent developer, I need to… because…"
+    validations:
+      required: true
+
+  - type: textarea
+    id: hypothesis
+    attributes:
+      label: Proposed solution
+      description: What change would you like? Be as specific as possible (SQL API, config, schema).
+      placeholder: "Add a new function pgmnemo.X() that…"
+    validations:
+      required: true
+
+  - type: textarea
+    id: measure
+    attributes:
+      label: How will you measure success?
+      description: What does "done" look like? A benchmark, a test, a use-case that works?
+      placeholder: "recall@10 improves by X pp on LongMemEval-S / agents can do Y without Z workaround"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: scope
+    attributes:
+      label: Scope
+      description: Which part of pgmnemo does this touch?
+      options:
+        - SQL extension (new function / schema change)
+        - pgmnemo-mcp (MCP server)
+        - Benchmarks / evaluation
+        - Documentation
+        - CI / packaging
+        - Other
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Before submitting
+      options:
+        - label: I checked existing issues and discussions for duplicates
+          required: true
+        - label: I read CONTRIBUTING.md
+          required: true
