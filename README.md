@@ -3,7 +3,7 @@
 **Agent memory that learns which lessons worked — inspectable in plain SQL, no new service.**
 
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.8.3-green.svg)](CHANGELOG.md)
+[![Release](https://img.shields.io/github/v/release/pgmnemo/pgmnemo?label=release&color=brightgreen)](https://github.com/pgmnemo/pgmnemo/releases/latest)
 [![PyPI](https://img.shields.io/pypi/v/pgmnemo-mcp.svg)](https://pypi.org/project/pgmnemo-mcp/)
 [![PGXN](https://badge.pgxn.org/stable/pgmnemo.svg)](https://pgxn.org/dist/pgmnemo/)
 <!-- [![GitHub Stars](https://img.shields.io/github/stars/pgmnemo/pgmnemo.svg?style=social)](https://github.com/pgmnemo/pgmnemo) -->
