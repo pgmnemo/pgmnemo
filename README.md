@@ -39,31 +39,15 @@
 
 ## Benchmarks (v0.8.0, retrieval-only)
 
-> **Read this before the numbers below:** [docs/COMPETITIVE_REALITY.md](docs/COMPETITIVE_REALITY.md)
-> explains exactly what these recall@K figures mean, what they don't, and where
-> our methodology has asymmetries vs paper baselines and competitor positioning.
-
-Real numbers vs published academic benchmarks. **Canonical protocol:** [docs/BENCHMARK_PROTOCOL.md](docs/BENCHMARK_PROTOCOL.md) (v1, frozen 2026-05-13). Full per-version history: [benchmarks/METRICS_BY_VERSION.md](benchmarks/METRICS_BY_VERSION.md). Reproduction commands in [docs/BENCHMARKS.md](docs/BENCHMARKS.md).
+> ⚠️ **Read methodology and caveats first:** [docs/COMPETITIVE_REALITY.md](docs/COMPETITIVE_REALITY.md) — search-space asymmetries, BM25 baseline comparison, and what these numbers do and don't measure.
 
 | Benchmark | Methodology | Embedder | recall@10 / MRR | Honest comparison |
 |---|---|---|---|---|
-| **LoCoMo** ([Maharana ACL 2024](https://arxiv.org/abs/2402.17753)) | **session-level** (paper-canonical headline) | DRAGON | **0.7994** / **0.5569** | Easier task than paper Table 3 (272 sessions vs 5882 turns search space) |
-| **LoCoMo** same paper, turn-level (apples-to-apples with paper baseline) | **turn-level** (retrieval primitive) | DRAGON | recall@5 = **0.302** / MRR = **0.237** | Paper DRAGON dense recall@5 ≈ 0.225 → pgmnemo +7.7pp |
-| **LongMemEval-S** ([Wu ICLR 2025](https://arxiv.org/abs/2410.10813)) | retrieval-only, full session | bge-m3 (subst. for Stella V5)¹ | **0.9604** / **0.8472** | Hybrid RRF Fix-A (v0.6.2) closed gap to BM25 baseline² 0.982 from −5pp to −2.2pp |
+| **LoCoMo** ([Maharana ACL 2024](https://arxiv.org/abs/2402.17753)) | **session-level** (paper-canonical headline) | DRAGON | **0.7994** / **0.5569** | 272-session search space vs paper's 5882-turn space (22× smaller) |
+| **LoCoMo** turn-level (apples-to-apples with paper) | **turn-level** (retrieval primitive) | DRAGON | recall@5 = **0.302** / MRR = **0.237** | Paper DRAGON dense recall@5 ≈ 0.225 → +7.7pp |
+| **LongMemEval-S** ([Wu ICLR 2025](https://arxiv.org/abs/2410.10813)) | retrieval-only, full session | bge-m3 | **0.9604** / **0.8472** | BM25 baseline = 0.982; gap closed to −2.2pp (v0.6.2 RRF Fix-A) |
 
-¹ Stella V5 paper-canonical incompatible with transformers 5.8 — substituted bge-m3 (1024d, MTEB-strong).
-² Pure-Python BM25 baseline included for reference: [run_nollm.py](benchmarks/longmemeval/run_nollm.py). Gap narrowed from −5pp (v0.5.x) to −2.2pp (v0.6.2 RRF Fix-A, p=0.017). Full numbers: [benchmarks/METRICS_BY_VERSION.md](benchmarks/METRICS_BY_VERSION.md).
-
-> **The "we beat everyone" framing is wrong.** Our headline session-level
-> LoCoMo number compares to a 22× smaller search space than the paper baseline.
-> Our LongMemEval number is below a 50-LOC BM25 script. Comparisons with Mem0 /
-> Zep / MAGMA on these datasets are apples-to-oranges — they optimise different
-> objectives. The honest competitive position is detailed in
-> [COMPETITIVE_REALITY.md §3-§5](docs/COMPETITIVE_REALITY.md).
-
-**Reproduce in 3 commands:** see [docs/BENCHMARKS.md#reproducibility](docs/BENCHMARKS.md#reproducibility).
-
-**What pgmnemo's bench does NOT measure** ([§2 of COMPETITIVE_REALITY.md](docs/COMPETITIVE_REALITY.md#2-what-we-dont-measure-and-why-it-matters)): insertion throughput, concurrent read/write, retrieval latency p50/p95/p99, multi-tenant RLS correctness, scale beyond ~5k rows, end-to-end agent task completion, provenance gate correctness, state-machine transitions.
+Full per-version history: [benchmarks/METRICS_BY_VERSION.md](benchmarks/METRICS_BY_VERSION.md) · **Reproduce:** [docs/BENCHMARKS.md#reproducibility](docs/BENCHMARKS.md#reproducibility)
 
 ## Why this exists
 
@@ -87,6 +71,8 @@ Real numbers vs published academic benchmarks. **Canonical protocol:** [docs/BEN
 | Provenance enforcement | ✅ DB-layer constraint | ❌ | ❌ |
 | Install model | `CREATE EXTENSION` | External service | SaaS API |
 | Self-hosted price | Free (Apache 2.0) | $$$$ | $$$$$ |
+
+In production at [Agency](docs/case_studies/agency.md) (~100k agent runs/week).
 
 ## Compatibility matrix
 
