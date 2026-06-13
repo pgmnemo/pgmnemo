@@ -2,6 +2,15 @@
 
 All notable changes to `pgmnemo` are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
+Versions follow [Semantic Versioning](https://semver.org/).
+
+## Breaking changes quick-scan
+
+| Version | Breaking change | Migration |
+|---|---|---|
+| **0.9.0** | `navigate_locate` budget counter fixed — ~5× more IDs returned per equivalent budget | Callers with `token_budget_chars` need proportional adjustment; see §Breaking changes in [0.9.0] |
+| **0.5.0** | 4-arg `traverse_causal_chain` removed | Use 2-arg form + `WHERE` clause |
+| **0.5.0** | `mem_edge` columns renamed: `lesson_a_id` → `source_id`, `lesson_b_id` → `target_id` | Use `pgmnemo.add_edge()` to avoid direct column references; see [docs/MIGRATION.md](docs/MIGRATION.md) |
 
 ---
 
@@ -1462,3 +1471,40 @@ CREATE EXTENSION pgmnemo CASCADE;   -- installs 0.1.4 directly
 ## [0.0.1] — 2026-04-20
 
 Initial schema: `pgmnemo.agent_lesson` table + basic HNSW index.
+
+---
+
+<!-- Keep-a-Changelog compare links — update top entry on each release -->
+[unreleased]: https://github.com/pgmnemo/pgmnemo/compare/v0.9.0...HEAD
+[0.9.0]: https://github.com/pgmnemo/pgmnemo/compare/v0.8.3...v0.9.0
+[0.8.3]: https://github.com/pgmnemo/pgmnemo/compare/v0.8.2...v0.8.3
+[0.8.2]: https://github.com/pgmnemo/pgmnemo/compare/v0.8.1...v0.8.2
+[0.8.1]: https://github.com/pgmnemo/pgmnemo/compare/v0.8.0...v0.8.1
+[0.8.0]: https://github.com/pgmnemo/pgmnemo/compare/v0.7.2...v0.8.0
+[0.7.2]: https://github.com/pgmnemo/pgmnemo/compare/v0.7.1...v0.7.2
+[0.7.1]: https://github.com/pgmnemo/pgmnemo/compare/v0.7.0...v0.7.1
+[0.7.0]: https://github.com/pgmnemo/pgmnemo/compare/v0.6.3...v0.7.0
+[0.6.3]: https://github.com/pgmnemo/pgmnemo/compare/v0.6.2...v0.6.3
+[0.6.2]: https://github.com/pgmnemo/pgmnemo/compare/v0.6.1...v0.6.2
+[0.6.1]: https://github.com/pgmnemo/pgmnemo/compare/v0.6.0...v0.6.1
+[0.6.0]: https://github.com/pgmnemo/pgmnemo/compare/v0.5.2.post1...v0.6.0
+[0.5.2.post1]: https://github.com/pgmnemo/pgmnemo/compare/v0.5.2...v0.5.2.post1
+[0.5.2]: https://github.com/pgmnemo/pgmnemo/compare/v0.5.1...v0.5.2
+[0.5.1]: https://github.com/pgmnemo/pgmnemo/compare/v0.5.0...v0.5.1
+[0.5.0]: https://github.com/pgmnemo/pgmnemo/compare/v0.4.1...v0.5.0
+[0.4.1]: https://github.com/pgmnemo/pgmnemo/compare/v0.4.0...v0.4.1
+[0.4.0]: https://github.com/pgmnemo/pgmnemo/compare/v0.3.1...v0.4.0
+[0.3.1]: https://github.com/pgmnemo/pgmnemo/compare/v0.3.0...v0.3.1
+[0.3.0]: https://github.com/pgmnemo/pgmnemo/compare/v0.2.2...v0.3.0
+[0.2.2]: https://github.com/pgmnemo/pgmnemo/compare/v0.2.1...v0.2.2
+[0.2.1]: https://github.com/pgmnemo/pgmnemo/compare/v0.2.0.1...v0.2.1
+[0.2.0.1]: https://github.com/pgmnemo/pgmnemo/compare/v0.2.0...v0.2.0.1
+[0.2.0]: https://github.com/pgmnemo/pgmnemo/compare/v0.1.4.1...v0.2.0
+[0.1.4.1]: https://github.com/pgmnemo/pgmnemo/compare/v0.1.4...v0.1.4.1
+[0.1.4]: https://github.com/pgmnemo/pgmnemo/compare/v0.1.3...v0.1.4
+[0.1.3]: https://github.com/pgmnemo/pgmnemo/compare/v0.1.2...v0.1.3
+[0.1.2]: https://github.com/pgmnemo/pgmnemo/compare/v0.1.1...v0.1.2
+[0.1.1]: https://github.com/pgmnemo/pgmnemo/compare/v0.1.0...v0.1.1
+[0.1.0]: https://github.com/pgmnemo/pgmnemo/compare/v0.0.1...v0.1.0
+[0.0.1]: https://github.com/pgmnemo/pgmnemo/releases/tag/v0.0.1
+
