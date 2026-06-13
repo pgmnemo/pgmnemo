@@ -1,0 +1,58 @@
+name: Documentation question or gap
+description: Something in the docs is missing, confusing, or wrong
+title: "docs: "
+labels: ["documentation", "triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        For general questions that aren't doc bugs, use [Discussions](https://github.com/pgmnemo/pgmnemo/discussions) instead.
+
+  - type: dropdown
+    id: doc_type
+    attributes:
+      label: Which document?
+      options:
+        - README.md
+        - docs/INSTALL.md
+        - docs/USAGE.md
+        - AGENTS.md
+        - docs/MIGRATION.md
+        - docs/BENCHMARKS.md / BENCHMARK_PROTOCOL.md
+        - docs/PRODUCTION_READINESS.md
+        - pgmnemo_mcp/README.md
+        - Other (specify in description)
+    validations:
+      required: true
+
+  - type: textarea
+    id: what
+    attributes:
+      label: What is unclear, missing, or wrong?
+      description: Quote the confusing passage if you can.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect the docs to say?
+      description: What would have unblocked you?
+    validations:
+      required: false
+
+  - type: input
+    id: version
+    attributes:
+      label: pgmnemo version
+      placeholder: "e.g. 0.9.0 — run: SELECT pgmnemo.version();"
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Before submitting
+      options:
+        - label: I searched existing issues for this doc question
+          required: true
