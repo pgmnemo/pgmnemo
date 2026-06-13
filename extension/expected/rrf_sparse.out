@@ -2,7 +2,7 @@
 -- Pure-SQL boolean and integer checks — no embeddings, no floating-point comparisons.
 -- Apply the v0.6.2 migration.
 ALTER EXTENSION pgmnemo UPDATE TO '0.9.0';
-NOTICE:  version "0.8.3" of extension "pgmnemo" is already installed
+NOTICE:  version "0.9.0" of extension "pgmnemo" is already installed
 -- ── Signature check ───────────────────────────────────────────────────────────
 -- recall_hybrid() signature still 8 parameters (unchanged)
 SELECT pronargs AS recall_hybrid_arg_count
