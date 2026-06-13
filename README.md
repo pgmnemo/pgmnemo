@@ -21,6 +21,13 @@
 
 </div>
 
+⭐ *If pgmnemo is useful to you, star this repo — it helps other developers find it.*
+
+> [!TIP]
+> **Try the MCP server in 60 seconds:** `pip install pgmnemo-mcp && pgmnemo-mcp`
+> — connects to your existing Postgres and exposes ingest/recall as MCP tools for Claude Desktop, Cursor, and other MCP clients.
+> Or run [`examples/01_reinforce_ranking_flip.py`](examples/01_reinforce_ranking_flip.py) to see outcome-learning live (rank flip after 3× reinforce).
+
 **recall@10 = 0.9604 on LongMemEval-S · $0 LLM ingestion cost · `CREATE EXTENSION` install · fully `EXPLAIN`-able**  
 In production at [Agency](docs/case_studies/agency.md): agents used **−68% fewer turns** on runs where memory fired a relevant hit.
 
