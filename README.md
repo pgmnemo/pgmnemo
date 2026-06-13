@@ -1,6 +1,6 @@
 <div align="center">
 
-# pgmnemo
+<img src="assets/logo.svg" alt="pgmnemo" width="220">
 
 ### Agent memory that learns which lessons worked — inspectable in plain SQL, in your Postgres
 
