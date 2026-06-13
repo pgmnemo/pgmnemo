@@ -1474,6 +1474,42 @@ Initial schema: `pgmnemo.agent_lesson` table + basic HNSW index.
 
 ---
 
+<!-- Keep-a-Changelog compare links — update top entry on each release -->
+[unreleased]: https://github.com/pgmnemo/pgmnemo/compare/v0.9.0...HEAD
+[0.9.0]: https://github.com/pgmnemo/pgmnemo/compare/v0.8.3...v0.9.0
+[0.8.3]: https://github.com/pgmnemo/pgmnemo/compare/v0.8.2...v0.8.3
+[0.8.2]: https://github.com/pgmnemo/pgmnemo/compare/v0.8.1...v0.8.2
+[0.8.1]: https://github.com/pgmnemo/pgmnemo/compare/v0.8.0...v0.8.1
+[0.8.0]: https://github.com/pgmnemo/pgmnemo/compare/v0.7.2...v0.8.0
+[0.7.2]: https://github.com/pgmnemo/pgmnemo/compare/v0.7.1...v0.7.2
+[0.7.1]: https://github.com/pgmnemo/pgmnemo/compare/v0.7.0...v0.7.1
+[0.7.0]: https://github.com/pgmnemo/pgmnemo/compare/v0.6.3...v0.7.0
+[0.6.3]: https://github.com/pgmnemo/pgmnemo/compare/v0.6.2...v0.6.3
+[0.6.2]: https://github.com/pgmnemo/pgmnemo/compare/v0.6.1...v0.6.2
+[0.6.1]: https://github.com/pgmnemo/pgmnemo/compare/v0.6.0...v0.6.1
+[0.6.0]: https://github.com/pgmnemo/pgmnemo/compare/v0.5.2.post1...v0.6.0
+[0.5.2.post1]: https://github.com/pgmnemo/pgmnemo/compare/v0.5.2...v0.5.2.post1
+[0.5.2]: https://github.com/pgmnemo/pgmnemo/compare/v0.5.1...v0.5.2
+[0.5.1]: https://github.com/pgmnemo/pgmnemo/compare/v0.5.0...v0.5.1
+[0.5.0]: https://github.com/pgmnemo/pgmnemo/compare/v0.4.1...v0.5.0
+[0.4.1]: https://github.com/pgmnemo/pgmnemo/compare/v0.4.0...v0.4.1
+[0.4.0]: https://github.com/pgmnemo/pgmnemo/compare/v0.3.1...v0.4.0
+[0.3.1]: https://github.com/pgmnemo/pgmnemo/compare/v0.3.0...v0.3.1
+[0.3.0]: https://github.com/pgmnemo/pgmnemo/compare/v0.2.2...v0.3.0
+[0.2.2]: https://github.com/pgmnemo/pgmnemo/compare/v0.2.1...v0.2.2
+[0.2.1]: https://github.com/pgmnemo/pgmnemo/compare/v0.2.0.1...v0.2.1
+[0.2.0.1]: https://github.com/pgmnemo/pgmnemo/compare/v0.2.0...v0.2.0.1
+[0.2.0]: https://github.com/pgmnemo/pgmnemo/compare/v0.1.4.1...v0.2.0
+[0.1.4.1]: https://github.com/pgmnemo/pgmnemo/compare/v0.1.4...v0.1.4.1
+[0.1.4]: https://github.com/pgmnemo/pgmnemo/compare/v0.1.3...v0.1.4
+[0.1.3]: https://github.com/pgmnemo/pgmnemo/compare/v0.1.2...v0.1.3
+[0.1.2]: https://github.com/pgmnemo/pgmnemo/compare/v0.1.1...v0.1.2
+[0.1.1]: https://github.com/pgmnemo/pgmnemo/compare/v0.1.0...v0.1.1
+[0.1.0]: https://github.com/pgmnemo/pgmnemo/compare/v0.0.1...v0.1.0
+[0.0.1]: https://github.com/pgmnemo/pgmnemo/releases/tag/v0.0.1
+
+---
+
 <!-- Compare links (Keep a Changelog §Links) -->
 [0.9.0]: https://github.com/pgmnemo/pgmnemo/compare/v0.8.3...v0.9.0
 [0.8.3]: https://github.com/pgmnemo/pgmnemo/compare/v0.8.2...v0.8.3
