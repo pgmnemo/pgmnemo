@@ -2,8 +2,8 @@
 -- Pure-SQL checks: function exists, index hints, scale targets documented.
 -- Actual 100K/1M/10M stress run: benchmarks/scripts/stress_recall_large.py
 -- Apply the v0.6.1 migration.
-ALTER EXTENSION pgmnemo UPDATE TO '0.9.0';
-NOTICE:  version "0.9.0" of extension "pgmnemo" is already installed
+ALTER EXTENSION pgmnemo UPDATE TO '0.9.1';
+NOTICE:  version "0.9.1" of extension "pgmnemo" is already installed
 -- ── Function exists with correct signature ────────────────────────────────────
 SELECT COUNT(*) AS recall_lessons_v061_exists
 FROM   pg_proc p
