@@ -1,0 +1,22 @@
+{
+    "version": "v0.9.1",
+    "date": "2026-06-14",
+    "pgmnemo_version": "0.9.1",
+    "gate_status": "PASS",
+    "gate_type": "navigation_correctness",
+    "scope": "Validates the navigate_expand/navigate_locate graph-traversal fix (B1-B4). This is a CORRECTNESS fix to a broken navigation primitive, not a change to recall ranking: recall_hybrid / recall_lessons scoring math is untouched, so no recall@k or latency regression is possible. The gate is therefore correctness (does step-2 of the navigation loop now function?) rather than recall-parity.",
+    "root_cause": "navigate_expand/locate filtered graph edges by edge_kind IN ('causal','temporal'); production edges are written with edge_kind='semantic' (unmapped relation_types in backfill). Result: graph expansion returned ZERO neighbors for 100% of production edges.",
+    "results": {
+        "navigate_expand_neighbors_0_9_0": 0,
+        "navigate_expand_neighbors_0_9_1": 1,
+        "smoke": "ingest 2 lessons (project_id=99999 test contour) + one relation_type='semantic' edge a->b; navigate_expand([a]) returns graph_neighbor_ids={b} via navigation_path='graph_expand'. Under 0.9.0 this returned empty.",
+        "fresh_install_version": "0.9.1",
+        "upgrade_path_version": "0.9.1",
+        "path_equivalence": "fresh-install (pgmnemo--0.9.1.sql) and upgrade (ALTER EXTENSION UPDATE TO '0.9.1') both expose identical SP set: navigate_expand, navigate_locate, recall_lessons_pooled, traverse_causal_chain, traverse_temporal_window",
+        "regress_test": "extension/sql/test_v091.sql passes (rc=0, ON_ERROR_STOP; 4 lessons + 3 edges fixture)"
+    },
+    "gate_criteria": "navigate_expand returns >=1 neighbor for a non-causal/temporal edge (was 0 in 0.9.0) AND fresh-install == upgrade SP set AND test_v091.sql passes",
+    "verdict": "PASS — navigation step-2 now functions (0->1 neighbor on semantic edge); fresh+upgrade installcheck green; remove-candidate SPs (traverse_*/recall_lessons_pooled) deliberately retained per joint Agency<->pgmnemo verdict 2026-06-13 (retire in v1.0 after nav-efficiency benchmark validates the loop).",
+    "no_recall_regression": "recall_hybrid and recall_lessons scoring unchanged in 0.9.1; the v0.9.0 empirical_recall_parity gate (recall@10=78.8%, top-10 Jaccard=1.00) remains the recall reference.",
+    "verification": "Local installcheck on PostgreSQL 17 + pgvector: scratch DBs pgmnemo_091_smoke (upgrade path) and pgmnemo_091_ic (fresh-install path); test contour project_id=99999, no real-data contact."
+}
