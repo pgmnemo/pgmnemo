@@ -717,7 +717,8 @@ pgmnemo.navigate_expand(
     ids                    BIGINT[],
     expand_fields          TEXT[]  DEFAULT '{}',  -- metadata keys to project
     graph_expand_depth     INT     DEFAULT 1,      -- BFS hops; 0 = none
-    graph_expand_threshold FLOAT   DEFAULT 0.7     -- min edge weight
+    graph_expand_threshold FLOAT   DEFAULT 0.5,    -- min edge weight (0.5 since v0.9.1)
+    relation_types         TEXT[]  DEFAULT NULL     -- NULL = all edges; or filter (v0.9.1)
 ) RETURNS TABLE (
     id                      BIGINT,
     content                 TEXT,    -- full lesson_text
@@ -735,8 +736,9 @@ SELECT id, content, graph_neighbor_ids, tokens_consumed
 FROM pgmnemo.navigate_expand(
     ARRAY[42, 99, 137]::BIGINT[],
     ARRAY['run_id', 'model'],  -- extract these keys from metadata
-    1,                         -- follow 1-hop causal/temporal neighbors
-    0.7                        -- only traverse edges with weight ≥ 0.7
+    1,                         -- follow 1-hop neighbors (bidirectional BFS)
+    0.5,                       -- only traverse edges with weight >= 0.5
+    NULL                       -- traverse all relation_types (or ARRAY['ENTITY_LINK','CAUSED_BY'])
 );
 ```
 
@@ -746,8 +748,8 @@ FROM pgmnemo.navigate_expand(
 this can overflow a context window before you've decided which lessons to use.
 `navigate_locate()` returns only IDs and 50-char previews — you evaluate rank and
 relevance before fetching content. `navigate_expand()` then fetches content only for
-the IDs you selected, with an optional graph traversal to pull in causally or
-temporally linked neighbors.
+the IDs you selected, with an optional graph traversal to pull in connected
+neighbors (entity, semantic, causal, temporal — all edge kinds).
 
 ---
 

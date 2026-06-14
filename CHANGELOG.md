@@ -8,9 +8,71 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 | Version | Breaking change | Migration |
 |---|---|---|
+| **0.9.1** | `navigate_expand` 4-arg overload dropped (5th param `relation_types TEXT[]` added) | Positional callers unaffected (DEFAULT NULL); explicit overload refs must update |
 | **0.9.0** | `navigate_locate` budget counter fixed — ~5× more IDs returned per equivalent budget | Callers with `token_budget_chars` need proportional adjustment; see §Breaking changes in [0.9.0] |
 | **0.5.0** | 4-arg `traverse_causal_chain` removed | Use 2-arg form + `WHERE` clause |
 | **0.5.0** | `mem_edge` columns renamed: `lesson_a_id` → `source_id`, `lesson_b_id` → `target_id` | Use `pgmnemo.add_edge()` to avoid direct column references; see [docs/MIGRATION.md](docs/MIGRATION.md) |
+
+---
+
+## [0.9.1] — 2026-06-14
+
+### Theme
+
+**P0 graph traversal fix.** `navigate_expand` and `navigate_locate` graph
+walks filtered `edge_kind IN ('causal','temporal')`, making entity and
+semantic edges invisible. Production edges written via `backfill_mem_edge.py`
+all had `edge_kind='semantic'` (unmapped `CO_TEMPORAL` relation_type defaults
+to semantic in `add_edge`'s CASE). Result: graph expansion step-2 returned
+zero neighbors for 100% of production edges.
+
+### Fixed
+
+- **B1 — `navigate_expand` edge filter** (#graph, #P0): replaced
+  `me.edge_kind IN ('causal','temporal')` with
+  `me.relation_type = ANY(relation_types)`. `relation_type` is the actual
+  typed discriminator; `edge_kind` is a coarse 4-value category that silently
+  miscategorized production edges. New parameter: `relation_types TEXT[]
+  DEFAULT NULL` — NULL traverses ALL active edges (no type filter).
+
+- **B2 — `valid_until` sentinel mismatch** (#graph): edges could carry
+  `valid_until = 'infinity'::TIMESTAMPTZ` (following `agent_lesson.t_valid_to`
+  convention) instead of NULL. Old filter `valid_until IS NULL` excluded them.
+  Fix: `(valid_until IS NULL OR valid_until = 'infinity'::TIMESTAMPTZ)`.
+
+- **B3 — Forward-only BFS** (#graph): graph expansion only followed
+  `me.source_id = node → me.target_id`. Backward relations (e.g. discovering
+  a cause from its effect) were invisible. Fix: bidirectional join on
+  `(source_id = node OR target_id = node)` with CASE to select the opposite
+  endpoint.
+
+- **B4 — Default weight threshold 0.7 → 0.5** (#graph): navigation should be
+  permissive — the agent decides which connections to follow. 0.7 was too
+  aggressive for sparse graphs.
+
+- **`navigate_locate` graph_walk** (#graph): same B1+B2+B3 fixes applied to
+  the proximity-scoring BFS in `navigate_locate`. All `relation_type`s now
+  contribute to proximity boost.
+
+- **P1-D — `navigate_locate` topic BM25 seq-scan** (#performance): replaced
+  inline `to_tsvector('english', COALESCE(topic,''))` with stored generated
+  column `topic_tsv` (GIN-indexed). Eliminates O(n) recompute per row in
+  `raw_candidates`.
+
+### Breaking changes
+
+- `navigate_expand` signature changed from 4-arg
+  `(BIGINT[], TEXT[], INT, FLOAT)` to 5-arg
+  `(BIGINT[], TEXT[], INT, FLOAT, TEXT[])`. Old 4-arg overload is dropped in
+  the migration (`DROP FUNCTION IF EXISTS`). Callers using only positional
+  args 1–4 are unaffected (5th arg defaults to NULL). Callers storing the
+  function signature explicitly must update.
+
+### Upgrade
+
+```sql
+ALTER EXTENSION pgmnemo UPDATE TO '0.9.1';
+```
 
 ---
 

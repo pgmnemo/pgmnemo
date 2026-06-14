@@ -32,8 +32,10 @@
 In production at [Agency](docs/case_studies/agency.md): agents used **−68% fewer turns** on runs where memory fired a relevant hit.
 
 <details>
-<summary>Recent releases (v0.9.0, v0.8.0) · <a href="CHANGELOG.md">full CHANGELOG</a></summary>
+<summary>Recent releases (v0.9.1, v0.9.0, v0.8.0) · <a href="CHANGELOG.md">full CHANGELOG</a></summary>
 
+> **v0.9.1 (2026-06-14):** **P0 graph traversal fix.** `navigate_expand` + `navigate_locate` now traverse all edge kinds (entity, semantic, causal, temporal) — was hardcoded to causal+temporal only, making 100% of production edges invisible. Bidirectional BFS, `relation_types` filter param, threshold 0.7→0.5. See [CHANGELOG.md](CHANGELOG.md).
+>
 > **v0.9.0 (2026-06-10):** **Token-economy correctness + recall performance.** `navigate_locate` budget counter fix (~5× more IDs returned per equivalent budget), `navigate_expand` project-scoping, NULL-embedding ghost-exclusion fix, `recall_hybrid` O(n) → O(k log n) rewrite, `content_type`/`blob_ref`/`doc_ref` columns. See [CHANGELOG.md](CHANGELOG.md).
 >
 > **v0.8.0 (2026-06-03):** **Token-economy navigation API.** `navigate_locate()` returns ranked lesson IDs within a configurable character budget; `navigate_expand()` fetches full content + graph neighbors on demand. `reembed()` / `reembed_batch()` for in-place embedding refresh, `recompute_content()`, `source_type` column. See [CHANGELOG.md](CHANGELOG.md).
