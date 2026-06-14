@@ -4529,10 +4529,6 @@ COMMENT ON FUNCTION pgmnemo.navigate_expand(BIGINT[], TEXT[], INT, FLOAT, TEXT[]
     'Threshold default lowered: 0.5 (was 0.7) — navigation should be permissive; '
     'agent decides which connections to follow. '
     'Combine with navigate_locate() for the locate→connections→expand loop.';
-    'tokens_consumed: cumulative char count across all rows (running sum of length(lesson_text)). '
-    'navigation_path: ''content'' for requested IDs; ''graph_expand'' for BFS neighbours. '
-    'Typically called after navigate_locate(); use navigate_locate() to discover IDs '
-    'within a token budget, then navigate_expand() to retrieve content for chosen subset.';
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- S4: reembed() — Single-row embedding refresh
