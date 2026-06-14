@@ -14,39 +14,31 @@
 --       parameter; bidirectional BFS; handle valid_until='infinity'; threshold 0.7→0.5
 --   #2  navigate_locate(): graph_walk filters by relation_type (not edge_kind);
 --       bidirectional BFS; handle valid_until='infinity'
---   P1-A  DROP traverse_causal_chain(BIGINT, INT, TEXT[], BOOLEAN, TEXT) — zero callers
---   P1-B  DROP traverse_temporal_window(BIGINT, INTERVAL, BOOLEAN, TEXT, INT, INT) — zero callers
---   P1-C  DROP recall_lessons_pooled(vector, INT, INT) — zero callers
 --   P1-D  navigate_locate raw_candidates: replace inline to_tsvector(topic) with stored
 --         topic_tsv column (O(n) seq-scan → GIN-indexed stored generated column)
+--
+-- DELIBERATELY NOT REMOVED in 0.9.1 (joint Agency↔pgmnemo verdict 2026-06-13,
+-- AGENCY_DOGFOOD_FEEDBACK_AND_CONSULT_2026-06-13.md §4 #3/#6):
+--   traverse_causal_chain, traverse_temporal_window, recall_lessons_pooled have
+--   zero current callers BUT are the only WORKING traversal SPs. Their 0% adoption
+--   is "no nav loop is proven yet", NOT redundancy. Retire only AFTER the navigate_*
+--   loop is validated by the nav-efficiency benchmark. Marked remove-candidate v1.0
+--   below (COMMENT only — no DROP). recall_lessons retirement likewise deferred (§6).
 --
 -- Upgrade: ALTER EXTENSION pgmnemo UPDATE TO '0.9.1';
 
 \echo Use "ALTER EXTENSION pgmnemo UPDATE TO '0.9.1'" to load this file. \quit
 
 -- ══════════════════════════════════════════════════════════════════════════════
--- P1-A: DROP traverse_causal_chain
--- Zero callers in Agency app / MCP. Active regress tests confirm no fixture refs.
--- Introduced v0.2.1. Pre-1.0 semver: no stability commitment.
+-- REMOVE-CANDIDATES v1.0 (NOT dropped in 0.9.1 — joint verdict §4 #3/#6)
+-- The following SPs have zero current callers but are the only working traversal /
+-- pooled-recall SPs today. Per the Agency↔pgmnemo consult they are retired ONLY
+-- after the navigate_* loop is validated by the nav-efficiency benchmark — not now:
+--   • pgmnemo.traverse_causal_chain(BIGINT, INT, TEXT[], BOOLEAN, TEXT)   [v0.2.1]
+--   • pgmnemo.traverse_temporal_window(BIGINT, INTERVAL, BOOLEAN, TEXT, INT, INT) [v0.2.0]
+--   • pgmnemo.recall_lessons_pooled(vector, INT, INT)                     [v0.1.2]
+-- No DROP statements here by design.
 -- ══════════════════════════════════════════════════════════════════════════════
-
-DROP FUNCTION IF EXISTS pgmnemo.traverse_causal_chain(BIGINT, INT, TEXT[], BOOLEAN, TEXT);
-
--- ══════════════════════════════════════════════════════════════════════════════
--- P1-B: DROP traverse_temporal_window
--- Zero runtime callers. curate_mem_edges.py line 14 is a doc comment, not a call.
--- Introduced v0.2.0. Last touched v0.8.2 (include_unverified fix).
--- ══════════════════════════════════════════════════════════════════════════════
-
-DROP FUNCTION IF EXISTS pgmnemo.traverse_temporal_window(BIGINT, INTERVAL, BOOLEAN, TEXT, INT, INT);
-
--- ══════════════════════════════════════════════════════════════════════════════
--- P1-C: DROP recall_lessons_pooled
--- Thin wrapper: recall_lessons(role=NULL). Zero callers. recall_lessons() is the path.
--- Introduced v0.1.2.
--- ══════════════════════════════════════════════════════════════════════════════
-
-DROP FUNCTION IF EXISTS pgmnemo.recall_lessons_pooled(vector, INT, INT);
 
 -- ══════════════════════════════════════════════════════════════════════════════
 -- #1: navigate_expand — fix graph traversal (P0)
