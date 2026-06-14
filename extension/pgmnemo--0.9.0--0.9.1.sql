@@ -14,10 +14,39 @@
 --       parameter; bidirectional BFS; handle valid_until='infinity'; threshold 0.7→0.5
 --   #2  navigate_locate(): graph_walk filters by relation_type (not edge_kind);
 --       bidirectional BFS; handle valid_until='infinity'
+--   P1-A  DROP traverse_causal_chain(BIGINT, INT, TEXT[], BOOLEAN, TEXT) — zero callers
+--   P1-B  DROP traverse_temporal_window(BIGINT, INTERVAL, BOOLEAN, TEXT, INT, INT) — zero callers
+--   P1-C  DROP recall_lessons_pooled(vector, INT, INT) — zero callers
+--   P1-D  navigate_locate raw_candidates: replace inline to_tsvector(topic) with stored
+--         topic_tsv column (O(n) seq-scan → GIN-indexed stored generated column)
 --
 -- Upgrade: ALTER EXTENSION pgmnemo UPDATE TO '0.9.1';
 
 \echo Use "ALTER EXTENSION pgmnemo UPDATE TO '0.9.1'" to load this file. \quit
+
+-- ══════════════════════════════════════════════════════════════════════════════
+-- P1-A: DROP traverse_causal_chain
+-- Zero callers in Agency app / MCP. Active regress tests confirm no fixture refs.
+-- Introduced v0.2.1. Pre-1.0 semver: no stability commitment.
+-- ══════════════════════════════════════════════════════════════════════════════
+
+DROP FUNCTION IF EXISTS pgmnemo.traverse_causal_chain(BIGINT, INT, TEXT[], BOOLEAN, TEXT);
+
+-- ══════════════════════════════════════════════════════════════════════════════
+-- P1-B: DROP traverse_temporal_window
+-- Zero runtime callers. curate_mem_edges.py line 14 is a doc comment, not a call.
+-- Introduced v0.2.0. Last touched v0.8.2 (include_unverified fix).
+-- ══════════════════════════════════════════════════════════════════════════════
+
+DROP FUNCTION IF EXISTS pgmnemo.traverse_temporal_window(BIGINT, INTERVAL, BOOLEAN, TEXT, INT, INT);
+
+-- ══════════════════════════════════════════════════════════════════════════════
+-- P1-C: DROP recall_lessons_pooled
+-- Thin wrapper: recall_lessons(role=NULL). Zero callers. recall_lessons() is the path.
+-- Introduced v0.1.2.
+-- ══════════════════════════════════════════════════════════════════════════════
+
+DROP FUNCTION IF EXISTS pgmnemo.recall_lessons_pooled(vector, INT, INT);
 
 -- ══════════════════════════════════════════════════════════════════════════════
 -- #1: navigate_expand — fix graph traversal (P0)
@@ -367,12 +396,15 @@ BEGIN
                 THEN (1.0 - (al.embedding <=> query_embedding))::DOUBLE PRECISION
                 ELSE 0.0::DOUBLE PRECISION
             END AS raw_vec_score,
-            -- v0.8.1 F3: topic in BM25 — setweight(topic, 'A') || lesson_tsv
+            -- P1-D fix: use stored generated columns (topic_tsv, lesson_tsv) — GIN-indexed.
+            -- Was: inline to_tsvector('english', COALESCE(topic,'')) — O(n) seq-scan per row.
+            -- topic_tsv GENERATED ALWAYS AS (to_tsvector('english', coalesce(topic,''))) STORED
+            -- pgmnemo_agent_lesson_topic_tsv_idx GIN index on topic_tsv.
             CASE
                 WHEN _has_text AND (al.lesson_tsv @@ _tsquery
-                     OR to_tsvector('english', COALESCE(al.topic, '')) @@ _tsquery)
+                     OR al.topic_tsv @@ _tsquery)
                 THEN ts_rank_cd(
-                    setweight(to_tsvector('english', COALESCE(al.topic, '')), 'A') || al.lesson_tsv,
+                    setweight(al.topic_tsv, 'A') || al.lesson_tsv,
                     _tsquery, 32)::DOUBLE PRECISION
                 ELSE 0.0::DOUBLE PRECISION
             END AS raw_bm25_score
@@ -391,7 +423,7 @@ BEGIN
           AND (
               (_has_vec  AND al.embedding  IS NOT NULL)
            OR (_has_text AND (al.lesson_tsv @@ _tsquery
-               OR to_tsvector('english', COALESCE(al.topic, '')) @@ _tsquery))
+               OR al.topic_tsv @@ _tsquery))
           )
     ),
     -- Step 2: sparse-safe RRF ranks (Cormack 2009)
@@ -546,8 +578,10 @@ $$;
 COMMENT ON FUNCTION pgmnemo.navigate_locate(vector, TEXT, INT, JSONB, INT) IS
     'Token-economy navigation LOCATE (v0.9.1). '
     'Ranks lessons using the same hybrid RRF+aux+graph formula as recall_hybrid. '
-    'v0.9.1 fixes: graph_walk now traverses ALL relation_types bidirectionally '
-    '(was edge_kind IN causal/temporal — missed production edges with edge_kind=semantic). '
+    'v0.9.1 fixes: (1) graph_walk now traverses ALL relation_types bidirectionally '
+    '(was edge_kind IN causal/temporal — missed production edges with edge_kind=semantic); '
+    '(2) raw_candidates uses stored topic_tsv column (GIN-indexed) instead of inline '
+    'to_tsvector recompute — eliminates O(n) seq-scan on topic for BM25 match. '
     'Returns id/preview/score/tokens_consumed/navigation_path — preview is first ~50 chars. '
     'token_budget_chars: cumulative Unicode character (code-point) limit on delivered previews; '
     'first row always returned regardless of budget. '
