@@ -17,17 +17,14 @@
 -- NOTE: Run with:
 --   psql -v ON_ERROR_STOP=1 -f test_v091.sql
 -- or via pg_regress.
-
 SET pgmnemo.gate_strict = 'off';
 SET pgmnemo.include_unverified = 'on';
-
 -- =============================================================================
 -- Setup: insert test lessons + edges for v0.9.1 tests
 -- =============================================================================
 -- role='tc_v091' for easy cleanup.
 -- 4 lessons: A, B (entity-linked), C (semantic-linked to A), D (causal-linked to A)
 -- Edge weights chosen to test threshold gate at 0.5 default.
-
 -- Lesson A: anchor
 INSERT INTO pgmnemo.agent_lesson (role, topic, lesson_text, embedding, metadata)
 VALUES (
@@ -36,7 +33,6 @@ VALUES (
     ('[' || repeat('0.03125,', 1023) || '0.03125]')::vector(1024),
     '{"env": "prod"}'::jsonb
 );
-
 -- Lesson B: entity-linked to A
 INSERT INTO pgmnemo.agent_lesson (role, topic, lesson_text, embedding, metadata)
 VALUES (
@@ -45,7 +41,6 @@ VALUES (
     ('[' || repeat('0.03125,', 1023) || '0.03125]')::vector(1024),
     '{"env": "prod"}'::jsonb
 );
-
 -- Lesson C: semantic-linked to A with weight 0.6 (above 0.5 default threshold)
 INSERT INTO pgmnemo.agent_lesson (role, topic, lesson_text, embedding, metadata)
 VALUES (
@@ -54,7 +49,6 @@ VALUES (
     ('[' || repeat('0.03125,', 1023) || '0.03125]')::vector(1024),
     '{"env": "staging"}'::jsonb
 );
-
 -- Lesson D: causal-linked to A with weight 0.4 (below 0.5 default threshold)
 INSERT INTO pgmnemo.agent_lesson (role, topic, lesson_text, embedding, metadata)
 VALUES (
@@ -63,7 +57,6 @@ VALUES (
     ('[' || repeat('0.03125,', 1023) || '0.03125]')::vector(1024),
     '{"env": "staging"}'::jsonb
 );
-
 -- Capture IDs
 DO $$
 DECLARE
@@ -86,16 +79,21 @@ BEGIN
     -- Causal edge A→D, weight 0.4 (below default threshold)
     PERFORM pgmnemo.add_edge(_id_a, _id_d, 'CAUSED_BY', 0.4);
 
-    RAISE NOTICE 'tc_v091 setup: A=%, B=%, C=%, D=%', _id_a, _id_b, _id_c, _id_d;
+    RAISE NOTICE 'tc_v091 setup: 4 lessons + 3 edges inserted';
 END;
 $$;
-
+NOTICE:  tc_v091 setup: 4 lessons + 3 edges inserted
 -- =============================================================================
 -- T1: navigate_expand — entity edge traversal (P0 fix)
 -- In 0.9.0 this returned ONLY lesson A (entity edges were filtered out).
 -- In 0.9.1 this MUST return lesson A (content) + lesson B (graph_expand).
 -- =============================================================================
 SELECT 'T1: entity edge traversal' AS test;
+           test
+---------------------------
+ T1: entity edge traversal
+(1 row)
+
 SELECT
     al.topic,
     ne.navigation_path,
@@ -105,27 +103,45 @@ FROM pgmnemo.navigate_expand(
 ) ne
 JOIN pgmnemo.agent_lesson al ON al.id = ne.id
 ORDER BY al.topic;
+     topic      | navigation_path | has_neighbors
+----------------+-----------------+---------------
+ lesson_a_v091  | content         | t
+ lesson_b_v091  | graph_expand    | f
+ lesson_c_v091  | graph_expand    | f
+(3 rows)
 
 -- Expect: 3 rows — A (content), B (graph_expand via entity), C (graph_expand via semantic)
 -- D excluded by weight threshold (0.4 < 0.5 default)
-
 -- =============================================================================
 -- T2: navigate_expand — semantic edge traversal
 -- SHARED_TAG → edge_kind='entity' (per add_edge mapping), weight 0.6 > 0.5
 -- =============================================================================
 SELECT 'T2: semantic edge (SHARED_TAG) traversal' AS test;
+                    test
+--------------------------------------------
+ T2: semantic edge (SHARED_TAG) traversal
+(1 row)
+
 SELECT COUNT(*) AS expanded_count
 FROM pgmnemo.navigate_expand(
     ARRAY[(SELECT id FROM pgmnemo.agent_lesson WHERE topic = 'lesson_a_v091')]
 ) ne
 WHERE ne.navigation_path = 'graph_expand';
+ expanded_count
+----------------
+              2
+(1 row)
 
 -- Expect: 2 (B via ENTITY_LINK + C via SHARED_TAG)
-
 -- =============================================================================
 -- T3: navigate_expand — default threshold 0.5 admits weight=0.6 edge
 -- =============================================================================
 SELECT 'T3: threshold 0.5 admits weight 0.6' AS test;
+                 test
+---------------------------------------
+ T3: threshold 0.5 admits weight 0.6
+(1 row)
+
 SELECT EXISTS (
     SELECT 1
     FROM pgmnemo.navigate_expand(
@@ -138,13 +154,21 @@ SELECT EXISTS (
     WHERE al.topic = 'lesson_c_v091'
       AND ne.navigation_path = 'graph_expand'
 ) AS c_found;
+ c_found
+---------
+ t
+(1 row)
 
 -- Expect: true
-
 -- =============================================================================
 -- T4: navigate_expand — weight=0.4 edge excluded by default threshold 0.5
 -- =============================================================================
 SELECT 'T4: threshold 0.5 excludes weight 0.4' AS test;
+                  test
+-----------------------------------------
+ T4: threshold 0.5 excludes weight 0.4
+(1 row)
+
 SELECT NOT EXISTS (
     SELECT 1
     FROM pgmnemo.navigate_expand(
@@ -156,14 +180,22 @@ SELECT NOT EXISTS (
     JOIN pgmnemo.agent_lesson al ON al.id = ne.id
     WHERE al.topic = 'lesson_d_v091'
 ) AS d_excluded;
+ d_excluded
+------------
+ t
+(1 row)
 
 -- Expect: true (D has weight 0.4 < threshold 0.5)
-
 -- =============================================================================
 -- T5: navigate_expand — relation_types filter restricts traversal
 -- Only ENTITY_LINK → only B reached, not C (SHARED_TAG)
 -- =============================================================================
 SELECT 'T5: relation_types filter' AS test;
+           test
+--------------------------
+ T5: relation_types filter
+(1 row)
+
 SELECT al.topic, ne.navigation_path
 FROM pgmnemo.navigate_expand(
     ARRAY[(SELECT id FROM pgmnemo.agent_lesson WHERE topic = 'lesson_a_v091')],
@@ -174,15 +206,24 @@ FROM pgmnemo.navigate_expand(
 ) ne
 JOIN pgmnemo.agent_lesson al ON al.id = ne.id
 ORDER BY al.topic;
+     topic      | navigation_path
+----------------+-----------------
+ lesson_a_v091  | content
+ lesson_b_v091  | graph_expand
+(2 rows)
 
 -- Expect: 2 rows — A (content) + B (graph_expand)
 -- C excluded because SHARED_TAG not in filter
-
 -- =============================================================================
 -- T6: navigate_expand — relation_types=NULL traverses all edge kinds
 -- With threshold lowered to 0.3, all 3 neighbors reachable
 -- =============================================================================
 SELECT 'T6: relation_types NULL + low threshold' AS test;
+                  test
+-----------------------------------------
+ T6: relation_types NULL + low threshold
+(1 row)
+
 SELECT COUNT(*) AS total_rows
 FROM pgmnemo.navigate_expand(
     ARRAY[(SELECT id FROM pgmnemo.agent_lesson WHERE topic = 'lesson_a_v091')],
@@ -191,15 +232,23 @@ FROM pgmnemo.navigate_expand(
     0.3,  -- low threshold: admits D (weight 0.4)
     NULL  -- all relation types
 ) ne;
+ total_rows
+------------
+          4
+(1 row)
 
 -- Expect: 4 (A + B + C + D)
-
 -- =============================================================================
 -- T7: navigate_expand — bidirectional: backward edge discovered
 -- Expand from B; A→B edge exists (source=A, target=B).
 -- Forward-only BFS from B would find nothing. Bidirectional finds A.
 -- =============================================================================
 SELECT 'T7: bidirectional BFS' AS test;
+         test
+-----------------------
+ T7: bidirectional BFS
+(1 row)
+
 SELECT EXISTS (
     SELECT 1
     FROM pgmnemo.navigate_expand(
@@ -209,14 +258,22 @@ SELECT EXISTS (
     WHERE al.topic = 'lesson_a_v091'
       AND ne.navigation_path = 'graph_expand'
 ) AS a_found_from_b;
+ a_found_from_b
+----------------
+ t
+(1 row)
 
 -- Expect: true (backward traversal: B discovers A via reverse of A→B edge)
-
 -- =============================================================================
 -- T8: navigate_locate — graph_walk traverses entity/semantic edges
 -- Verify that the proximity score boost works for non-causal/temporal edges
 -- =============================================================================
 SELECT 'T8: navigate_locate graph proximity with entity edges' AS test;
+                         test
+-------------------------------------------------------
+ T8: navigate_locate graph proximity with entity edges
+(1 row)
+
 SET pgmnemo.graph_proximity_weight = '0.3';
 SELECT COUNT(*) > 0 AS locate_returns_rows
 FROM pgmnemo.navigate_locate(
@@ -224,13 +281,21 @@ FROM pgmnemo.navigate_locate(
     'lesson anchor entity traversal',
     4000
 );
+ locate_returns_rows
+---------------------
+ t
+(1 row)
 
 -- Expect: true (locate returns rows; graph_walk uses entity/semantic edges for proximity)
-
 -- =============================================================================
 -- T9: navigate_expand — valid_until='infinity' edge is traversed
 -- =============================================================================
 SELECT 'T9: valid_until=infinity sentinel' AS test;
+                test
+-------------------------------------
+ T9: valid_until=infinity sentinel
+(1 row)
+
 DO $$
 DECLARE
     _id_a BIGINT;
@@ -244,7 +309,6 @@ BEGIN
     WHERE source_id = _id_a AND target_id = _id_b AND relation_type = 'ENTITY_LINK';
 END;
 $$;
-
 SELECT EXISTS (
     SELECT 1
     FROM pgmnemo.navigate_expand(
@@ -254,14 +318,22 @@ SELECT EXISTS (
     WHERE al.topic = 'lesson_b_v091'
       AND ne.navigation_path = 'graph_expand'
 ) AS b_found_with_infinity;
+ b_found_with_infinity
+-----------------------
+ t
+(1 row)
 
 -- Expect: true (infinity sentinel handled by B2 fix)
-
 -- =============================================================================
 -- T10: navigate_expand — valid_until IS NULL edge is traversed (standard)
 -- Reset edge back to NULL convention
 -- =============================================================================
 SELECT 'T10: valid_until=NULL standard convention' AS test;
+                   test
+-------------------------------------------
+ T10: valid_until=NULL standard convention
+(1 row)
+
 DO $$
 DECLARE
     _id_a BIGINT;
@@ -274,7 +346,6 @@ BEGIN
     WHERE source_id = _id_a AND target_id = _id_b AND relation_type = 'ENTITY_LINK';
 END;
 $$;
-
 SELECT EXISTS (
     SELECT 1
     FROM pgmnemo.navigate_expand(
@@ -284,9 +355,12 @@ SELECT EXISTS (
     WHERE al.topic = 'lesson_b_v091'
       AND ne.navigation_path = 'graph_expand'
 ) AS b_found_with_null;
+ b_found_with_null
+-------------------
+ t
+(1 row)
 
 -- Expect: true
-
 -- =============================================================================
 -- Cleanup
 -- =============================================================================
@@ -294,5 +368,3 @@ DELETE FROM pgmnemo.mem_edge
 WHERE source_id IN (SELECT id FROM pgmnemo.agent_lesson WHERE role = 'tc_v091')
    OR target_id IN (SELECT id FROM pgmnemo.agent_lesson WHERE role = 'tc_v091');
 DELETE FROM pgmnemo.agent_lesson WHERE role = 'tc_v091';
-
-SELECT 'All v0.9.1 tests completed.' AS result;
