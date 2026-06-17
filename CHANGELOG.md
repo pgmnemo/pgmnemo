@@ -15,6 +15,38 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.9.2] — 2026-06-17
+
+### Theme
+
+**I1 — Flag-gated confidence-weighted recall ranking.** `reinforce()` updates
+confidence, but its contribution to the `recall_hybrid` final score was
+~0.000431 — operationally inert (~3 RRF positions max). Outcome-learning was
+marketing, not engineering. This release adds an additive, zero-centered
+confidence boost behind a GUC flag: `score += w × (confidence − 0.5)`.
+
+### Added
+
+- **Confidence boost GUC** (`pgmnemo.confidence_boost_weight`): DOUBLE
+  PRECISION, default `0.0` (OFF — byte-identical to 0.9.1), clamped
+  `[0.0, 0.01]`. Recommended activation value: `0.003` (OL-260605 §1.3).
+  At `w=0.003`, a high-vs-low confidence delta ≈ 0.0024 ≈ 8–15 RRF positions.
+  Cold-start (`confidence=0.5`) gets zero boost/penalty.
+
+- **`recall_hybrid()` I1 term**: additive `+ w × (confidence − 0.5)` in the
+  `final` CTE, after the aux-scale block and before the graph-proximity
+  multiplier. Strong tie-breaker, not driver.
+
+- **Regression test** (`confidence_boost_guc`): 5 tests — GUC default, GUC ON
+  ranking, cold-start invariance, flag-OFF regression, spread amplification.
+
+### Activation gate
+
+Do NOT flip default to ON. Pending: validation task 9091 + positive A/B result.
+Activate per-session: `SET pgmnemo.confidence_boost_weight = '0.003';`
+
+---
+
 ## [0.9.1] — 2026-06-14
 
 ### Theme
