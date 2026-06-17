@@ -3,10 +3,10 @@
 --
 -- Coverage:
 --   T1: confidence column default (0.5) and CHECK constraint (< 0, > 1 rejected)
---   T2: reinforce() success path  (+0.10, stays in [0.55, 0.65])
---   T3: reinforce() failure path  (-0.15, stays in [0.30, 0.40])
+--   T2: reinforce() success path  (+0.02 default, stays in [0.51, 0.53])
+--   T3: reinforce() failure path  (-0.12 default, stays in [0.35, 0.40])
 --   T4: reinforce() neutral       (no change, returns 0.5)
---   T5: reinforce() boundary clamping (0.95 → 1.0; 0.10 → 0.0)
+--   T5: reinforce() boundary clamping (0.99 → 1.0; 0.10 → 0.0)
 --   T6: recall_lessons() ranks high-confidence lesson above low-confidence
 --   T7: footgun NOTICE fires on NULL embedding with text query
 --   T8: ingest() guards (F1 min-length, F2 repetition)
@@ -50,7 +50,7 @@ END;
 $$;
 
 -- =============================================================================
--- T2: reinforce() success path (+0.10, clamped, increments success_count)
+-- T2: reinforce() success path (+0.02 default, clamped, increments success_count)
 -- =============================================================================
 
 WITH ins AS (
@@ -62,10 +62,10 @@ WITH ins AS (
 reinforced AS (
     SELECT pgmnemo.reinforce(id, 'success') AS new_conf FROM ins
 )
-SELECT new_conf > 0.55 AND new_conf < 0.65 AS success_confidence_raised FROM reinforced;
+SELECT new_conf > 0.51 AND new_conf < 0.53 AS success_confidence_raised FROM reinforced;
 
 -- =============================================================================
--- T3: reinforce() failure path (-0.15, clamped, increments fail_count)
+-- T3: reinforce() failure path (-0.12 default, clamped, increments fail_count)
 -- =============================================================================
 
 WITH ins AS (
@@ -77,7 +77,7 @@ WITH ins AS (
 reinforced AS (
     SELECT pgmnemo.reinforce(id, 'failure') AS new_conf FROM ins
 )
-SELECT new_conf > 0.30 AND new_conf < 0.40 AS failure_confidence_lowered FROM reinforced;
+SELECT new_conf > 0.35 AND new_conf < 0.40 AS failure_confidence_lowered FROM reinforced;
 
 -- =============================================================================
 -- T4: reinforce() neutral (no-op, returns unchanged confidence)
@@ -95,13 +95,13 @@ reinforced AS (
 SELECT new_conf = 0.5 AS neutral_confidence_unchanged FROM reinforced;
 
 -- =============================================================================
--- T5a: reinforce() upper boundary: 0.95 + success → clamped to 1.0
+-- T5a: reinforce() upper boundary: 0.99 + success → clamped to 1.0
 -- =============================================================================
 
 WITH ins AS (
     INSERT INTO pgmnemo.agent_lesson (role, topic, lesson_text, confidence)
     VALUES ('tc_v070', 'reinforce_clamp_high',
-            'reinforce boundary clamp upper confidence test lesson text here', 0.95)
+            'reinforce boundary clamp upper confidence test lesson text here', 0.99)
     RETURNING id
 ),
 reinforced AS (

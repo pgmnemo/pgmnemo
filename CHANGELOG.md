@@ -15,32 +15,57 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.9.3] — 2026-06-17
+
+### Theme
+
+**D1 — Base-rate-adjusted `reinforce()` deltas, GUC-configurable.** OL-260605
+validation (task 9091) showed shipped deltas (+0.10/−0.15) give r_pb=−0.051
+(confidence does NOT predict success). At 83.5% base success rate, `+0.10`
+saturates confidence toward ceiling, destroying discriminability.
+Base-rate-adjusted defaults (+0.02/−0.12) give r_pb=+0.107..+0.124 — the only
+positive signal observed.
+
+### Added
+
+- **Base-rate-adjusted `reinforce()` deltas** (D1): default success delta
+  `+0.10` → `+0.02`; failure delta `−0.15` → `−0.12`. Both scalar
+  `reinforce(BIGINT, TEXT)` and batch `reinforce(BIGINT[], TEXT)` forms updated.
+
+- **`reinforce()` GUC-configurable deltas**:
+  - `pgmnemo.reinforce_success_delta` — DOUBLE PRECISION, default `0.02`,
+    clamped `[0.0, 1.0]`. Applied as `confidence += delta` on success.
+  - `pgmnemo.reinforce_fail_delta` — DOUBLE PRECISION, default `0.12`,
+    clamped `[0.0, 1.0]`. Applied as `confidence -= delta` on failure.
+  Override per-session: `SET pgmnemo.reinforce_success_delta = '0.05';`
+  Batch form reads GUCs once before the loop for consistency across IDs.
+
+- **Regression test** (`reinforce_delta_guc`): 8 assertions — default success
+  delta, default failure delta, GUC override success, GUC override failure,
+  clamp prevents overflow, batch form respects GUC, post-RESET defaults restored.
+
+### Upgrade
+
+```sql
+ALTER EXTENSION pgmnemo UPDATE TO '0.9.3';
+```
+
+New defaults apply immediately. Override per-session or at DB/role level if
+your workload has a different base success rate.
+
+---
+
 ## [0.9.2] — 2026-06-17
 
 ### Theme
 
-**I1 + D1 — Confidence-weighted recall ranking (GUC-gated) + base-rate-adjusted
-`reinforce()` deltas.** OL-260605 validation (task 9091) revealed two compounding
-problems: (1) `reinforce()` shipped deltas (+0.10/−0.15) give r_pb=−0.051 (confidence
-does NOT predict success at 83.5% base rate); (2) `recall_hybrid()` confidence
-contribution was operationally inert (~0.000431, ~3 RRF positions max).
-
-This release fixes both: base-rate-adjusted deltas (+0.02/−0.12, r_pb=+0.107..0.124)
-and an additive confidence boost GUC in recall ranking (`score += w × (confidence − 0.5)`).
+**I1 — Flag-gated confidence-weighted recall ranking.** `reinforce()` updates
+confidence, but its contribution to the `recall_hybrid` final score was
+~0.000431 — operationally inert (~3 RRF positions max). Outcome-learning was
+marketing, not engineering. This release adds an additive, zero-centered
+confidence boost behind a GUC flag: `score += w × (confidence − 0.5)`.
 
 ### Added
-
-- **Base-rate-adjusted `reinforce()` deltas** (D1): default success delta changed
-  from `+0.10` → `+0.02`; failure delta changed from `−0.15` → `−0.12`. At 83.5%
-  base success, the old `+0.10` saturated confidence toward ceiling, destroying
-  discriminability (r_pb=−0.051). The new defaults give r_pb=+0.107..0.124.
-
-- **`reinforce()` GUC-configurable deltas** (`pgmnemo.reinforce_success_delta`,
-  `pgmnemo.reinforce_fail_delta`): both DOUBLE PRECISION, clamped `[0.001, 0.5]`.
-  Defaults: `0.02` / `0.12`. Override per-session or at DB/role level:
-  `SET pgmnemo.reinforce_success_delta = '0.05';`
-  Both scalar `reinforce(BIGINT, TEXT)` and batch `reinforce(BIGINT[], TEXT)` forms
-  are updated (batch reads GUCs once, outside the loop).
 
 - **Confidence boost GUC** (`pgmnemo.confidence_boost_weight`): DOUBLE
   PRECISION, default `0.0` (OFF — byte-identical to 0.9.1), clamped
@@ -52,22 +77,13 @@ and an additive confidence boost GUC in recall ranking (`score += w × (confiden
   `final` CTE, after the aux-scale block and before the graph-proximity
   multiplier. Strong tie-breaker, not driver.
 
-- **Regression tests** (`test_v092_reinforce`): 10 tests — default delta success,
-  default delta failure, GUC override success, GUC override failure, ceiling clamp,
-  floor clamp, batch defaults, neutral no-op, GUC lower-bound clamp, batch GUC override.
-
-### Changed
-
-- `pgmnemo.agent_lesson.confidence` column COMMENT updated to reflect new defaults
-  and cite OL-260605 r_pb rationale.
+- **Regression test** (`confidence_boost_guc`): 5 tests — GUC default, GUC ON
+  ranking, cold-start invariance, flag-OFF regression, spread amplification.
 
 ### Activation gate
 
-**I1 (confidence boost in recall)**: Do NOT flip default to ON. Pending positive A/B
-result (task 9091). Activate per-session: `SET pgmnemo.confidence_boost_weight = '0.003';`
-
-**D1 (reinforce deltas)**: New defaults apply immediately on upgrade. Override if your
-workload has a different base success rate.
+Do NOT flip default to ON. Pending: validation task 9091 + positive A/B result.
+Activate per-session: `SET pgmnemo.confidence_boost_weight = '0.003';`
 
 ---
 
