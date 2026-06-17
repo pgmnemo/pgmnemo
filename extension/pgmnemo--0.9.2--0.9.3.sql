@@ -171,17 +171,17 @@ BEGIN
     END IF;
 
     -- D1: read base-rate-adjusted delta GUCs once before iterating
-    -- pgmnemo.reinforce_success_delta default 0.02, clamp [0.0, 0.5]
+    -- pgmnemo.reinforce_success_delta default 0.02, clamp [0.001, 0.5]
     BEGIN
-        _success_delta := GREATEST(0.0, LEAST(0.5, COALESCE(
+        _success_delta := GREATEST(0.001, LEAST(0.5, COALESCE(
             NULLIF(current_setting('pgmnemo.reinforce_success_delta', TRUE), '')::DOUBLE PRECISION,
             0.02)));
     EXCEPTION WHEN OTHERS THEN _success_delta := 0.02;
     END;
 
-    -- pgmnemo.reinforce_fail_delta default 0.12, clamp [0.0, 0.5], applied negative
+    -- pgmnemo.reinforce_fail_delta default 0.12, clamp [0.001, 0.5], applied negative
     BEGIN
-        _fail_delta := GREATEST(0.0, LEAST(0.5, COALESCE(
+        _fail_delta := GREATEST(0.001, LEAST(0.5, COALESCE(
             NULLIF(current_setting('pgmnemo.reinforce_fail_delta', TRUE), '')::DOUBLE PRECISION,
             0.12)));
     EXCEPTION WHEN OTHERS THEN _fail_delta := 0.12;

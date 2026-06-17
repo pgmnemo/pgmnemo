@@ -3248,7 +3248,7 @@ COMMENT ON FUNCTION pgmnemo.reinforce(BIGINT[], TEXT) IS
     'Unknown outcome string raises RAISE EXCEPTION (caller programming error). '
     'Empty or NULL array returns 0. '
     'success: +pgmnemo.reinforce_success_delta (default 0.02), failure: -pgmnemo.reinforce_fail_delta (default 0.12). '
-    'Scalar form reinforce(BIGINT, TEXT) unchanged (same GUC reads).'
+    'Scalar form reinforce(BIGINT, TEXT) unchanged (same GUC reads).';
 
 -- =============================================================================
 -- C + D + E) recall_hybrid() v0.7.1

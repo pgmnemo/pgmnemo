@@ -1,20 +1,17 @@
 -- reinforce_delta_guc.sql
--- pg_regress tests for pgmnemo v0.9.3 D1: base-rate-adjusted reinforce() deltas
+-- pg_regress tests for pgmnemo v0.9.3 D1: base-rate-adjusted reinforce() deltas + GUC
 --
 -- Coverage:
 --   G1: Default deltas applied (success +0.02, failure -0.12)
---   G2: GUC override reinforce_success_delta works (SET to 0.08)
---   G3: GUC override reinforce_fail_delta works (SET to 0.20)
---   G4: GUC clamp — value > 1.0 clamped to 1.0 (no overflow)
---   G5: Batch form reinforce(BIGINT[], TEXT) respects GUC
---   G6: Regression — RESET GUC returns to default 0.02/0.12
---
+--   G2: GUC override reinforce_success_delta works (0.08)
+--   G3: GUC override reinforce_fail_delta works (0.20)
+--   G4: GUC clamp — value outside [0.001, 0.5] clamped; large value → confidence = 1.0
+--   G5: Batch form reinforce(BIGINT[], TEXT) respects same GUC deltas
+--   G6: Regression — after transaction RESET, defaults restore to 0.02/0.12
 -- Prerequisites: pgmnemo 0.9.3 installed.
 -- gate_strict=off: insert test rows without commit_sha/artifact_hash.
 SET pgmnemo.gate_strict = 'off';
-SET
 SET pgmnemo.include_unverified = 'on';
-SET
 -- =============================================================================
 -- G1: Default deltas: success +0.02, failure -0.12
 -- =============================================================================
@@ -57,113 +54,113 @@ FROM reinforced;
 -- =============================================================================
 -- G2: GUC override: reinforce_success_delta = 0.08
 -- =============================================================================
-SET pgmnemo.reinforce_success_delta = '0.08';
+BEGIN;
+    SET LOCAL pgmnemo.reinforce_success_delta = '0.08';
+    -- 0.5 + 0.08 = 0.58
+    WITH ins AS (
+        INSERT INTO pgmnemo.agent_lesson (role, topic, lesson_text)
+        VALUES ('tc_d1', 'g2_success_guc',
+                'reinforce delta guc test success override guc eight hundredths lesson')
+        RETURNING id
+    ),
+    reinforced AS (
+        SELECT pgmnemo.reinforce(id, 'success') AS new_conf FROM ins
+    )
+    SELECT
+        new_conf > 0.57 AND new_conf < 0.59 AS success_guc_override_works
+    FROM reinforced;
 SET
--- 0.5 + 0.08 = 0.58
-WITH ins AS (
-    INSERT INTO pgmnemo.agent_lesson (role, topic, lesson_text)
-    VALUES ('tc_d1', 'g2_success_guc',
-            'reinforce delta guc test success override guc eight hundredths lesson')
-    RETURNING id
-),
-reinforced AS (
-    SELECT pgmnemo.reinforce(id, 'success') AS new_conf FROM ins
-)
-SELECT
-    new_conf > 0.57 AND new_conf < 0.59 AS success_guc_override_works
-FROM reinforced;
  success_guc_override_works
 ----------------------------
  t
 (1 row)
 
-RESET pgmnemo.reinforce_success_delta;
-RESET
+COMMIT;
 -- =============================================================================
 -- G3: GUC override: reinforce_fail_delta = 0.20
 -- =============================================================================
-SET pgmnemo.reinforce_fail_delta = '0.20';
+BEGIN;
+    SET LOCAL pgmnemo.reinforce_fail_delta = '0.20';
+    -- 0.5 - 0.20 = 0.30
+    WITH ins AS (
+        INSERT INTO pgmnemo.agent_lesson (role, topic, lesson_text)
+        VALUES ('tc_d1', 'g3_fail_guc',
+                'reinforce delta guc test failure override guc twenty hundredths lesson')
+        RETURNING id
+    ),
+    reinforced AS (
+        SELECT pgmnemo.reinforce(id, 'failure') AS new_conf FROM ins
+    )
+    SELECT
+        new_conf > 0.29 AND new_conf < 0.31 AS fail_guc_override_works
+    FROM reinforced;
 SET
--- 0.5 - 0.20 = 0.30
-WITH ins AS (
-    INSERT INTO pgmnemo.agent_lesson (role, topic, lesson_text)
-    VALUES ('tc_d1', 'g3_fail_guc',
-            'reinforce delta guc test failure override guc twenty hundredths lesson')
-    RETURNING id
-),
-reinforced AS (
-    SELECT pgmnemo.reinforce(id, 'failure') AS new_conf FROM ins
-)
-SELECT
-    new_conf > 0.29 AND new_conf < 0.31 AS fail_guc_override_works
-FROM reinforced;
  fail_guc_override_works
 -------------------------
  t
 (1 row)
 
-RESET pgmnemo.reinforce_fail_delta;
-RESET
+COMMIT;
 -- =============================================================================
--- G4: GUC clamp — value > 1.0 is clamped to 1.0 (no confidence > 1.0)
+-- G4: GUC clamp — value > 0.5 clamped to 0.5; 0.5 + 0.5 = 1.0
 -- =============================================================================
-SET pgmnemo.reinforce_success_delta = '2.0';
+BEGIN;
+    SET LOCAL pgmnemo.reinforce_success_delta = '2.0';
+    -- clamp(2.0, 0.001, 0.5) = 0.5; 0.5 + 0.5 = 1.0 → LEAST(1.0, 1.0) = 1.0
+    WITH ins AS (
+        INSERT INTO pgmnemo.agent_lesson (role, topic, lesson_text)
+        VALUES ('tc_d1', 'g4_clamp_high',
+                'reinforce delta guc clamp test high value delta clamping behavior lesson')
+        RETURNING id
+    ),
+    reinforced AS (
+        SELECT pgmnemo.reinforce(id, 'success') AS new_conf FROM ins
+    )
+    SELECT new_conf = 1.0 AS guc_clamp_prevents_overflow FROM reinforced;
 SET
--- 0.5 + clamp(2.0, 0.0, 1.0) = 0.5 + 1.0 = 1.5 → clamped by LEAST(1.0, ...) to 1.0
-WITH ins AS (
-    INSERT INTO pgmnemo.agent_lesson (role, topic, lesson_text)
-    VALUES ('tc_d1', 'g4_clamp_high',
-            'reinforce delta guc clamp test high value delta clamping behavior lesson')
-    RETURNING id
-),
-reinforced AS (
-    SELECT pgmnemo.reinforce(id, 'success') AS new_conf FROM ins
-)
-SELECT new_conf = 1.0 AS guc_clamp_prevents_overflow FROM reinforced;
  guc_clamp_prevents_overflow
 -----------------------------
  t
 (1 row)
 
-RESET pgmnemo.reinforce_success_delta;
-RESET
+COMMIT;
 -- =============================================================================
 -- G5: Batch form reinforce(BIGINT[], TEXT) respects GUC
 -- =============================================================================
-SET pgmnemo.reinforce_success_delta = '0.05';
+BEGIN;
+    SET LOCAL pgmnemo.reinforce_success_delta = '0.05';
+    -- Insert two lessons; batch reinforce applies 0.05 to each
+    WITH ins AS (
+        INSERT INTO pgmnemo.agent_lesson (role, topic, lesson_text)
+        VALUES
+            ('tc_d1', 'g5_batch_a', 'reinforce delta guc batch form test lesson alpha'),
+            ('tc_d1', 'g5_batch_b', 'reinforce delta guc batch form test lesson beta')
+        RETURNING id
+    ),
+    batch_result AS (
+        SELECT pgmnemo.reinforce(ARRAY(SELECT id FROM ins), 'success') AS updated_count
+    )
+    SELECT updated_count = 2 AS batch_updated_two FROM batch_result;
 SET
--- Insert two lessons; batch reinforce should apply 0.05 to each
-WITH ins AS (
-    INSERT INTO pgmnemo.agent_lesson (role, topic, lesson_text)
-    VALUES
-        ('tc_d1', 'g5_batch_a', 'reinforce delta guc batch form test lesson alpha'),
-        ('tc_d1', 'g5_batch_b', 'reinforce delta guc batch form test lesson beta')
-    RETURNING id
-),
-batch_result AS (
-    SELECT pgmnemo.reinforce(ARRAY(SELECT id FROM ins), 'success') AS updated_count
-)
-SELECT updated_count = 2 AS batch_updated_two FROM batch_result;
  batch_updated_two
 -------------------
  t
 (1 row)
 
--- Verify actual confidence of batch-updated rows (both should be 0.55)
-SELECT
-    COUNT(*) = 2                                   AS both_rows_updated,
-    bool_and(confidence > 0.54 AND confidence < 0.56) AS both_have_correct_delta
-FROM pgmnemo.agent_lesson
-WHERE role = 'tc_d1' AND topic IN ('g5_batch_a', 'g5_batch_b');
+    -- Verify actual confidence of batch-updated rows (both should be ~0.55)
+    SELECT
+        COUNT(*) = 2                                        AS both_rows_updated,
+        bool_and(confidence > 0.54 AND confidence < 0.56)  AS both_have_correct_delta
+    FROM pgmnemo.agent_lesson
+    WHERE role = 'tc_d1' AND topic IN ('g5_batch_a', 'g5_batch_b');
  both_rows_updated | both_have_correct_delta
 -------------------+-------------------------
  t                 | t
 (1 row)
 
-RESET pgmnemo.reinforce_success_delta;
-RESET
+COMMIT;
 -- =============================================================================
--- G6: Regression — after RESET, defaults restore to 0.02 / 0.12
+-- G6: Regression — GUC back to default (+0.02 / -0.12) after prior transactions
 -- =============================================================================
 -- success with default: 0.5 + 0.02 = 0.52
 WITH ins AS (
