@@ -34,9 +34,9 @@ positive signal observed.
 
 - **`reinforce()` GUC-configurable deltas**:
   - `pgmnemo.reinforce_success_delta` — DOUBLE PRECISION, default `0.02`,
-    clamped `[0.0, 1.0]`. Applied as `confidence += delta` on success.
+    clamped `[0.001, 0.5]`. Applied as `confidence += delta` on success.
   - `pgmnemo.reinforce_fail_delta` — DOUBLE PRECISION, default `0.12`,
-    clamped `[0.0, 1.0]`. Applied as `confidence -= delta` on failure.
+    clamped `[0.001, 0.5]`. Applied as `confidence -= delta` on failure.
   Override per-session: `SET pgmnemo.reinforce_success_delta = '0.05';`
   Batch form reads GUCs once before the loop for consistency across IDs.
 
