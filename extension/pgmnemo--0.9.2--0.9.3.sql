@@ -58,17 +58,17 @@ DECLARE
     _fail_delta     DOUBLE PRECISION;
 BEGIN
     -- D1: read base-rate-adjusted delta GUCs
-    -- pgmnemo.reinforce_success_delta default 0.02, clamp [0.0, 1.0]
+    -- pgmnemo.reinforce_success_delta default 0.02, clamp [0.0, 0.5]
     BEGIN
-        _success_delta := GREATEST(0.0, LEAST(1.0, COALESCE(
+        _success_delta := GREATEST(0.0, LEAST(0.5, COALESCE(
             NULLIF(current_setting('pgmnemo.reinforce_success_delta', TRUE), '')::DOUBLE PRECISION,
             0.02)));
     EXCEPTION WHEN OTHERS THEN _success_delta := 0.02;
     END;
 
-    -- pgmnemo.reinforce_fail_delta default 0.12, clamp [0.0, 1.0], applied negative
+    -- pgmnemo.reinforce_fail_delta default 0.12, clamp [0.0, 0.5], applied negative
     BEGIN
-        _fail_delta := GREATEST(0.0, LEAST(1.0, COALESCE(
+        _fail_delta := GREATEST(0.0, LEAST(0.5, COALESCE(
             NULLIF(current_setting('pgmnemo.reinforce_fail_delta', TRUE), '')::DOUBLE PRECISION,
             0.12)));
     EXCEPTION WHEN OTHERS THEN _fail_delta := 0.12;
@@ -125,8 +125,8 @@ COMMENT ON FUNCTION pgmnemo.reinforce(BIGINT, TEXT) IS
     'neutral: no-op -- returns current confidence without any write. '
     'Unknown outcome string: RAISE EXCEPTION. '
     'Row-locked (SELECT ... FOR UPDATE) for concurrent-safe update on hot lessons. '
-    'GUCs: pgmnemo.reinforce_success_delta [0.0,1.0] default 0.02; '
-    '      pgmnemo.reinforce_fail_delta    [0.0,1.0] default 0.12 (applied negative). '
+    'GUCs: pgmnemo.reinforce_success_delta [0.0,0.5] default 0.02; '
+    '      pgmnemo.reinforce_fail_delta    [0.0,0.5] default 0.12 (applied negative). '
     'Rationale: OL-260605 base-rate 83.5% -- raw +0.10 saturates ceiling; '
     '           +0.02/-0.12 gives r_pb = +0.107..+0.124 vs -0.051 for old defaults.';
 
