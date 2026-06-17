@@ -16,9 +16,9 @@
 --        success: +0.10 → +0.02
 --        failure: -0.15 → -0.12
 --   2. Make GUC-configurable:
---        pgmnemo.reinforce_success_delta (default 0.02, range [0.0, 1.0])
---        pgmnemo.reinforce_fail_delta    (default 0.12, range [0.0, 1.0], applied negative)
---   Both clamp to [0.0, 1.0]; applied via GREATEST/LEAST per existing pattern.
+--        pgmnemo.reinforce_success_delta (default 0.02, range [0.0, 0.5])
+--        pgmnemo.reinforce_fail_delta    (default 0.12, range [0.0, 0.5], applied negative)
+--   Both clamp to [0.0, 0.5]; applied via GREATEST/LEAST per existing pattern.
 --
 -- ITEMS:
 --   #1  reinforce(BIGINT, TEXT)   — scalar form: add GUC reads, use new deltas
@@ -34,8 +34,8 @@
 --
 -- Changes vs 0.9.2:
 --   +  DECLARE: _success_delta DOUBLE PRECISION, _fail_delta DOUBLE PRECISION
---   +  GUC read block for pgmnemo.reinforce_success_delta (default 0.02, clamp [0.0, 1.0])
---   +  GUC read block for pgmnemo.reinforce_fail_delta    (default 0.12, clamp [0.0, 1.0])
+--   +  GUC read block for pgmnemo.reinforce_success_delta (default 0.02, clamp [0.0, 0.5])
+--   +  GUC read block for pgmnemo.reinforce_fail_delta    (default 0.12, clamp [0.0, 0.5])
 --   ~  success branch: hardcoded 0.10 → _success_delta::REAL
 --   ~  failure branch: hardcoded 0.15 → _fail_delta::REAL
 --   +  COMMENT updated.
@@ -171,17 +171,17 @@ BEGIN
     END IF;
 
     -- D1: read base-rate-adjusted delta GUCs once before iterating
-    -- pgmnemo.reinforce_success_delta default 0.02, clamp [0.0, 1.0]
+    -- pgmnemo.reinforce_success_delta default 0.02, clamp [0.0, 0.5]
     BEGIN
-        _success_delta := GREATEST(0.0, LEAST(1.0, COALESCE(
+        _success_delta := GREATEST(0.0, LEAST(0.5, COALESCE(
             NULLIF(current_setting('pgmnemo.reinforce_success_delta', TRUE), '')::DOUBLE PRECISION,
             0.02)));
     EXCEPTION WHEN OTHERS THEN _success_delta := 0.02;
     END;
 
-    -- pgmnemo.reinforce_fail_delta default 0.12, clamp [0.0, 1.0], applied negative
+    -- pgmnemo.reinforce_fail_delta default 0.12, clamp [0.0, 0.5], applied negative
     BEGIN
-        _fail_delta := GREATEST(0.0, LEAST(1.0, COALESCE(
+        _fail_delta := GREATEST(0.0, LEAST(0.5, COALESCE(
             NULLIF(current_setting('pgmnemo.reinforce_fail_delta', TRUE), '')::DOUBLE PRECISION,
             0.12)));
     EXCEPTION WHEN OTHERS THEN _fail_delta := 0.12;
