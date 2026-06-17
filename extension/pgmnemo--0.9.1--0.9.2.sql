@@ -365,3 +365,203 @@ COMMENT ON FUNCTION pgmnemo.recall_hybrid(vector, TEXT, INT, TEXT, INT, DOUBLE P
     'Two-phase indexed retrieval: HNSW (pgvector) + GIN (BM25) → RRF fusion → graph proximity boost. '
     'match_confidence: vec_score (cosine similarity, [0,1]). On text-only path (NULL embedding) = 0.0. '
     'STABLE PARALLEL SAFE.';
+
+-- ══════════════════════════════════════════════════════════════════════════════
+-- #2: reinforce() — base-rate-adjusted deltas + GUC-configurable (D1)
+-- ══════════════════════════════════════════════════════════════════════════════
+--
+-- PROBLEM: Shipped deltas (+0.10/-0.15) give r_pb=-0.051 (OL-260605 task 9091).
+--   At 83.5% base success rate, +0.10 saturates to ceiling — confidence always
+--   drifts toward 1.0 and fails to differentiate.
+--   Base-rate-adjusted deltas (+0.02/-0.12) give r_pb=+0.107..0.124 (the ONLY
+--   positive signal observed).
+--
+-- FIX: Change reinforce() defaults to +0.02/-0.12.
+--   Expose as GUCs so operators can retune per-workload without extension upgrade.
+--
+-- GUCs:
+--   pgmnemo.reinforce_success_delta  DEFAULT 0.02  RANGE [0.001, 0.5]
+--   pgmnemo.reinforce_fail_delta     DEFAULT 0.12  RANGE [0.001, 0.5]  (applied negative)
+--
+-- Both scalar and batch forms (BIGINT, TEXT) and (BIGINT[], TEXT) are updated.
+--
+-- Upgrade: ALTER EXTENSION pgmnemo UPDATE TO '0.9.2';
+
+-- Scalar reinforce(): GUC-aware delta reads, new base-rate-adjusted defaults
+CREATE OR REPLACE FUNCTION pgmnemo.reinforce(
+    p_lesson_id BIGINT,
+    p_outcome   TEXT
+)
+RETURNS REAL
+LANGUAGE plpgsql
+AS $func$
+#variable_conflict use_column
+DECLARE
+    _row           pgmnemo.agent_lesson%ROWTYPE;
+    _new_conf      REAL;
+    _success_delta DOUBLE PRECISION;
+    _fail_delta    DOUBLE PRECISION;
+BEGIN
+    -- D1: read reinforce deltas from GUC (base-rate-adjusted defaults)
+    BEGIN
+        _success_delta := GREATEST(0.001, LEAST(0.5, COALESCE(
+            NULLIF(current_setting('pgmnemo.reinforce_success_delta', TRUE), '')::DOUBLE PRECISION,
+            0.02)));
+    EXCEPTION WHEN OTHERS THEN _success_delta := 0.02;
+    END;
+
+    BEGIN
+        _fail_delta := GREATEST(0.001, LEAST(0.5, COALESCE(
+            NULLIF(current_setting('pgmnemo.reinforce_fail_delta', TRUE), '')::DOUBLE PRECISION,
+            0.12)));
+    EXCEPTION WHEN OTHERS THEN _fail_delta := 0.12;
+    END;
+
+    SELECT * INTO _row
+    FROM pgmnemo.agent_lesson
+    WHERE id = p_lesson_id
+    FOR UPDATE;
+
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'pgmnemo.reinforce: lesson_id % not found', p_lesson_id;
+    END IF;
+
+    CASE p_outcome
+        WHEN 'success' THEN
+            _new_conf := LEAST(1.0, _row.confidence + _success_delta::REAL);
+            UPDATE pgmnemo.agent_lesson
+            SET confidence      = _new_conf,
+                success_count   = _row.success_count + 1,
+                last_outcome    = 'success',
+                last_outcome_at = NOW()
+            WHERE id = p_lesson_id;
+
+        WHEN 'failure' THEN
+            _new_conf := GREATEST(0.0, _row.confidence - _fail_delta::REAL);
+            UPDATE pgmnemo.agent_lesson
+            SET confidence      = _new_conf,
+                fail_count      = _row.fail_count + 1,
+                last_outcome    = 'failure',
+                last_outcome_at = NOW()
+            WHERE id = p_lesson_id;
+
+        WHEN 'neutral' THEN
+            _new_conf := _row.confidence;
+
+        ELSE
+            RAISE EXCEPTION
+                'pgmnemo.reinforce: unknown outcome ''%'' -- expected ''success'', ''failure'', or ''neutral''',
+                p_outcome;
+    END CASE;
+
+    RETURN _new_conf;
+END;
+$func$;
+
+COMMENT ON FUNCTION pgmnemo.reinforce(BIGINT, TEXT) IS
+    'Outcome-learning update (v0.9.2/D1): adjusts confidence for lesson p_lesson_id. '
+    'Exact case required: ''success'' | ''failure'' | ''neutral''. '
+    'success: confidence += pgmnemo.reinforce_success_delta (default 0.02, clamped [0.001,0.5]). '
+    'failure: confidence -= pgmnemo.reinforce_fail_delta    (default 0.12, clamped [0.001,0.5]). '
+    'neutral: no-op — returns current confidence without any write. '
+    'Unknown outcome string: RAISE EXCEPTION. '
+    'Row-locked (SELECT ... FOR UPDATE) for concurrent-safe update on hot lessons. '
+    'Defaults base-rate-adjusted for 83.5% success workload (OL-260605): r_pb=+0.107..0.124.';
+
+-- Batch reinforce(): GUC-aware delta reads
+CREATE OR REPLACE FUNCTION pgmnemo.reinforce(
+    p_lesson_ids BIGINT[],
+    p_outcome    TEXT
+)
+RETURNS INT
+LANGUAGE plpgsql
+AS $func$
+DECLARE
+    _id            BIGINT;
+    _row           pgmnemo.agent_lesson%ROWTYPE;
+    _new_conf      REAL;
+    _updated       INT := 0;
+    _success_delta DOUBLE PRECISION;
+    _fail_delta    DOUBLE PRECISION;
+BEGIN
+    -- Validate outcome up-front so the caller gets a clear error on bad input.
+    IF p_outcome NOT IN ('success', 'failure', 'neutral') THEN
+        RAISE EXCEPTION
+            'pgmnemo.reinforce: unknown outcome ''%'' -- expected ''success'', ''failure'', or ''neutral''',
+            p_outcome;
+    END IF;
+
+    IF p_lesson_ids IS NULL OR array_length(p_lesson_ids, 1) IS NULL THEN
+        RETURN 0;
+    END IF;
+
+    -- D1: read reinforce deltas from GUC (base-rate-adjusted defaults)
+    BEGIN
+        _success_delta := GREATEST(0.001, LEAST(0.5, COALESCE(
+            NULLIF(current_setting('pgmnemo.reinforce_success_delta', TRUE), '')::DOUBLE PRECISION,
+            0.02)));
+    EXCEPTION WHEN OTHERS THEN _success_delta := 0.02;
+    END;
+
+    BEGIN
+        _fail_delta := GREATEST(0.001, LEAST(0.5, COALESCE(
+            NULLIF(current_setting('pgmnemo.reinforce_fail_delta', TRUE), '')::DOUBLE PRECISION,
+            0.12)));
+    EXCEPTION WHEN OTHERS THEN _fail_delta := 0.12;
+    END;
+
+    FOREACH _id IN ARRAY p_lesson_ids LOOP
+        SELECT * INTO _row
+        FROM pgmnemo.agent_lesson
+        WHERE id = _id
+        FOR UPDATE;
+
+        IF NOT FOUND THEN
+            CONTINUE;  -- skip missing; no RAISE (bitemporal supersession / TTL normal)
+        END IF;
+
+        CASE p_outcome
+            WHEN 'success' THEN
+                _new_conf := LEAST(1.0, _row.confidence + _success_delta::REAL);
+                UPDATE pgmnemo.agent_lesson
+                SET confidence      = _new_conf,
+                    success_count   = _row.success_count + 1,
+                    last_outcome    = 'success',
+                    last_outcome_at = NOW()
+                WHERE id = _id;
+                _updated := _updated + 1;
+
+            WHEN 'failure' THEN
+                _new_conf := GREATEST(0.0, _row.confidence - _fail_delta::REAL);
+                UPDATE pgmnemo.agent_lesson
+                SET confidence      = _new_conf,
+                    fail_count      = _row.fail_count + 1,
+                    last_outcome    = 'failure',
+                    last_outcome_at = NOW()
+                WHERE id = _id;
+                _updated := _updated + 1;
+
+            WHEN 'neutral' THEN
+                NULL;  -- no-op; does not increment _updated
+        END CASE;
+    END LOOP;
+
+    RETURN _updated;
+END;
+$func$;
+
+COMMENT ON FUNCTION pgmnemo.reinforce(BIGINT[], TEXT) IS
+    'Batch confidence update v0.9.2/D1. Iterates p_lesson_ids; skips missing IDs silently (no RAISE). '
+    'Returns count of rows actually updated (neutral outcome does not increment count). '
+    'Unknown outcome string raises RAISE EXCEPTION (caller programming error). '
+    'Empty or NULL array returns 0. '
+    'success: +pgmnemo.reinforce_success_delta (default 0.02), failure: -pgmnemo.reinforce_fail_delta (default 0.12). '
+    'Scalar form reinforce(BIGINT, TEXT) unchanged (same GUC reads).';
+
+COMMENT ON COLUMN pgmnemo.agent_lesson.confidence IS
+    'Outcome-track-record confidence score [0.0, 1.0]. '
+    'Default 0.5 (cold-start neutral). '
+    'Updated by pgmnemo.reinforce(): success +pgmnemo.reinforce_success_delta (default 0.02), '
+    'failure -pgmnemo.reinforce_fail_delta (default 0.12), neutral no-op. '
+    'Clamped to [0.0, 1.0] by CHECK constraint + reinforce() logic. '
+    'Defaults base-rate-adjusted (OL-260605): legacy +0.10/-0.15 gave r_pb=-0.051 at 83.5% base success.';
