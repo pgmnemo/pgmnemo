@@ -129,6 +129,30 @@ Agents need persistent memory in their control — not in a third-party API. pgm
 
 ---
 
+## Emerging competitors (June 2026)
+
+| Dimension | **GBrain** | **Memoir** | **agentmemory** | **Odysseus** |
+|---|---|---|---|---|
+| **What it is** | Markdown knowledge graph (PGLite/Postgres WASM) | Taxonomy-structured path-based recall (ProllyTreeStore) | Hybrid BM25+vector for coding agents (SQLite) | Self-hosted AI workspace; ChromaDB session recall |
+| **License** | MIT | Apache 2.0 | MIT | MIT |
+| **Install model** | `bun install gbrain` (PGLite embedded) | `pip install memoir` + Claude Code plugin | `npm install agentmemory` | Docker Compose (full workspace) |
+| **LLM cost per write** | ✅ $0 (regex graph extraction) | ⚠️ ~$0 (pattern match; LLM fallback rare) | ❌ Non-zero (background compression per observation) | Unknown (ChromaDB embeddings) |
+| **Recall substrate** | HNSW vectors + regex-typed graph edges | Path-based exact match + tiered semantic drill-down | BM25 + vector hybrid (SQLite FTS5) | ChromaDB vector only |
+| **Provenance gate** | ❌ None | ❌ None (SHA-256 content hash for versioning) | ❌ None | ❌ None |
+| **Standard benchmarks** | BrainBench only (own corpus) | None published | LongMemEval-S R@10 98.6% | None |
+| **Production maturity** | 146K pages in founder's personal brain | Alpha | Coding agent community adoption | 67K stars; session memory only |
+| **pgmnemo advantage** | Multimodal fusion, provenance gate, token-economy navigation, standard benchmarks | In-database substrate, hybrid recall, academic benchmarks, production fleet evidence | Concurrent writes (Postgres vs SQLite), RLS, provenance, EXPLAIN-able ranking | Not comparable — different category |
+
+**Use GBrain if:** your use case is a personal knowledge graph from Markdown files and you want zero-config Postgres (PGLite). Not for multi-agent fleet memory.
+
+**Use Memoir if:** you want taxonomy-organized memory with Git-like versioning and deterministic path-based retrieval. Alpha-stage; no standard recall benchmarks yet.
+
+**Use agentmemory if:** you want drop-in memory for a single coding agent (Claude Code, Cursor) with zero-config auto-capture hooks. Accept SQLite single-writer limitation and per-observation LLM cost.
+
+**Do not treat Odysseus as a memory competitor.** It is a self-hosted AI workspace (ChatGPT alternative). Memory is a bolted-on ChromaDB session feature, not a substrate.
+
+---
+
 ## What would falsify our claims
 
 | Claim | Falsification condition |

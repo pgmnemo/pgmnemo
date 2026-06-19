@@ -52,6 +52,10 @@ misleading. They optimise different objectives:
 | Mem0 | Entity extraction + consolidation into structured facts | Memory recall accuracy on internal dialog suites; agent task completion |
 | Zep | Graph+vector hybrid + temporal reasoning | F1 on Zep-internal benchmark; entity F1 |
 | MAGMA | Research multi-agent memory | QA accuracy with LLM-as-judge |
+| GBrain | Markdown knowledge graph + regex edge extraction (PGLite/Postgres) | BrainBench P@5 49.1%, R@5 97.9% on own 240-page corpus |
+| Memoir | Taxonomy-structured path-based recall (Git-like versioning) | Classification F1; path-recall latency (<10ms) |
+| agentmemory | Hybrid BM25+vector for coding agents (SQLite) | LongMemEval-S R@10 98.6%; claims "−92% tokens" vs full-context dump |
+| Odysseus | Self-hosted AI workspace; ChromaDB session recall | Stars/adoption (67K); no memory-specific benchmarks |
 | pgmnemo | Retrieval recall on raw chunks | recall@K on two academic datasets |
 
 A fair comparison would be the **same retrieval task on the same dataset with
@@ -209,7 +213,85 @@ caveats this document spells out."
 
 ---
 
-## 8. Self-check rules for every future release announcement
+## 8. Emerging competitors (June 2026 scan)
+
+### 8.1 GBrain (Garry Tan / YC) — MIT, ~14K stars
+
+Markdown-first knowledge graph on PGLite (Postgres 17 WASM). Zero-LLM ingestion
+via regex inference cascade for typed edges (FOUNDED, INVESTED, WORKS_AT, etc.).
+BrainBench (own corpus, 240 pages): P@5 49.1%, R@5 97.9%. Production brain: 146K
+pages, 24K people, 5K companies.
+
+**Threat assessment:** Different niche — personal knowledge graph for VCs/founders,
+not agent fleet memory. No recall@K on standard academic corpora. Postgres substrate
+overlaps (PGLite → full Postgres), but no hybrid recall, no provenance gate, no
+token-economy navigation. Zero LLM cost per write IS shared with pgmnemo.
+
+### 8.2 Memoir (zhangfengcdt) — Apache 2.0, alpha
+
+Hierarchical taxonomy + Git-like versioned storage (ProllyTreeStore, SHA-256).
+No vector DB. Classification on write via pattern match (1–5ms), LLM fallback
+for ambiguous cases. Path-based recall (<10ms exact, tiered semantic drill-down).
+Ships as Claude Code plugin.
+
+**Threat assessment:** Conceptually interesting (taxonomy over embedding space),
+but alpha-stage, no standard benchmarks, no production deployments documented.
+Architecture is orthogonal to pgmnemo — could be complementary (taxonomy on top
+of pgmnemo substrate). Not a retrieval recall competitor today.
+
+### 8.3 agentmemory (rohitg00) — MIT, ~7K+ stars
+
+Hybrid BM25+vector on SQLite for coding agents. 12 auto-capture hooks (zero manual
+`memory.add()` calls). Local embeddings (BGE-small via @xenova/transformers) optional.
+Background compression on every observation = **non-zero LLM cost per write**.
+
+Claims "−92% tokens" (1,900 vs 22,000 CLAUDE.md dump). Their own COMPARISON.md
+flags this as apples-to-oranges. More honest number from same doc: 86% reduction
+(3,142 vs 22,610 tokens, top-10 vs full context).
+
+LongMemEval-S: R@5 95.2%, R@10 98.6%, MRR 88.2. Note: their BM25-only baseline
+scores 86.2%, pure vector 96.6% — hybrid adds 9pp over BM25 but trails pure vector
+by 1.4pp on this corpus. pgmnemo v0.6.2 = 0.9604 R@10 on same corpus.
+
+**Threat assessment:** Direct competitor on "coding agent memory" wedge. Token
+claim is structurally weak (selective top-k vs full dump — ANY retrieval system
+achieves this). Quality on LongMemEval-S is competitive (R@10 98.6% vs pgmnemo
+0.9604). Key differentiator vs pgmnemo: easier DX (auto-capture hooks, zero config)
+at cost of SQLite limitations (no concurrent writes, no RLS, no provenance gate).
+
+### 8.4 Odysseus (PewDiePie) — MIT, ~67K stars
+
+Self-hosted AI workspace (ChatGPT/Claude alternative), NOT a memory library.
+Memory = ChromaDB session recall. No cross-session memory linking, no graph,
+no benchmarks. 270+ local model support via Ollama.
+
+**Threat assessment:** Not a memory substrate competitor. Listed because star count
+creates visibility. Third-party reviews note memory "does not connect dots across
+weeks of conversations." Different category entirely.
+
+---
+
+## 9. agentmemory "−92% tokens" claim — analysis
+
+**Claim:** "CLAUDE.md dumps 22,000+ tokens into context at 240 observations while
+agentmemory uses ~1,900 tokens — 92% less."
+
+**Structural analysis:** This compares selective top-k retrieval against full context
+dump. The comparison is trivially true for ANY system that does top-k retrieval
+(including pgmnemo `recall_hybrid` top-10, or a 50-LOC BM25 script). The relevant
+question is quality at the reduced token budget, not the reduction itself.
+
+**Their own caveat:** agentmemory's `benchmark/COMPARISON.md` explicitly flags this
+as "apples vs oranges" and reports a more honest 86% number (3,142 vs 22,610 tokens).
+
+**Verification via pgmnemo navigate bench:** PLANNED, not yet executed. The navigate
+token-economy path has never been benchmarked (STRATEGY §0 "UNMEASURED" table). A
+proper comparison requires running both systems on the same corpus with the same
+quality metric (LongMemEval-S R@10) and measuring tokens delivered.
+
+---
+
+## 10. Self-check rules for every future release announcement
 
 Before any release blog post or social media headline cites a number:
 
