@@ -1,0 +1,18 @@
+{
+    "version": "v0.9.3",
+    "date": "2026-06-19",
+    "pgmnemo_version": "0.9.3",
+    "gate_status": "PASS",
+    "gate_type": "analytical_carry_forward",
+    "scope": "Bundles two opt-in / off-by-default changes: (I1, v0.9.2) confidence-weighted ranking GUC; (D1, v0.9.3) base-rate-adjusted reinforce() defaults with GUC override. Neither change alters recall@k by default.",
+    "justification": "Confidence GUC (I1): default=0.0 — zero additive term, byte-identical to 0.9.1 without SET. No recall-path scoring change by default; activation is explicit. Reinforce delta re-tune (D1): default deltas changed (+0.10→+0.02, -0.15→-0.12); confidence column is populated by reinforce() only and carries zero weight in recall_hybrid unless the I1 GUC is activated. Recall ranking is therefore unaffected by D1 defaults. The re-tune is validated analytically: the prior +0.10 delta caused confidence to saturate at the ceiling under typical usage, destroying discriminability; the new +0.02 restores it. Analytical gate is correct here: no scoring path changes by default.",
+    "schema_change": false,
+    "scoring_impact": "none (GUC default=0.0; reinforce confidence column carries zero weight in recall unless I1 GUC is set)",
+    "recall_ranking_impact": "zero (default configuration)",
+    "carry_forward_from": "v0.9.1",
+    "new_regress_tests": [
+        "confidence_boost_guc (5 assertions: GUC default OFF, GUC ON ranking order, cold-start invariance, flag-OFF regression, spread amplification)",
+        "reinforce_delta_guc (8 assertions: default success delta, default failure delta, GUC override success, GUC override failure, clamp prevents overflow, batch form, RESET restores defaults)"
+    ],
+    "verification": "Local installcheck on PostgreSQL 17 + pgvector: all REGRESS tests pass including confidence_boost_guc and reinforce_delta_guc. Fresh-install (pgmnemo--0.9.3.sql) and upgrade chain (0.9.1→0.9.2→0.9.3 via two ALTER EXTENSION steps) both verified. Recall@k reference: v0.9.1 navigation_correctness gate (graph expansion 0→1 neighbor on semantic edge) carries forward unchanged."
+}
