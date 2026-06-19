@@ -52,6 +52,98 @@ CI pre-flight enforces 1-8 automatically. The pg_regress fixture sweep (#8) was 
 
 ---
 
+## 0.A Documentation readiness (manual sweep, before tag)
+
+Every new GUC, function, or changed default **must** be documented before the tag.
+v0.9.4 shipped as a separate docs-only release because this was skipped for v0.9.2–v0.9.3.
+
+### GUC coverage check
+
+```bash
+# List every GUC defined in the flat install:
+grep -oE "current_setting\('pgmnemo\.[^']+'" extension/pgmnemo--${V}.sql | sort -u
+
+# Verify each appears in SQL_REFERENCE §3:
+grep "pgmnemo\." docs/SQL_REFERENCE.md | grep -v "^#\|example\|SET pgmnemo\.\(gate\|include\|tenant\)" | grep -oE "pgmnemo\.[a-z_]+" | sort -u
+```
+
+Cross-check: every GUC in the flat install must have a row in `SQL_REFERENCE.md §3`.
+
+### Default-value consistency
+
+```bash
+# If reinforce() deltas changed — verify USAGE shows the new values:
+grep "confidence +=" docs/USAGE.md          # must match default in SQL
+grep "confidence -=" docs/USAGE.md          # must match default in SQL
+```
+
+### Checklist
+
+- [ ] Every GUC introduced in this version has a row in `SQL_REFERENCE.md §3.x`
+- [ ] `SQL_REFERENCE.md §3.6 Default-change history` has an entry for each changed default
+- [ ] `USAGE.md` examples use current default values (not previous release's values)
+- [ ] `MIGRATION.md` notes any breaking changes (column renames, removed overloads, etc.)
+- [ ] `CHANGELOG.md §[V]` entry is non-trivial (>200 chars)
+
+**If docs are not ready: do not tag.** Ship a docs-only patch version first (like v0.9.4),
+or backfill docs in the same branch before tagging.
+
+---
+
+## 0.B MCP readiness (manual sweep, before tag)
+
+`pgmnemo_mcp` is a thin Python wrapper; it must stay in sync with the SQL API.
+
+### Version
+
+```bash
+grep "^version" pgmnemo_mcp/pyproject.toml   # must match ${V}
+```
+
+Already enforced by §0 checklist item #1.
+
+### API surface check
+
+New SQL functions shipped in this version may need MCP tool coverage.
+Check whether each new/changed function should be exposed:
+
+```bash
+# Functions added or replaced in the upgrade script:
+grep -E "^CREATE (OR REPLACE )?FUNCTION" extension/pgmnemo--$(prev)--${V}.sql
+
+# Current MCP tools:
+grep -E "^@mcp\.tool|^def " pgmnemo_mcp/pgmnemo_mcp/server.py | head -30
+```
+
+Decide for each: **expose** (add MCP tool) | **internal** (skip, leave a comment) | **deferred** (note in CHANGELOG).
+
+### MCP smoke test
+
+```bash
+cd pgmnemo_mcp
+pip install -e .
+python -m pgmnemo_mcp --smoke    # must print PASS; fails on import or schema errors
+```
+
+### MCP Docker image
+
+Built and published automatically by CI (`Publish pgmnemo-mcp Docker image` job).
+No manual step needed unless the Dockerfile changed — in that case rebuild locally first:
+
+```bash
+docker build -t pgmnemo-mcp:${V} pgmnemo_mcp/
+docker run --rm pgmnemo-mcp:${V} python -m pgmnemo_mcp --smoke
+```
+
+### MCP checklist
+
+- [ ] `pyproject.toml` version = `${V}`
+- [ ] New SQL functions reviewed: expose / internal / deferred decision recorded in CHANGELOG
+- [ ] `python -m pgmnemo_mcp --smoke` passes locally
+- [ ] If Dockerfile changed: local build + smoke verified
+
+---
+
 ## 1. Local smoke test (before tag)
 
 ```bash
