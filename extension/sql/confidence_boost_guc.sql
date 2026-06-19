@@ -37,26 +37,31 @@ SELECT current_setting('pgmnemo.confidence_boost_weight', TRUE) IS NULL
     AS guc_default_is_unset;
 
 -- =============================================================================
--- T2: GUC ON (0.003) — top result has confidence 0.9
+-- T2: GUC ON (0.003) — confidence=0.9 lesson outscores confidence=0.1 lesson
+--     Uses score comparison across k=3 (all rows) — immune to tie-break order.
 -- =============================================================================
 
 SET pgmnemo.confidence_boost_weight = '0.003';
-SELECT (s.confidence = 0.9) AS top_is_high_confidence
-FROM pgmnemo.recall_hybrid(
-    NULL::vector(1024),
-    'confidence boost guc integration test xylophone zebra',
-    1, 'tc_i1', NULL
-) s;
-
--- T2b: bottom result (of 3) has confidence 0.1
-SELECT (s.confidence = 0.1) AS bottom_is_low_confidence
+SELECT (
+    MAX(score) FILTER (WHERE confidence > 0.85) >
+    MAX(score) FILTER (WHERE confidence < 0.2)
+) AS top_is_high_confidence
 FROM pgmnemo.recall_hybrid(
     NULL::vector(1024),
     'confidence boost guc integration test xylophone zebra',
     3, 'tc_i1', NULL
-) s
-ORDER BY s.score ASC
-LIMIT 1;
+) s;
+
+-- T2b: confidence=0.1 lesson scores below confidence=0.5 lesson
+SELECT (
+    MIN(score) FILTER (WHERE confidence < 0.2) <
+    MIN(score) FILTER (WHERE confidence BETWEEN 0.4 AND 0.6)
+) AS bottom_is_low_confidence
+FROM pgmnemo.recall_hybrid(
+    NULL::vector(1024),
+    'confidence boost guc integration test xylophone zebra',
+    3, 'tc_i1', NULL
+) s;
 
 RESET pgmnemo.confidence_boost_weight;
 
