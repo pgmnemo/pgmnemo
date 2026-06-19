@@ -482,6 +482,7 @@ jobs:
   notify-telegram:
     needs: [pre-flight, release, publish-mcp, smoke-pypi, smoke-pgxn]
     runs-on: ubuntu-latest
+    continue-on-error: true
     steps:
       - name: Check Telegram secrets
         id: tg_check
