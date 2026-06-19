@@ -9,18 +9,15 @@
 --   T4: memory_ingest_log INSERT + SELECT + UPDATE retired_at
 --   T5: exclude_dag_id filter — lesson with source_dag_id='dag-x' is recalled when
 --       exclude_dag_id is NULL or 'dag-y', but NOT when exclude_dag_id='dag-x'
-
 -- Prerequisites: pgmnemo 0.9.5+ installed. gate_strict=off for raw INSERTs.
 SET pgmnemo.gate_strict = 'off';
+SET
 SET pgmnemo.include_unverified = 'on';
-
 ALTER EXTENSION pgmnemo UPDATE TO '0.9.6';
 NOTICE:  version "0.9.6" of extension "pgmnemo" is already installed
-
 -- =============================================================================
 -- Schema verification: new columns exist on agent_lesson
 -- =============================================================================
-
 SELECT
     SUM(CASE WHEN column_name = 'item_kind'     THEN 1 ELSE 0 END) = 1 AS has_item_kind,
     SUM(CASE WHEN column_name = 'version_n'     THEN 1 ELSE 0 END) = 1 AS has_version_n,
@@ -48,10 +45,8 @@ WHERE table_schema = 'pgmnemo'
 -- =============================================================================
 -- T1: item_kind column — default 'note'; CHECK rejects invalid value
 -- =============================================================================
-
 INSERT INTO pgmnemo.agent_lesson (role, topic, lesson_text, commit_sha)
 VALUES ('tc_vi_ik', 'item_kind_test', 'item kind default test lesson', 'vi-sha-ik-1');
-
 -- Default should be 'note'
 SELECT item_kind = 'note' AS t1_default_note
 FROM pgmnemo.agent_lesson
@@ -70,7 +65,7 @@ VALUES
     ('tc_vi_ik', 'item_kind_reference', 'reference test lesson',  'vi-sha-ik-5', 'reference'),
     ('tc_vi_ik', 'item_kind_config',    'config test lesson',     'vi-sha-ik-6', 'config'),
     ('tc_vi_ik', 'item_kind_spec',      'spec test lesson',       'vi-sha-ik-7', 'spec');
-
+INSERT 0 6
 SELECT COUNT(*) = 7 AS t1_all_valid_kinds_inserted
 FROM pgmnemo.agent_lesson WHERE role = 'tc_vi_ik';
  t1_all_valid_kinds_inserted
@@ -89,46 +84,41 @@ EXCEPTION WHEN check_violation THEN
 END;
 $$;
 NOTICE:  T1 CHECK violation correctly raised for item_kind=invalid_kind
-
+DO
 -- =============================================================================
 -- T2: version_n default=1, patch_count default=0
 -- =============================================================================
-
 INSERT INTO pgmnemo.agent_lesson (role, topic, lesson_text, commit_sha)
 VALUES ('tc_vi_vn', 'version_n_test', 'version and patch count default test', 'vi-sha-vn-1');
-
 SELECT
     version_n   = 1 AS t2_version_n_default_1,
     patch_count = 0 AS t2_patch_count_default_0
 FROM pgmnemo.agent_lesson
 WHERE role = 'tc_vi_vn' AND commit_sha = 'vi-sha-vn-1';
  t2_version_n_default_1 | t2_patch_count_default_0
--------------------------+--------------------------
- t                       | t
+------------------------+--------------------------
+ t                      | t
 (1 row)
 
 -- Explicit values should be stored correctly
 INSERT INTO pgmnemo.agent_lesson (role, topic, lesson_text, commit_sha, version_n, patch_count)
 VALUES ('tc_vi_vn', 'version_n_explicit', 'explicit version test', 'vi-sha-vn-2', 3, 7);
-
 SELECT
     version_n   = 3 AS t2_version_n_explicit_3,
     patch_count = 7 AS t2_patch_count_explicit_7
 FROM pgmnemo.agent_lesson
 WHERE role = 'tc_vi_vn' AND commit_sha = 'vi-sha-vn-2';
  t2_version_n_explicit_3 | t2_patch_count_explicit_7
---------------------------+---------------------------
- t                        | t
+-------------------------+---------------------------
+ t                       | t
 (1 row)
 
 -- =============================================================================
 -- T3: source_dag_id nullable, can be set; sparse index exists
 -- =============================================================================
-
 -- NULL by default
 INSERT INTO pgmnemo.agent_lesson (role, topic, lesson_text, commit_sha)
 VALUES ('tc_vi_dag', 'dag_null_test', 'dag id null default test', 'vi-sha-dag-0');
-
 SELECT source_dag_id IS NULL AS t3_source_dag_id_null_by_default
 FROM pgmnemo.agent_lesson
 WHERE role = 'tc_vi_dag' AND commit_sha = 'vi-sha-dag-0';
@@ -140,7 +130,6 @@ WHERE role = 'tc_vi_dag' AND commit_sha = 'vi-sha-dag-0';
 -- Can be set to a non-null value
 INSERT INTO pgmnemo.agent_lesson (role, topic, lesson_text, commit_sha, source_dag_id)
 VALUES ('tc_vi_dag', 'dag_set_test', 'dag id set test', 'vi-sha-dag-1', 'dag-test-run-42');
-
 SELECT source_dag_id = 'dag-test-run-42' AS t3_source_dag_id_stored
 FROM pgmnemo.agent_lesson
 WHERE role = 'tc_vi_dag' AND commit_sha = 'vi-sha-dag-1';
@@ -163,7 +152,6 @@ WHERE schemaname = 'pgmnemo'
 -- =============================================================================
 -- T4: memory_ingest_log INSERT + SELECT + UPDATE retired_at
 -- =============================================================================
-
 INSERT INTO pgmnemo.memory_ingest_log (source_origin, min_id, max_id)
 VALUES ('legacy.agent_memory', 1, 5000)
 RETURNING id > 0 AS t4_insert_ok, source_origin, min_id, max_id;
@@ -184,22 +172,21 @@ WHERE source_origin = 'legacy.agent_memory'
 ORDER BY id DESC
 LIMIT 1;
  t4_origin_correct | t4_min_id_correct | t4_max_id_correct | t4_ingested_at_set | t4_retired_at_null
---------------------+-------------------+-------------------+--------------------+--------------------
- t                  | t                 | t                 | t                  | t
+-------------------+-------------------+-------------------+--------------------+--------------------
+ t                 | t                 | t                 | t                  | t
 (1 row)
 
 -- Update retired_at
 UPDATE pgmnemo.memory_ingest_log
 SET retired_at = NOW()
 WHERE source_origin = 'legacy.agent_memory';
-
 SELECT retired_at IS NOT NULL AS t4_retired_at_set
 FROM pgmnemo.memory_ingest_log
 WHERE source_origin = 'legacy.agent_memory'
 ORDER BY id DESC
 LIMIT 1;
  t4_retired_at_set
---------------------
+-------------------
  t
 (1 row)
 
@@ -209,7 +196,6 @@ LIMIT 1;
 -- Verify recalled when exclude_dag_id=NULL or 'dag-y'.
 -- Verify NOT returned when exclude_dag_id='dag-x'.
 -- =============================================================================
-
 -- Unique text to ensure this lesson dominates text recall
 INSERT INTO pgmnemo.agent_lesson (role, topic, lesson_text, commit_sha, source_dag_id)
 VALUES (
@@ -219,7 +205,6 @@ VALUES (
     'vi-sha-exc-dag',
     'dag-x'
 );
-
 INSERT INTO pgmnemo.agent_lesson (role, topic, lesson_text, commit_sha)
 VALUES (
     'tc_vi_exc',
@@ -227,7 +212,6 @@ VALUES (
     'exclude dag filter quasar xylophone nebula bravo foxtrot zeta no dag',
     'vi-sha-exc-nodagid'
 );
-
 -- T5a: exclude_dag_id=NULL — both lessons returned
 SELECT COUNT(*) >= 1 AS t5a_both_present_when_exclude_null
 FROM pgmnemo.recall_hybrid(
@@ -301,9 +285,7 @@ NOTICE:  pgmnemo: query_embedding IS NULL -- falling back to text-only recall; n
 -- =============================================================================
 -- Cleanup
 -- =============================================================================
-
 DELETE FROM pgmnemo.agent_lesson
 WHERE role IN ('tc_vi_ik', 'tc_vi_vn', 'tc_vi_dag', 'tc_vi_exc');
-
 DELETE FROM pgmnemo.memory_ingest_log
 WHERE source_origin = 'legacy.agent_memory';
