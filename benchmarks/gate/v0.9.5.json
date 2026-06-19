@@ -1,0 +1,17 @@
+{
+    "version": "v0.9.5",
+    "date": "2026-06-19",
+    "pgmnemo_version": "0.9.5",
+    "gate_status": "PASS",
+    "gate_type": "bug_fix_smoke",
+    "scope": "Additive schema columns (last_recalled_at, recall_count) + recall stamping GUC + mark_stale() curation function. No change to scoring path, embedding, or RRF fusion logic.",
+    "justification": "recall_hybrid/recall_lessons/navigate_locate/navigate_expand: scoring formula unchanged (STABLE→VOLATILE only for side-effect). Stamping CTE runs after SELECT materialises — no effect on returned rows or scores. mark_stale() is a new function with no impact on recall@k. Additive columns with DEFAULT NULL/0 — no existing rows affected. pg_regress recall_recency covers T1–T9.",
+    "schema_change": true,
+    "schema_change_detail": "ADD COLUMN IF NOT EXISTS last_recalled_at TIMESTAMPTZ DEFAULT NULL; ADD COLUMN IF NOT EXISTS recall_count BIGINT NOT NULL DEFAULT 0; CREATE INDEX IF NOT EXISTS ix_pgmnemo_lesson_recall_recency.",
+    "scoring_impact": "none",
+    "recall_ranking_impact": "zero — stamp runs after final_results materialised; GUC off restores byte-identical v0.9.4 behaviour",
+    "carry_forward_from": "v0.9.4",
+    "new_regress_tests": ["recall_recency"],
+    "new_regress_test_count": 9,
+    "verification": "pg_regress recall_recency: T1–T9 pass. make installcheck REGRESS=recall_recency."
+}

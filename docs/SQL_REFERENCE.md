@@ -1,6 +1,6 @@
 # pgmnemo SQL Reference
 
-**Version coverage:** v0.6.0 (current)  
+**Version coverage:** v0.9.5 (current)  
 **Status:** authoritative — function signatures here match `extension/pgmnemo--*.sql`.
 
 For usage patterns and worked examples see `USAGE.md`; for upgrade paths see
@@ -551,6 +551,7 @@ for the detection + recovery procedure.
 | `pgmnemo.graph_proximity_weight` | float | `0.2` | 0.0 – 0.5 | Weight on `mem_edge` graph-walk proximity term in `recall_hybrid()` scoring. Set to `0.0` for pure semantic recall (the reference bench setup). |
 | `pgmnemo.temporal_boost` | float | `1.0` (v0.5.0+) | 0.0 – 20.0 | Multiplier on the recency component. `effective_γ = recency_weight × temporal_boost`. Default `1.0` = unchanged behaviour from v0.4.1. H-06 optimal: `boost=10` with `recency_weight=0.05` → `effective_γ=0.5`. Helper: `SELECT pgmnemo.get_temporal_boost()`. |
 | `pgmnemo.confidence_boost_weight` | float | **`0.0`** (v0.9.2+, off by default) | 0.0 – 0.01 | Additive confidence boost in `recall_hybrid()` final score: `score += w × (confidence − 0.5)`. Zero-centered: confidence=0.5 gets no boost. Off by default — byte-identical to v0.9.1 without `SET`. Activate with `SET pgmnemo.confidence_boost_weight = '0.003'`. Recommended range: 0.001 – 0.005. |
+| `pgmnemo.track_recall_recency` | bool | **`on`** (v0.9.5+) | `on` / `off` | When `on`, every recall function (`recall_hybrid`, `recall_lessons`, `navigate_locate`, `navigate_expand`) stamps `last_recalled_at = NOW()` and increments `recall_count` on the returned lessons via a data-modifying CTE. Set to `off` to disable all stamping — functions are then byte-identical to v0.9.4. Default `on` (opt-out, not opt-in). |
 
 ### 3.2 Write/ingest GUCs (used by `pgmnemo.ingest()` and `recall_lessons()` filtering)
 
@@ -612,6 +613,7 @@ SELECT name, setting, sourcefile FROM pg_file_settings WHERE name LIKE 'pgmnemo.
 | v0.5.0 | `pgmnemo.max_query_text_chars` | (new GUC, default 2000) | R5: input-length guard for ingest() and recall query_text; 0 = disabled |
 | v0.9.2 | `pgmnemo.confidence_boost_weight` | (new GUC, default 0.0 = off) | I1: opt-in confidence-weighted ranking; off by default, byte-identical to v0.9.1 without SET |
 | v0.9.3 | `pgmnemo.reinforce_success_delta` | `0.10` → `0.02` | D1: base-rate-adjusted default; old value caused confidence saturation at ceiling |
+| v0.9.5 | `pgmnemo.track_recall_recency` | (new GUC, default `on`) | E: recall-recency stamping; opt-out (`off`) for byte-identical behaviour to v0.9.4 |
 | v0.9.3 | `pgmnemo.reinforce_fail_delta` | `0.15` → `0.12` | D1: base-rate-adjusted default; asymmetric: failures penalised faster than successes rewarded |
 
 Adopters who set GUCs via `ALTER SYSTEM` keep their values across version upgrades.

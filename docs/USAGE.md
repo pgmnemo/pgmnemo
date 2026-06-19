@@ -946,3 +946,109 @@ FROM pgmnemo.stats();  -- returns current_setting() values, not defaults
 | `pgmnemo.max_query_text_chars` | `2000` | 0–any | Max input length; 0 = unlimited |
 | `pgmnemo.tenant_id` | `''` | any text | RLS scoping by project_id; empty = bypass |
 
+---
+
+## Usage-based curation — `mark_stale()` (v0.9.5)
+
+As corpus size grows, recall@k quality degrades when stale, never-recalled
+lessons dilute the result set. `mark_stale()` is a safe operator primitive for
+identifying and deprecating them.
+
+> **Warning:** never run `p_dry_run=>FALSE` without first reviewing the candidate
+> set. The default is `p_dry_run=>TRUE` for this reason.
+
+### Signature
+
+```sql
+pgmnemo.mark_stale(
+    p_unused_days         INT     DEFAULT 45,    -- staleness threshold
+    p_min_confidence_keep REAL    DEFAULT 0.6,   -- safeguard: keep confident lessons
+    p_keep_provenance     BOOLEAN DEFAULT TRUE,  -- safeguard: keep lessons with commit_sha/artifact_hash
+    p_dry_run             BOOLEAN DEFAULT TRUE,  -- TRUE = read-only preview (SAFE)
+    p_cap                 INT     DEFAULT 500    -- max deprecations per call; refuses if exceeded
+)
+RETURNS TABLE(
+    lesson_id        BIGINT,
+    role             TEXT,
+    topic            TEXT,
+    last_recalled_at TIMESTAMPTZ,
+    confidence       REAL,
+    would_deprecate  BOOLEAN
+)
+```
+
+### Candidate criteria
+
+A lesson is a candidate if it is active (`is_active = TRUE`, state not already
+deprecated/archived/rejected) AND either:
+- `last_recalled_at IS NOT NULL AND last_recalled_at < NOW() - p_unused_days * INTERVAL '1 day'`
+- `last_recalled_at IS NULL AND created_at < NOW() - p_unused_days * INTERVAL '1 day'`
+
+### Safeguards (lessons NOT deprecated regardless of age)
+
+| Safeguard | Condition | Rationale |
+|---|---|---|
+| High confidence | `confidence >= p_min_confidence_keep` (default 0.6) | High outcome track record; likely still useful |
+| High importance | `importance = 5` | Operator-marked critical; never touched automatically |
+| Provenance | `p_keep_provenance=TRUE` AND `commit_sha IS NOT NULL OR artifact_hash IS NOT NULL` | Traced to a verifiable artifact; safe to keep |
+
+`would_deprecate = TRUE` in the return set means the lesson is NOT protected by any safeguard.
+
+### Step 1: dry-run preview (always run this first)
+
+```sql
+-- Preview which lessons would be deprecated with default settings (45-day window)
+SELECT lesson_id, role, topic, last_recalled_at, confidence, would_deprecate
+FROM pgmnemo.mark_stale()
+WHERE would_deprecate
+ORDER BY last_recalled_at ASC NULLS FIRST
+LIMIT 50;
+```
+
+The function returns ALL candidates (including safeguarded ones). Filter by
+`would_deprecate = TRUE` to see what would actually be touched.
+
+### Step 2: apply (after reviewing dry-run output)
+
+```sql
+-- Agency policy: 45-day window, keep high-confidence + provenance, cap at 200
+SELECT COUNT(*) AS deprecated_count
+FROM pgmnemo.mark_stale(
+    p_unused_days         => 45,
+    p_min_confidence_keep => 0.6,
+    p_keep_provenance     => TRUE,
+    p_dry_run             => FALSE,
+    p_cap                 => 200
+)
+WHERE would_deprecate;
+```
+
+If candidates exceed `p_cap`, the function raises a `NOTICE` and takes no action.
+Review the dry-run output and either narrow the criteria or raise `p_cap` explicitly.
+
+### Recency tracking
+
+Starting in v0.9.5, `last_recalled_at` and `recall_count` are automatically
+stamped on each lesson returned by any recall function. The stamping is controlled
+by GUC `pgmnemo.track_recall_recency` (default `on`).
+
+```sql
+-- Disable stamping for a session (e.g. bulk benchmarking that shouldn't affect recency):
+SET pgmnemo.track_recall_recency = 'off';
+-- ... run recalls ...
+RESET pgmnemo.track_recall_recency;
+```
+
+Check coverage of the recency signal:
+
+```sql
+-- What fraction of the active corpus has ever been recalled?
+SELECT
+    COUNT(*)                                         AS total_active,
+    COUNT(*) FILTER (WHERE last_recalled_at IS NULL) AS never_recalled,
+    ROUND(100.0 * COUNT(*) FILTER (WHERE last_recalled_at IS NULL) / COUNT(*), 1)
+                                                     AS never_recalled_pct
+FROM pgmnemo.agent_lesson
+WHERE is_active;
+```
+

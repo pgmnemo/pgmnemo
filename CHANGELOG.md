@@ -15,6 +15,60 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.9.5] — 2026-06-19
+
+### Theme
+
+**E — Recall-recency signals + `mark_stale()`.** Corpus of 6,584 lessons with
+92 % never recalled could not be curated by actual use because `last_recalled_at`
+didn't exist. This release adds the column, stamps it on every recall path, and
+provides a safe, guarded curation primitive.
+
+### Added
+
+- **`last_recalled_at TIMESTAMPTZ DEFAULT NULL`** on `pgmnemo.agent_lesson`.
+  Stamped automatically by `recall_hybrid()`, `recall_lessons()`,
+  `navigate_locate()`, and `navigate_expand()`. NULL = never recalled since
+  v0.9.5 column addition.
+- **`recall_count BIGINT NOT NULL DEFAULT 0`** on `pgmnemo.agent_lesson`.
+  Incremented once per recall-function call that returns the lesson. Monotonically
+  increasing; never decremented.
+- **`ix_pgmnemo_lesson_recall_recency` partial index** on `(last_recalled_at ASC
+  NULLS FIRST, created_at ASC) WHERE is_active` — supports efficient stale-lesson
+  scans.
+- **GUC `pgmnemo.track_recall_recency`** (BOOLEAN, default `on`). When set to
+  `off`, no stamping occurs and all four recall functions behave byte-identically
+  to v0.9.4. Documented in `SQL_REFERENCE.md §3.1`.
+- **`pgmnemo.mark_stale()`** — usage-based corpus curation primitive. Identifies
+  and optionally deprecates lessons unused for `p_unused_days` (default 45 days).
+  Safeguards prevent touching high-confidence (`>= 0.6`), high-importance (`= 5`),
+  or provenance-bearing lessons. `p_dry_run=TRUE` (default) is read-only and safe
+  to run anytime. `p_cap` (default 500) refuses to deprecate without explicit
+  acknowledgement if candidates exceed the cap.
+- **`extension/sql/recall_recency.sql`** — 9 pg_regress tests covering stamping,
+  GUC control, dry-run, safeguards, and cap guard.
+
+### Changed
+
+- **`recall_hybrid()`**, **`recall_lessons()`**, **`navigate_locate()`**,
+  **`navigate_expand()`**: changed from `STABLE` → `VOLATILE` (required for the
+  UPDATE side-effect in the data-modifying CTE stamp). No scoring change; existing
+  query plans remain valid.
+- **`docs/SQL_REFERENCE.md`**: new §3.1 row for `pgmnemo.track_recall_recency`;
+  §3.6 entry for v0.9.5 new GUC. New `mark_stale()` entry in §2.
+- **`docs/USAGE.md`**: new section "Usage-based curation — `mark_stale()`".
+
+### Upgrade
+
+```sql
+ALTER EXTENSION pgmnemo UPDATE TO '0.9.5';
+```
+
+Adds two columns to `pgmnemo.agent_lesson` and creates one partial index.
+Non-destructive and backward-compatible. All recall function signatures unchanged.
+
+---
+
 ## [0.9.4] — 2026-06-19
 
 ### Theme
