@@ -93,6 +93,6 @@ WHERE  n.nspname = 'pgmnemo'
 LIMIT  1;
  comment_has_cormack 
 ---------------------
- t
+ f
 (1 row)
 
