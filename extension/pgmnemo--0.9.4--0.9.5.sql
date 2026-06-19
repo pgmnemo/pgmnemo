@@ -340,7 +340,7 @@ BEGIN
         UPDATE pgmnemo.agent_lesson
         SET last_recalled_at = NOW(),
             recall_count     = recall_count + 1
-        WHERE id = ANY(ARRAY(SELECT fr.lesson_id FROM final_results))
+        WHERE id = ANY(ARRAY(SELECT lesson_id FROM final_results))
           AND COALESCE(
               NULLIF(current_setting('pgmnemo.track_recall_recency', TRUE), '')::BOOLEAN,
               TRUE)
