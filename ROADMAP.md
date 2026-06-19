@@ -1,6 +1,6 @@
 # pgmnemo Roadmap
 
-**Effective:** 2026-06-04
+**Effective:** 2026-06-20
 
 ---
 
@@ -15,10 +15,10 @@ SQL query plan — plus provenance-gated writes and token-economy navigation
 (`navigate_locate` / `navigate_expand`). No external RAG service can match this
 architecture because it requires executing inside the database's query optimizer.
 
-**Retrieval benchmark position (v0.8.0):**
-- LoCoMo session recall@10 = 0.8409 (paper-canonical, +4.15pp vs v0.3.x)
-- LongMemEval-S recall@10 = 0.9604 (hybrid RRF Fix-A v0.6.2, gap to BM25 baseline
-  narrowed from −5pp to −2.2pp, p=0.017)
+**Retrieval benchmark position (v0.9.5, bge-m3 1024d):**
+- LoCoMo session recall@10 = 0.8409 (paper-canonical, +4.15pp vs v0.3.x baseline)
+- LongMemEval-S recall@10 = 0.9604 (RRF Fix-A v0.6.2, sparse-safe; gap to BM25
+  baseline narrowed from −5pp to −2.2pp, p=0.017)
 
 ---
 
@@ -47,6 +47,10 @@ architecture because it requires executing inside the database's query optimizer
 | **v0.9.1** | P0 graph traversal fix | `navigate_expand`/`navigate_locate` traverse all edge kinds (was causal+temporal only); bidirectional BFS; `relation_types` filter; threshold 0.7→0.5 | 2026-06-14 (✅ SHIPPED) |
 | **v0.9.2** | Opt-in confidence-weighted ranking GUC | `pgmnemo.confidence_boost_weight` (default `0.0`, off); additive tie-breaker in `recall_hybrid` | 2026-06-17 (✅ SHIPPED) |
 | **v0.9.3** | Base-rate-adjusted reinforce() defaults + GUC control | Success delta +0.10→+0.02, failure −0.15→−0.12; `reinforce_success_delta`/`reinforce_fail_delta` GUCs | 2026-06-19 (✅ SHIPPED) |
+| **v0.9.4** | Documentation-only | `SQL_REFERENCE.md` + `USAGE.md` coverage for 0.9.2–0.9.3 GUCs; no SQL changes | 2026-06-19 (✅ SHIPPED) |
+| **v0.9.5** | Recall-recency signals + corpus curation | `last_recalled_at`, `recall_count` columns; `mark_stale()` with dry-run + safeguards; `track_recall_recency` GUC | 2026-06-19 (✅ SHIPPED) |
+| **v0.9.6** | Community response + R11/R12/R13 plumbing | `item_kind`/`version_n`/`patch_count`; `source_dag_id` + `exclude_dag_id`; `memory_ingest_log` table | Planned |
+| **v0.10.0** | Extraction substrate | Chunk → LLM entity+relation extraction → typed `mem_edge`; `ingest_document()`; Python client SDK | Planned |
 | **v1.0** | API freeze + stability commitment | 2 consecutive non-breaking releases; stable API contract | 2026-Q4 |
 
 ---
@@ -202,6 +206,155 @@ Lessons now carry a `confidence REAL DEFAULT 0.5` field that responds to observe
 - `README.md`, `POSITIONING.md`, `docs/WHY_PGMNEMO.md`: reframed to single-plan multimodal fusion; version badges updated to 0.8.1; benchmark numbers corrected to 0.9604
 - `ROADMAP.md`: public-safe rewrite; internal strategy language removed; all shipped versions marked
 - `docs/SQL_REFERENCE.md`, `docs/USAGE.md`: v0.8.0 coverage (planned follow-on)
+
+---
+
+## v0.8.2 — Bug-fix maintenance (✅ SHIPPED 2026-06-05)
+
+- `traverse_temporal_window()`: `include_unverified` parameter now respected (was silently ignored)
+- `recall_hybrid()` / `recall_lessons()`: `RAISE NOTICE` when 0 rows returned — aids debugging silent misses
+- `docs/USAGE.md`: corrected a footgun in the provenance-gate examples that suggested `gate_strict=on` was safe to set globally
+
+---
+
+## v0.8.3 — GIN index + flat-install hardening (✅ SHIPPED 2026-06-10)
+
+- `lesson_tsv TSVECTOR GENERATED ALWAYS AS (...) STORED`: pre-computed full-text search vector with a GIN index; BM25 path no longer re-computes `to_tsvector()` at query time
+- Flat-install `Makefile` fix: `pgmnemo--<version>.sql` now correctly emitted by the build pipeline; earlier versions could produce a silently empty SQL file on some platforms
+
+---
+
+## v0.9.0 — Token-economy correctness + recall performance (✅ SHIPPED 2026-06-10)
+
+**Theme:** fix `navigate_locate` budget accounting and tighten the recall hot path.
+
+- **`navigate_locate` budget fix:** cumulative char counter was over-counting by a factor of ~5 (tracked compressed row bytes rather than `length(lesson_text)`). After fix, the same `token_budget_chars` returns ~5× more IDs. ⚠️ Callers with tight budgets may need to adjust.
+- **Ghost-exclusion fix:** lessons with `state = 'deprecated'` were leaking into recall results via the BM25 path; excluded at the `WHERE is_active` gate now applied uniformly across all three scoring paths
+- **`recall_hybrid()` O(n) → O(k log n):** vector candidate set now uses an HNSW `<=>` index scan with `ef_search` limit instead of a full sequential scan + sort
+- **New columns on `agent_lesson`:** `content_type TEXT`, `blob_ref TEXT`, `doc_ref TEXT` — structured pointers to source content; all nullable, no schema migration required for existing rows
+
+---
+
+## v0.9.1 — P0 graph traversal fix (✅ SHIPPED 2026-06-14)
+
+- `navigate_expand()` and `navigate_locate()` now traverse **all** `edge_kind` values (was restricted to `causal` + `temporal` only; `similarity`, `semantic`, and custom kinds were silently ignored)
+- **Bidirectional BFS:** graph traversal now follows edges in both directions (`source_id → target_id` and `target_id → source_id`)
+- **`relation_types TEXT[]` filter param** added to `navigate_expand()` — callers can restrict traversal to a named subset of relation types (e.g. `ARRAY['causal','supersedes']`)
+- **Edge weight threshold** lowered from 0.7 → 0.5 — allows weaker-signal edges to participate in expansion without being pruned
+
+---
+
+## v0.9.2 — Confidence-weighted ranking GUC (✅ SHIPPED 2026-06-17)
+
+*(No separate tag — shipped as part of v0.9.3)*
+
+- **`pgmnemo.confidence_boost_weight` GUC** (DOUBLE PRECISION, default `0.0`, off): when set > 0, adds `w × (confidence − 0.5)` to the final RRF score — zero-centered so neutral-confidence lessons (0.5) get no boost or penalty
+- Default `0.0` keeps behaviour identical to v0.9.1 for all existing deployments
+- Activate per-session: `SET pgmnemo.confidence_boost_weight = '0.3';`
+
+---
+
+## v0.9.3 — Base-rate-adjusted reinforce() defaults (✅ SHIPPED 2026-06-19)
+
+- **Recalibrated deltas:** success `+0.10` → `+0.02`; failure `−0.15` → `−0.12`. Previous defaults caused confidence to saturate at the ceiling under typical success rates, destroying discriminability.
+- **`reinforce_success_delta` / `reinforce_fail_delta` GUCs**: both DOUBLE PRECISION, clamped `[0.001, 0.5]`. Override per-session or at DB/role level.
+- Both scalar `reinforce(BIGINT, TEXT)` and batch `reinforce(BIGINT[], TEXT)` forms updated.
+
+---
+
+## v0.9.4 — Documentation-only release (✅ SHIPPED 2026-06-19)
+
+No SQL changes. Schema identical to v0.9.3.
+
+- `docs/SQL_REFERENCE.md`: added `confidence_boost_weight` to §3.1; new §3.3 Outcome-learning GUCs covering `reinforce_success_delta` and `reinforce_fail_delta`; §3.6 default-change history updated
+- `docs/USAGE.md`: `reinforce()` section updated to reflect new default deltas; GUC override example added
+
+---
+
+## v0.9.5 — Recall-recency signals + corpus curation (✅ SHIPPED 2026-06-19)
+
+**Theme:** a 6,500+ lesson corpus where 92% had never been recalled was uncuratable by use. This release adds the usage signal and a safe curation primitive.
+
+### New columns on `agent_lesson`
+
+| Column | Type | Default | Purpose |
+|---|---|---|---|
+| `last_recalled_at` | `TIMESTAMPTZ` | `NULL` | Stamped by all four recall functions on every call. NULL = never recalled since v0.9.5. |
+| `recall_count` | `BIGINT` | `0` | Incremented once per recall-function call that returns this lesson. Monotonically increasing. |
+
+### New function
+
+**`pgmnemo.mark_stale(p_unused_days, p_min_confidence_keep, p_keep_provenance, p_dry_run, p_cap)`**
+
+Identifies and optionally deprecates lessons unused for `p_unused_days` (default 45). Built-in safeguards: does not touch lessons with `confidence >= p_min_confidence_keep` (default 0.6), `importance = 5`, or a `commit_sha` (provenance bearing). `p_dry_run=TRUE` (default) is fully read-only. `p_cap` (default 500) refuses to act if candidate count exceeds the cap — requires explicit acknowledgement.
+
+### Other changes
+
+- **GUC `pgmnemo.track_recall_recency`** (BOOLEAN, default `on`): set to `off` to suppress stamping globally, e.g. during bulk testing or replay.
+- `recall_hybrid()`, `recall_lessons()`, `navigate_locate()`, `navigate_expand()` changed from `STABLE` → `VOLATILE` (required for the UPDATE side-effect in the stamp CTE). No scoring change.
+- **Partial index** `ix_pgmnemo_lesson_recall_recency` on `(last_recalled_at ASC NULLS FIRST, created_at ASC) WHERE is_active` — supports efficient stale-lesson scans.
+
+---
+
+## v0.9.6 — Community response + R11/R12/R13 plumbing (Planned)
+
+**Theme:** close the remaining agency-requirement gaps from [Issue #31](https://github.com/pgmnemo/pgmnemo/issues/31) and respond to reviewer feedback before the extraction substrate build begins.
+
+### New columns on `agent_lesson`
+
+| Column | Type | Default | Purpose |
+|---|---|---|---|
+| `item_kind` | `TEXT CHECK(...)` | `'note'` | Item type: `note` \| `skill_md` \| `template` \| `script` \| `reference` \| `config` \| `spec`. Default preserves all existing rows. |
+| `version_n` | `INT` | `1` | Version number for skill items. Operator-managed. |
+| `patch_count` | `INT` | `0` | Count of in-place patches since last full rewrite. Operator-managed. |
+| `source_dag_id` | `TEXT NULL` | `NULL` | DAG / workflow ID that produced this lesson. Used with `exclude_dag_id` to prevent self-referential recall loops. |
+
+### New table
+
+**`pgmnemo.memory_ingest_log`** — provenance metadata for migration batches. Keeps `agent_lesson` lean on the hot path; drop the table when the cutover window closes.
+
+```sql
+CREATE TABLE pgmnemo.memory_ingest_log (
+    id            BIGSERIAL PRIMARY KEY,
+    source_origin TEXT NOT NULL,
+    min_id        BIGINT,
+    max_id        BIGINT,
+    ingested_at   TIMESTAMPTZ DEFAULT NOW(),
+    retired_at    TIMESTAMPTZ NULL
+);
+```
+
+### Recall function addition
+
+`exclude_dag_id TEXT DEFAULT NULL` parameter added to `recall_hybrid()` and `recall_lessons()`: when set, excludes all lessons where `source_dag_id = exclude_dag_id`. Prevents a running DAG from recalling its own in-flight outputs.
+
+### Docs
+
+- `docs/MIGRATION.md`: worked example for folding a legacy memory table into `pgmnemo.agent_lesson` using `memory_ingest_log` for provenance tracking and a dual-read deprecation window
+- `ROADMAP.md`: this file
+
+---
+
+## v0.10.0 — Extraction substrate (Planned)
+
+**Theme:** first substrate feature — turn text into a queryable knowledge graph automatically. Without auto-extraction the graph layer is empty and graph-augmented retrieval is hollow.
+
+### Extraction pipeline
+
+`ingest_document(source TEXT, source_type TEXT DEFAULT 'text')`: accepts raw text, Markdown, or a local file path. Internally: chunk → embed → ingest into `agent_lesson`, then LLM (Haiku) entity + relation extraction → typed edges via `add_edge()`. Cost ≈ Haiku $/document. Logged to `memory_ingest_log`.
+
+### Python client SDK
+
+`pip install pgmnemo-client` — thin wrapper over the SQL API. Three-line quickstart:
+
+```python
+import pgmnemo
+mem = pgmnemo.connect("postgresql://...")
+mem.ingest("Claude solved the N+1 query by adding select_related()")
+results = mem.recall("database query optimization", top_k=5)
+```
+
+Covers: `connect()`, `ingest()`, `ingest_document()`, `recall()`, `reinforce()`.
 
 ---
 
