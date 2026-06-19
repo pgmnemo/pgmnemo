@@ -12,7 +12,7 @@
 SET pgmnemo.gate_strict = 'off';
 SET pgmnemo.include_unverified = 'on';
 
-ALTER EXTENSION pgmnemo UPDATE TO '0.9.2';
+ALTER EXTENSION pgmnemo UPDATE TO '0.9.3';
 
 -- =============================================================================
 -- Setup: three lessons with identical text but different confidence.

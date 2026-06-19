@@ -40,6 +40,13 @@ architecture because it requires executing inside the database's query optimizer
 | **v0.7.1** | `match_confidence` calibration fix + batch reinforce | BUG-1: `match_confidence` uses `vec_score` (cosine) not `final_score/1.5`; `reinforce(BIGINT[], TEXT)` batch overload | 2026-06-01 (✅ SHIPPED) |
 | **v0.7.2** | Packaging fix | Clean-room install gate in CI; dist structure corrected (no schema change) | 2026-06-01 (✅ SHIPPED) |
 | **v0.8.0** | Token-economy navigation + maintenance primitives | `navigate_locate()`, `navigate_expand()`, `reembed()`, `reembed_batch()`, `recompute_content()`, `source_type` + `embedding_at` columns | 2026-06-03 (✅ SHIPPED) |
+| **v0.8.1** | Docs sprint | `AGENTS.md` integration guide; README/POSITIONING reframe; ROADMAP public-safe rewrite | 2026-06-03 (✅ SHIPPED) |
+| **v0.8.2** | Bug-fix maintenance | `traverse_temporal_window` include_unverified fix; recall NOTICE on 0-row; docs footgun | 2026-06-05 (✅ SHIPPED) |
+| **v0.8.3** | GIN index + flat-install hardening | `lesson_tsv` stored GIN column; flat-install Makefile fix | 2026-06-10 (✅ SHIPPED) |
+| **v0.9.0** | Token-economy correctness + recall performance | `navigate_locate` budget fix (~5× IDs/budget); ghost-exclusion fix; `recall_hybrid` O(n)→O(k log n); `content_type`/`blob_ref`/`doc_ref` columns | 2026-06-10 (✅ SHIPPED) |
+| **v0.9.1** | P0 graph traversal fix | `navigate_expand`/`navigate_locate` traverse all edge kinds (was causal+temporal only); bidirectional BFS; `relation_types` filter; threshold 0.7→0.5 | 2026-06-14 (✅ SHIPPED) |
+| **v0.9.2** | Opt-in confidence-weighted ranking GUC | `pgmnemo.confidence_boost_weight` (default `0.0`, off); additive tie-breaker in `recall_hybrid` | 2026-06-17 (✅ SHIPPED) |
+| **v0.9.3** | Base-rate-adjusted reinforce() defaults + GUC control | Success delta +0.10→+0.02, failure −0.15→−0.12; `reinforce_success_delta`/`reinforce_fail_delta` GUCs | 2026-06-19 (✅ SHIPPED) |
 | **v1.0** | API freeze + stability commitment | 2 consecutive non-breaking releases; stable API contract | 2026-Q4 |
 
 ---
@@ -189,7 +196,7 @@ Lessons now carry a `confidence REAL DEFAULT 0.5` field that responds to observe
 
 ---
 
-## v0.8.1 — Docs sprint (🔄 IN PROGRESS)
+## v0.8.1 — Docs sprint (✅ SHIPPED 2026-06-03)
 
 - `AGENTS.md`: canonical single-file agent integration guide with all functions and working SQL
 - `README.md`, `POSITIONING.md`, `docs/WHY_PGMNEMO.md`: reframed to single-plan multimodal fusion; version badges updated to 0.8.1; benchmark numbers corrected to 0.9604

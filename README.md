@@ -13,6 +13,7 @@
 [![PGXN](https://badge.pgxn.org/stable/pgmnemo.svg)](https://pgxn.org/dist/pgmnemo/)
 [![CI](https://github.com/pgmnemo/pgmnemo/actions/workflows/ci.yml/badge.svg)](https://github.com/pgmnemo/pgmnemo/actions/workflows/ci.yml)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-17-4169E1.svg)](https://www.postgresql.org/)
+[![Version](https://img.shields.io/badge/version-0.9.3-blue.svg)](https://github.com/pgmnemo/pgmnemo/releases/tag/v0.9.3)
 [![LoCoMo recall@10](https://img.shields.io/badge/LoCoMo_recall%4010-0.8409-success.svg)](docs/img/all_metrics_history.md)
 [![LongMemEval recall@10](https://img.shields.io/badge/LongMemEval_recall%4010-0.9604-brightgreen.svg)](docs/img/all_metrics_history.md)
 <!-- [![GitHub Stars](https://img.shields.io/github/stars/pgmnemo/pgmnemo.svg?style=social)](https://github.com/pgmnemo/pgmnemo) -->
@@ -32,13 +33,13 @@
 In production at [Agency](docs/case_studies/agency.md): agents used **−68% fewer turns** on runs where memory fired a relevant hit.
 
 <details>
-<summary>Recent releases (v0.9.1, v0.9.0, v0.8.0) · <a href="CHANGELOG.md">full CHANGELOG</a></summary>
+<summary>Recent releases (v0.9.3, v0.9.2, v0.9.1) · <a href="CHANGELOG.md">full CHANGELOG</a></summary>
 
-> **v0.9.1 (2026-06-14):** **P0 graph traversal fix.** `navigate_expand` + `navigate_locate` now traverse all edge kinds (entity, semantic, causal, temporal) — was hardcoded to causal+temporal only, making 100% of production edges invisible. Bidirectional BFS, `relation_types` filter param, threshold 0.7→0.5. See [CHANGELOG.md](CHANGELOG.md).
+> **v0.9.3 (2026-06-17):** **`reinforce()` delta re-tune + GUC control.** Default success delta `+0.10` → `+0.02`, failure delta `−0.15` → `−0.12` (base-rate-adjusted). Both overridable via `pgmnemo.reinforce_success_delta` / `pgmnemo.reinforce_fail_delta` GUCs per-session or at DB/role level. See [CHANGELOG.md](CHANGELOG.md).
 >
-> **v0.9.0 (2026-06-10):** **Token-economy correctness + recall performance.** `navigate_locate` budget counter fix (~5× more IDs returned per equivalent budget), `navigate_expand` project-scoping, NULL-embedding ghost-exclusion fix, `recall_hybrid` O(n) → O(k log n) rewrite, `content_type`/`blob_ref`/`doc_ref` columns. See [CHANGELOG.md](CHANGELOG.md).
+> **v0.9.2 (2026-06-17):** **Opt-in confidence-weighted ranking GUC.** `pgmnemo.confidence_boost_weight` (default `0.0`, off) adds `w × (confidence − 0.5)` to the `recall_hybrid` score. Activate with `SET pgmnemo.confidence_boost_weight = '0.003';`. Off by default — byte-identical to 0.9.1 without the SET. See [CHANGELOG.md](CHANGELOG.md).
 >
-> **v0.8.0 (2026-06-03):** **Token-economy navigation API.** `navigate_locate()` returns ranked lesson IDs within a configurable character budget; `navigate_expand()` fetches full content + graph neighbors on demand. `reembed()` / `reembed_batch()` for in-place embedding refresh, `recompute_content()`, `source_type` column. See [CHANGELOG.md](CHANGELOG.md).
+> **v0.9.1 (2026-06-14):** **P0 graph traversal fix.** `navigate_expand` + `navigate_locate` now traverse all edge kinds — was hardcoded to causal+temporal only, making 100% of production edges invisible. Bidirectional BFS, `relation_types` filter param, threshold 0.7→0.5. See [CHANGELOG.md](CHANGELOG.md).
 
 </details>
 
@@ -115,7 +116,7 @@ into a recent green run to see which PG versions the latest build passed on.
 **PGXN install (if `pgxnclient` is available):**
 
 ```bash
-pgxn install pgmnemo==0.9.0
+pgxn install pgmnemo==0.9.3
 ```
 
 **Docker (production):** pgmnemo is **pure SQL** — no compilation. Bake files
@@ -123,21 +124,21 @@ into your image with a 3-line Dockerfile:
 
 ```dockerfile
 FROM pgvector/pgvector:pg17
-ADD https://github.com/pgmnemo/pgmnemo/releases/download/v0.9.0/pgmnemo-0.9.0.zip /tmp/
+ADD https://github.com/pgmnemo/pgmnemo/releases/download/v0.9.3/pgmnemo-0.9.3.zip /tmp/
 RUN apt-get update && apt-get install -y --no-install-recommends unzip \
-    && unzip /tmp/pgmnemo-0.9.0.zip -d /tmp/ \
-    && cp -r /tmp/pgmnemo-0.9.0/extension/* \
+    && unzip /tmp/pgmnemo-0.9.3.zip -d /tmp/ \
+    && cp -r /tmp/pgmnemo-0.9.3/extension/* \
           /usr/share/postgresql/17/extension/ \
-    && apt-get remove -y unzip && rm -rf /tmp/pgmnemo-0.9.0* /var/lib/apt/lists/*
+    && apt-get remove -y unzip && rm -rf /tmp/pgmnemo-0.9.3* /var/lib/apt/lists/*
 ```
 
 **Dev / laptop one-liner (NOT for production — state lost on container rebuild):**
 
 ```bash
 docker run --name pgmnemo-dev -e POSTGRES_PASSWORD=pass -p 5432:5432 -d pgvector/pgvector:pg17
-curl -L https://github.com/pgmnemo/pgmnemo/releases/download/v0.9.0/pgmnemo-0.9.0.zip -o /tmp/pg.zip
+curl -L https://github.com/pgmnemo/pgmnemo/releases/download/v0.9.3/pgmnemo-0.9.3.zip -o /tmp/pg.zip
 docker cp /tmp/pg.zip pgmnemo-dev:/tmp/
-docker exec pgmnemo-dev bash -c "cd /tmp && unzip -q pg.zip && cp -r pgmnemo-0.9.0/extension/* /usr/share/postgresql/17/extension/"
+docker exec pgmnemo-dev bash -c "cd /tmp && unzip -q pg.zip && cp -r pgmnemo-0.9.3/extension/* /usr/share/postgresql/17/extension/"
 ```
 
 ```sql
@@ -225,8 +226,8 @@ environment (common on Linux agent workflows), run the MCP in a container so its
 `psycopg2`/`mcp` deps stay isolated from your host:
 
 ```bash
-docker pull gaidabura/pgmnemo-mcp:0.9.0              # published to Docker Hub on each release tag
-docker build -t pgmnemo-mcp:0.9.0 pgmnemo_mcp/        # ...or build locally
+docker pull gaidabura/pgmnemo-mcp:0.9.3              # published to Docker Hub on each release tag
+docker build -t pgmnemo-mcp:0.9.3 pgmnemo_mcp/        # ...or build locally
 ```
 
 #### From zero — full quickstart (fresh DB → MCP)
@@ -234,9 +235,9 @@ docker build -t pgmnemo-mcp:0.9.0 pgmnemo_mcp/        # ...or build locally
 ```bash
 # 1. A Postgres with the extension. pgmnemo is pure SQL (no compiler):
 docker run -d --name pgmem -e POSTGRES_PASSWORD=pass pgvector/pgvector:pg17
-curl -L https://github.com/pgmnemo/pgmnemo/releases/download/v0.9.0/pgmnemo-0.9.0.zip -o /tmp/p.zip
+curl -L https://github.com/pgmnemo/pgmnemo/releases/download/v0.9.3/pgmnemo-0.9.3.zip -o /tmp/p.zip
 unzip -q /tmp/p.zip -d /tmp
-docker cp /tmp/pgmnemo-0.9.0/extension/. pgmem:/usr/share/postgresql/17/extension/
+docker cp /tmp/pgmnemo-0.9.3/extension/. pgmem:/usr/share/postgresql/17/extension/
 docker exec pgmem psql -U postgres -c "CREATE EXTENSION pgmnemo CASCADE;"
 
 # 2. (optional) an OpenAI-compatible embeddings endpoint (1024-dim, e.g. bge-m3 / LM Studio)
@@ -245,7 +246,7 @@ docker exec pgmem psql -U postgres -c "CREATE EXTENSION pgmnemo CASCADE;"
 # 3. Smoke-test the MCP against that DB (note: -e BEFORE the image, and the --smoke
 #    flag lives in `python -m pgmnemo_mcp`, not the default `pgmnemo-mcp` entrypoint):
 docker run --rm --link pgmem -e DATABASE_URL=postgresql://postgres:pass@pgmem:5432/postgres \
-  --entrypoint python gaidabura/pgmnemo-mcp:0.9.0 -m pgmnemo_mcp --smoke
+  --entrypoint python gaidabura/pgmnemo-mcp:0.9.3 -m pgmnemo_mcp --smoke
   # → "pgmnemo-mcp smoke: OK (recall_lessons returned N rows)"
 ```
 
@@ -258,7 +259,7 @@ MCP client config (stdio via `docker run -i`):
       "command": "docker",
       "args": ["run", "-i", "--rm",
                "-e", "DATABASE_URL", "-e", "EMBEDDING_SERVER", "-e", "EMBEDDING_MODEL",
-               "gaidabura/pgmnemo-mcp:0.9.0"],
+               "gaidabura/pgmnemo-mcp:0.9.3"],
       "env": {
         "DATABASE_URL": "postgresql://user:pass@host:5432/db",
         "EMBEDDING_SERVER": "http://server:1234/v1/embeddings"

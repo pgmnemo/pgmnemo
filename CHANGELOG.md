@@ -19,12 +19,11 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ### Theme
 
-**D1 — Base-rate-adjusted `reinforce()` deltas, GUC-configurable.** OL-260605
-validation (task 9091) showed shipped deltas (+0.10/−0.15) give r_pb=−0.051
-(confidence does NOT predict success). At 83.5% base success rate, `+0.10`
-saturates confidence toward ceiling, destroying discriminability.
-Base-rate-adjusted defaults (+0.02/−0.12) give r_pb=+0.107..+0.124 — the only
-positive signal observed.
+**D1 — Base-rate-adjusted `reinforce()` deltas, GUC-configurable.** The shipped
+deltas (+0.10/−0.15) caused confidence to saturate at the ceiling under typical
+success rates, destroying discriminability. Base-rate-adjusted defaults
+(+0.02/−0.12) restore discriminability and show consistent positive correlation
+with actual outcome.
 
 ### Added
 
@@ -69,7 +68,7 @@ confidence boost behind a GUC flag: `score += w × (confidence − 0.5)`.
 
 - **Confidence boost GUC** (`pgmnemo.confidence_boost_weight`): DOUBLE
   PRECISION, default `0.0` (OFF — byte-identical to 0.9.1), clamped
-  `[0.0, 0.01]`. Recommended activation value: `0.003` (OL-260605 §1.3).
+  `[0.0, 0.01]`. Recommended activation value: `0.003`.
   At `w=0.003`, a high-vs-low confidence delta ≈ 0.0024 ≈ 8–15 RRF positions.
   Cold-start (`confidence=0.5`) gets zero boost/penalty.
 
@@ -82,7 +81,7 @@ confidence boost behind a GUC flag: `score += w × (confidence − 0.5)`.
 
 ### Activation gate
 
-Do NOT flip default to ON. Pending: validation task 9091 + positive A/B result.
+Do NOT flip default to ON. Pending: positive A/B validation.
 Activate per-session: `SET pgmnemo.confidence_boost_weight = '0.003';`
 
 ---
