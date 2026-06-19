@@ -14,6 +14,7 @@ V=0.6.X  # the version you're about to ship
 # 1. Version files agree
 grep "^default_version" extension/pgmnemo.control          # → 'X.Y.Z'
 python3 -c "import json; print(json.load(open('META.json'))['version'])"
+python3 -c "import json; d=json.load(open('META.json')); print(d['provides']['pgmnemo']['version'], d['provides']['pgmnemo']['file'])"
 grep "^version" pgmnemo_mcp/pyproject.toml                  # → "X.Y.Z"
 
 # 2. Fresh-install + upgrade SQL scripts exist
