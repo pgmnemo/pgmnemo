@@ -28,7 +28,7 @@ reinforced AS (
 SELECT
     new_conf > 0.51 AND new_conf < 0.53 AS success_delta_is_002
 FROM reinforced;
- success_delta_is_002
+ success_delta_is_002 
 ----------------------
  t
 (1 row)
@@ -46,7 +46,7 @@ reinforced AS (
 SELECT
     new_conf > 0.37 AND new_conf < 0.39 AS failure_delta_is_012
 FROM reinforced;
- failure_delta_is_012
+ failure_delta_is_012 
 ----------------------
  t
 (1 row)
@@ -69,8 +69,7 @@ BEGIN;
     SELECT
         new_conf > 0.57 AND new_conf < 0.59 AS success_guc_override_works
     FROM reinforced;
-SET
- success_guc_override_works
+ success_guc_override_works 
 ----------------------------
  t
 (1 row)
@@ -94,8 +93,7 @@ BEGIN;
     SELECT
         new_conf > 0.29 AND new_conf < 0.31 AS fail_guc_override_works
     FROM reinforced;
-SET
- fail_guc_override_works
+ fail_guc_override_works 
 -------------------------
  t
 (1 row)
@@ -117,8 +115,7 @@ BEGIN;
         SELECT pgmnemo.reinforce(id, 'success') AS new_conf FROM ins
     )
     SELECT new_conf = 1.0 AS guc_clamp_prevents_overflow FROM reinforced;
-SET
- guc_clamp_prevents_overflow
+ guc_clamp_prevents_overflow 
 -----------------------------
  t
 (1 row)
@@ -141,8 +138,7 @@ BEGIN;
         SELECT pgmnemo.reinforce(ARRAY(SELECT id FROM ins), 'success') AS updated_count
     )
     SELECT updated_count = 2 AS batch_updated_two FROM batch_result;
-SET
- batch_updated_two
+ batch_updated_two 
 -------------------
  t
 (1 row)
@@ -153,7 +149,7 @@ SET
         bool_and(confidence > 0.54 AND confidence < 0.56)  AS both_have_correct_delta
     FROM pgmnemo.agent_lesson
     WHERE role = 'tc_d1' AND topic IN ('g5_batch_a', 'g5_batch_b');
- both_rows_updated | both_have_correct_delta
+ both_rows_updated | both_have_correct_delta 
 -------------------+-------------------------
  t                 | t
 (1 row)
@@ -173,7 +169,7 @@ reinforced AS (
     SELECT pgmnemo.reinforce(id, 'success') AS new_conf FROM ins
 )
 SELECT new_conf > 0.51 AND new_conf < 0.53 AS default_restored_after_reset FROM reinforced;
- default_restored_after_reset
+ default_restored_after_reset 
 ------------------------------
  t
 (1 row)
@@ -189,7 +185,7 @@ reinforced AS (
     SELECT pgmnemo.reinforce(id, 'failure') AS new_conf FROM ins
 )
 SELECT new_conf > 0.37 AND new_conf < 0.39 AS fail_default_restored_after_reset FROM reinforced;
- fail_default_restored_after_reset
+ fail_default_restored_after_reset 
 -----------------------------------
  t
 (1 row)
@@ -198,4 +194,3 @@ SELECT new_conf > 0.37 AND new_conf < 0.39 AS fail_default_restored_after_reset 
 -- Cleanup
 -- =============================================================================
 DELETE FROM pgmnemo.agent_lesson WHERE role = 'tc_d1';
-DELETE 9
