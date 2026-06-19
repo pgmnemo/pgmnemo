@@ -16,6 +16,7 @@
 SET pgmnemo.gate_strict = 'off';
 SET pgmnemo.include_unverified = 'on';
 ALTER EXTENSION pgmnemo UPDATE TO '0.9.5';
+NOTICE:  version "0.9.5" of extension "pgmnemo" is already installed
 -- Confirm new columns exist (boolean check avoids alignment-sensitive output)
 SELECT
     SUM(CASE WHEN column_name = 'last_recalled_at' THEN 1 ELSE 0 END) = 1 AS has_last_recalled_at,
@@ -24,7 +25,7 @@ FROM information_schema.columns
 WHERE table_schema = 'pgmnemo'
   AND table_name = 'agent_lesson'
   AND column_name IN ('last_recalled_at', 'recall_count');
- has_last_recalled_at | has_recall_count
+ has_last_recalled_at | has_recall_count 
 ----------------------+------------------
  t                    | t
 (1 row)
@@ -52,7 +53,7 @@ FROM pgmnemo.recall_hybrid(
     10, 'tc_e_rr', NULL
 );
 NOTICE:  pgmnemo: query_embedding IS NULL -- falling back to text-only recall; no semantic similarity
- rows_recalled
+ rows_recalled 
 ---------------
              3
 (1 row)
@@ -62,7 +63,7 @@ SELECT COUNT(*) = 3 AS t1_all_stamped
 FROM pgmnemo.agent_lesson
 WHERE role = 'tc_e_rr'
   AND last_recalled_at IS NOT NULL;
- t1_all_stamped
+ t1_all_stamped 
 ----------------
  t
 (1 row)
@@ -74,7 +75,7 @@ WHERE role = 'tc_e_rr'
 SELECT bool_and(recall_count = 1) AS t2_count_is_one
 FROM pgmnemo.agent_lesson
 WHERE role = 'tc_e_rr';
- t2_count_is_one
+ t2_count_is_one 
 -----------------
  t
 (1 row)
@@ -87,7 +88,7 @@ FROM pgmnemo.recall_hybrid(
     10, 'tc_e_rr', NULL
 );
 NOTICE:  pgmnemo: query_embedding IS NULL -- falling back to text-only recall; no semantic similarity
- rows_recalled_second
+ rows_recalled_second 
 ----------------------
                     3
 (1 row)
@@ -96,7 +97,7 @@ NOTICE:  pgmnemo: query_embedding IS NULL -- falling back to text-only recall; n
 SELECT bool_and(recall_count = 2) AS t2_count_incremented
 FROM pgmnemo.agent_lesson
 WHERE role = 'tc_e_rr';
- t2_count_incremented
+ t2_count_incremented 
 ----------------------
  t
 (1 row)
@@ -116,7 +117,7 @@ FROM pgmnemo.recall_hybrid(
     10, 'tc_e_rr_off', NULL
 );
 NOTICE:  pgmnemo: query_embedding IS NULL -- falling back to text-only recall; no semantic similarity
- rows_recalled_guc_off
+ rows_recalled_guc_off 
 -----------------------
                      1
 (1 row)
@@ -127,7 +128,7 @@ SELECT
     recall_count = 0         AS t3_count_unchanged
 FROM pgmnemo.agent_lesson
 WHERE role = 'tc_e_rr_off';
- t3_no_stamp | t3_count_unchanged
+ t3_no_stamp | t3_count_unchanged 
 -------------+--------------------
  t           | t
 (1 row)
@@ -169,7 +170,7 @@ FROM pgmnemo.mark_stale(
     p_unused_days=>45,
     p_dry_run=>TRUE
 ) WHERE role = 'tc_e_ms';
- t4_candidate_count | t4_has_deprecatable | t4_has_safeguarded
+ t4_candidate_count | t4_has_deprecatable | t4_has_safeguarded 
 --------------------+---------------------+--------------------
                   4 | t                   | t
 (1 row)
@@ -179,7 +180,7 @@ SELECT COUNT(*) AS t4_state_unchanged
 FROM pgmnemo.agent_lesson
 WHERE role = 'tc_e_ms'
   AND state = 'draft';
- t4_state_unchanged
+ t4_state_unchanged 
 --------------------
                   4
 (1 row)
@@ -192,7 +193,7 @@ FROM pgmnemo.mark_stale(
     p_unused_days=>45,
     p_dry_run=>FALSE
 ) WHERE role = 'tc_e_ms' AND would_deprecate;
- t5_deprecated_count
+ t5_deprecated_count 
 ---------------------
                    1
 (1 row)
@@ -203,7 +204,7 @@ FROM pgmnemo.agent_lesson
 WHERE role = 'tc_e_ms'
   AND topic = 'mark_stale_eligible'
   AND state = 'deprecated';
- t5_lesson_deprecated
+ t5_lesson_deprecated 
 ----------------------
                     1
 (1 row)
@@ -216,7 +217,7 @@ FROM pgmnemo.agent_lesson
 WHERE role = 'tc_e_ms'
   AND topic = 'mark_stale_high_conf'
   AND state != 'deprecated';
- t6_high_conf_still_active
+ t6_high_conf_still_active 
 ---------------------------
                          1
 (1 row)
@@ -229,7 +230,7 @@ FROM pgmnemo.agent_lesson
 WHERE role = 'tc_e_ms'
   AND topic = 'mark_stale_high_imp'
   AND state != 'deprecated';
- t7_high_imp_still_active
+ t7_high_imp_still_active 
 --------------------------
                         1
 (1 row)
@@ -242,7 +243,7 @@ FROM pgmnemo.agent_lesson
 WHERE role = 'tc_e_ms'
   AND topic = 'mark_stale_provenance'
   AND state != 'deprecated';
- t8_provenance_still_active
+ t8_provenance_still_active 
 ----------------------------
                           1
 (1 row)
@@ -266,7 +267,7 @@ FROM pgmnemo.mark_stale(
     p_cap=>1
 ) WHERE role = 'tc_e_ms_cap';
 NOTICE:  pgmnemo.mark_stale: 2 candidates exceed cap 1. No action taken. Re-run with p_cap=>2 to proceed, or narrow criteria first.
- t9_returned_count
+ t9_returned_count 
 -------------------
                  2
 (1 row)
@@ -276,7 +277,7 @@ SELECT COUNT(*) AS t9_all_still_draft
 FROM pgmnemo.agent_lesson
 WHERE role = 'tc_e_ms_cap'
   AND state = 'draft';
- t9_all_still_draft
+ t9_all_still_draft 
 --------------------
                   2
 (1 row)
