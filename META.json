@@ -10,8 +10,8 @@
     "provides": {
         "pgmnemo": {
             "abstract": "Single-plan multimodal agent memory for PostgreSQL \u2014 token-budget navigation, provenance-gated writes, outcome-learning",
-            "version": "0.9.3",
-            "file": "extension/pgmnemo--0.9.3.sql",
+            "version": "0.9.4",
+            "file": "extension/pgmnemo--0.9.4.sql",
             "docfile": "README.md"
         }
     },
