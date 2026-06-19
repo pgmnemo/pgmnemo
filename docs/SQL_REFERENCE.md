@@ -580,7 +580,7 @@ SELECT * FROM pgmnemo.mark_stale() WHERE would_deprecate;
 SELECT COUNT(*) FROM pgmnemo.mark_stale(p_dry_run=>FALSE, p_cap=>200)
 WHERE would_deprecate;
 
--- Agency policy (45d unused, confidence < 0.6, provenance kept):
+-- Typical settings (45d unused, confidence < 0.6, provenance kept):
 SELECT * FROM pgmnemo.mark_stale(
     p_unused_days         => 45,
     p_min_confidence_keep => 0.6,

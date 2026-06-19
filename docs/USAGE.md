@@ -1011,7 +1011,7 @@ The function returns ALL candidates (including safeguarded ones). Filter by
 ### Step 2: apply (after reviewing dry-run output)
 
 ```sql
--- Agency policy: 45-day window, keep high-confidence + provenance, cap at 200
+-- Conservative defaults: 45-day window, keep high-confidence + provenance, cap at 200
 SELECT COUNT(*) AS deprecated_count
 FROM pgmnemo.mark_stale(
     p_unused_days         => 45,
