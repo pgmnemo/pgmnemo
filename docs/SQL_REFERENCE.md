@@ -550,6 +550,7 @@ for the detection + recovery procedure.
 | `pgmnemo.disable_hybrid` | bool | `false` (v0.4.0+) | `true` / `false` | Opt out of hybrid routing. When `true`, `recall_lessons()` always uses vector-only path regardless of `query_text`. Use for adopters who need deterministic v0.3.x behaviour. |
 | `pgmnemo.graph_proximity_weight` | float | `0.2` | 0.0 – 0.5 | Weight on `mem_edge` graph-walk proximity term in `recall_hybrid()` scoring. Set to `0.0` for pure semantic recall (the reference bench setup). |
 | `pgmnemo.temporal_boost` | float | `1.0` (v0.5.0+) | 0.0 – 20.0 | Multiplier on the recency component. `effective_γ = recency_weight × temporal_boost`. Default `1.0` = unchanged behaviour from v0.4.1. H-06 optimal: `boost=10` with `recency_weight=0.05` → `effective_γ=0.5`. Helper: `SELECT pgmnemo.get_temporal_boost()`. |
+| `pgmnemo.confidence_boost_weight` | float | **`0.0`** (v0.9.2+, off by default) | 0.0 – 0.01 | Additive confidence boost in `recall_hybrid()` final score: `score += w × (confidence − 0.5)`. Zero-centered: confidence=0.5 gets no boost. Off by default — byte-identical to v0.9.1 without `SET`. Activate with `SET pgmnemo.confidence_boost_weight = '0.003'`. Recommended range: 0.001 – 0.005. |
 
 ### 3.2 Write/ingest GUCs (used by `pgmnemo.ingest()` and `recall_lessons()` filtering)
 
@@ -559,13 +560,27 @@ for the detection + recovery procedure.
 | `pgmnemo.include_unverified` | bool | `false` | `true` / `false` | Include ghost lessons (`verified_at IS NULL`) in `recall_lessons()` output. |
 | `pgmnemo.max_query_text_chars` | int | `2000` (v0.5.0+) | 0 – any | Maximum length of `query_text` in `recall_lessons()` and `lesson_text` in `ingest()`. Input exceeding the cap is silently truncated with a `RAISE NOTICE`. Set to `0` to disable the cap entirely. |
 
-### 3.3 Multi-tenant scoping (v0.2.1+)
+### 3.3 Outcome-learning GUCs (used by `reinforce()`, v0.9.3+)
+
+| GUC | Type | Default | Range | Description |
+|---|---|---|---|---|
+| `pgmnemo.reinforce_success_delta` | float | **`0.02`** (v0.9.3+; was `0.10` in v0.7.0–v0.9.2) | 0.001 – 0.5 | Confidence increment on `'success'` outcome. Applied as `confidence += delta` (clamped to 1.0). Base-rate-adjusted default: slow upward drift, one success is not sufficient evidence. |
+| `pgmnemo.reinforce_fail_delta` | float | **`0.12`** (v0.9.3+; was `0.15` in v0.7.0–v0.9.2) | 0.001 – 0.5 | Confidence decrement on `'failure'` outcome. Applied as `confidence -= delta` (clamped to 0.0). Asymmetric by design: failures are penalised faster than successes are rewarded. |
+
+Override per-session or at DB/role level:
+
+```sql
+SET pgmnemo.reinforce_success_delta = '0.05';  -- more aggressive success reward
+SET pgmnemo.reinforce_fail_delta    = '0.08';  -- lighter failure penalty
+```
+
+### 3.4 Multi-tenant scoping (v0.2.1+)
 
 | GUC | Type | Default | Description |
 |---|---|---|---|
 | `pgmnemo.tenant_id` | text | `''` (empty = service-account bypass; all rows visible) | RLS scoping key. Non-empty restricts `agent_lesson` to rows where `project_id::text = current_setting('pgmnemo.tenant_id')`. |
 
-### 3.4 Override patterns
+### 3.5 Override patterns
 
 ```sql
 -- Session-scope (this connection only):
@@ -585,7 +600,7 @@ SELECT current_setting('pgmnemo.recency_weight', TRUE);
 SELECT name, setting, sourcefile FROM pg_file_settings WHERE name LIKE 'pgmnemo.%';
 ```
 
-### 3.5 Default-change history (operator notes)
+### 3.6 Default-change history (operator notes)
 
 | Version | GUC | Old → New | Reason |
 |---|---|---|---|
@@ -595,6 +610,9 @@ SELECT name, setting, sourcefile FROM pg_file_settings WHERE name LIKE 'pgmnemo.
 | v0.4.0 | `pgmnemo.disable_hybrid` | (new GUC, default FALSE) | Hybrid retrieval became default; this is the opt-out switch |
 | v0.5.0 | `pgmnemo.temporal_boost` | (new GUC, default 1.0) | H-06: tunable recency multiplier; default 1.0 = no change from v0.4.1 behaviour |
 | v0.5.0 | `pgmnemo.max_query_text_chars` | (new GUC, default 2000) | R5: input-length guard for ingest() and recall query_text; 0 = disabled |
+| v0.9.2 | `pgmnemo.confidence_boost_weight` | (new GUC, default 0.0 = off) | I1: opt-in confidence-weighted ranking; off by default, byte-identical to v0.9.1 without SET |
+| v0.9.3 | `pgmnemo.reinforce_success_delta` | `0.10` → `0.02` | D1: base-rate-adjusted default; old value caused confidence saturation at ceiling |
+| v0.9.3 | `pgmnemo.reinforce_fail_delta` | `0.15` → `0.12` | D1: base-rate-adjusted default; asymmetric: failures penalised faster than successes rewarded |
 
 Adopters who set GUCs via `ALTER SYSTEM` keep their values across version upgrades.
 Only the **function default fallback** changes when we ship a new default. To

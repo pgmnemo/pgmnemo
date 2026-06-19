@@ -764,8 +764,8 @@ SELECT pgmnemo.reinforce(
     p_lesson_id := 42,
     p_outcome   := 'success'   -- 'success' | 'failure' | 'neutral'
 );
--- 'success' → confidence += 0.10 (clamped 1.0); increments success_count
--- 'failure' → confidence -= 0.15 (clamped 0.0); increments fail_count
+-- 'success' → confidence += 0.02 (clamped 1.0); increments success_count
+-- 'failure' → confidence -= 0.12 (clamped 0.0); increments fail_count
 -- 'neutral' → no-op; returns current confidence
 
 -- Batch (v0.7.1) — returns count of rows updated
@@ -775,6 +775,16 @@ SELECT pgmnemo.reinforce(
 );
 -- Missing IDs skipped silently. Unknown outcome string RAISES EXCEPTION.
 ```
+
+**Deltas are GUC-configurable (v0.9.3+).** Default `+0.02` / `−0.12` are base-rate-adjusted
+(slow reward, faster penalty). Override per-session or at DB/role level:
+
+```sql
+SET pgmnemo.reinforce_success_delta = '0.05';
+SET pgmnemo.reinforce_fail_delta    = '0.08';
+```
+
+Full reference: [`docs/SQL_REFERENCE.md §3.3`](SQL_REFERENCE.md#33-outcome-learning-gucs-used-by-reinforce-v093).
 
 **Outcome string values are exact:** `'success'`, `'failure'`, `'neutral'`.
 

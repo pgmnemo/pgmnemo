@@ -54,7 +54,7 @@ your workload has a different base success rate.
 
 ---
 
-## [0.9.2] — 2026-06-17
+## [0.9.2] — 2026-06-17 *(no separate tag — shipped as part of v0.9.3)*
 
 ### Theme
 
