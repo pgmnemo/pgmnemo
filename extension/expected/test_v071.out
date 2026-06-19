@@ -210,7 +210,7 @@ BEGIN
     END IF;
 END;
 $$;
-NOTICE:  T6a PASS: batch success 0.95+0.10 clamped to 1.0
+NOTICE:  T6a PASS: batch success 0.99+delta clamped to 1.0
 -- =============================================================================
 -- T6b: MINOR-2 — batch confidence lower clamp: 0.10 + failure → 0.0
 -- =============================================================================

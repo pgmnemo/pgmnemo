@@ -16,11 +16,13 @@ NOTICE:  version "0.9.3" of extension "pgmnemo" is already installed
 -- Setup: three lessons with identical text but different confidence.
 -- Text-only path avoids needing real embeddings.
 -- =============================================================================
-INSERT INTO pgmnemo.agent_lesson (role, topic, lesson_text, confidence)
+-- Distinct commit_sha values give each row a unique content_hash (MD5(role|topic|commit_sha))
+-- so the bitemporality trigger does not chain-close these rows.  All share the query terms.
+INSERT INTO pgmnemo.agent_lesson (role, topic, lesson_text, confidence, commit_sha)
 VALUES
-    ('tc_i1', 'boost_test', 'confidence boost guc integration test xylophone zebra alpha bravo charlie delta echo', 0.9),
-    ('tc_i1', 'boost_test', 'confidence boost guc integration test xylophone zebra alpha bravo charlie delta echo', 0.1),
-    ('tc_i1', 'boost_test', 'confidence boost guc integration test xylophone zebra alpha bravo charlie delta echo', 0.5);
+    ('tc_i1', 'boost_test', 'confidence boost guc integration test xylophone zebra alpha bravo charlie', 0.9, 'test-sha-high'),
+    ('tc_i1', 'boost_test', 'confidence boost guc integration test xylophone zebra alpha bravo charlie', 0.1, 'test-sha-low'),
+    ('tc_i1', 'boost_test', 'confidence boost guc integration test xylophone zebra alpha bravo charlie', 0.5, 'test-sha-mid');
 -- =============================================================================
 -- T1: GUC default — unset returns empty string (function defaults to 0.0)
 -- =============================================================================
@@ -46,7 +48,8 @@ FROM pgmnemo.recall_hybrid(
 NOTICE:  pgmnemo: query_embedding IS NULL -- falling back to text-only recall; no semantic similarity
  top_is_high_confidence 
 ------------------------
-(0 rows)
+ t
+(1 row)
 
 -- T2b: bottom result (of 3) has confidence 0.1
 SELECT (s.confidence = 0.1) AS bottom_is_low_confidence
@@ -60,7 +63,8 @@ LIMIT 1;
 NOTICE:  pgmnemo: query_embedding IS NULL -- falling back to text-only recall; no semantic similarity
  bottom_is_low_confidence 
 --------------------------
-(0 rows)
+ t
+(1 row)
 
 RESET pgmnemo.confidence_boost_weight;
 -- =============================================================================
@@ -90,7 +94,8 @@ NOTICE:  pgmnemo: query_embedding IS NULL -- falling back to text-only recall; n
     FROM _t3_off a, _t3_on b;
  coldstart_score_identical 
 ---------------------------
-(0 rows)
+ t
+(1 row)
 
     DROP TABLE _t3_off;
     DROP TABLE _t3_on;
@@ -120,7 +125,7 @@ NOTICE:  pgmnemo: query_embedding IS NULL -- falling back to text-only recall; n
     JOIN _t4_zero b ON a.confidence = b.confidence;
  flag_off_scores_identical 
 ---------------------------
- 
+ t
 (1 row)
 
     DROP TABLE _t4_unset;
@@ -151,7 +156,7 @@ NOTICE:  pgmnemo: query_embedding IS NULL -- falling back to text-only recall; n
     FROM _t5_off a, _t5_on b;
  boost_materially_increases_spread 
 -----------------------------------
- 
+ t
 (1 row)
 
     DROP TABLE _t5_off;

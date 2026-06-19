@@ -19,11 +19,13 @@ ALTER EXTENSION pgmnemo UPDATE TO '0.9.3';
 -- Text-only path avoids needing real embeddings.
 -- =============================================================================
 
-INSERT INTO pgmnemo.agent_lesson (role, topic, lesson_text, confidence)
+-- Distinct commit_sha values give each row a unique content_hash (MD5(role|topic|commit_sha))
+-- so the bitemporality trigger does not chain-close these rows.  All share the query terms.
+INSERT INTO pgmnemo.agent_lesson (role, topic, lesson_text, confidence, commit_sha)
 VALUES
-    ('tc_i1', 'boost_test', 'confidence boost guc integration test xylophone zebra alpha bravo charlie delta echo', 0.9),
-    ('tc_i1', 'boost_test', 'confidence boost guc integration test xylophone zebra alpha bravo charlie delta echo', 0.1),
-    ('tc_i1', 'boost_test', 'confidence boost guc integration test xylophone zebra alpha bravo charlie delta echo', 0.5);
+    ('tc_i1', 'boost_test', 'confidence boost guc integration test xylophone zebra alpha bravo charlie', 0.9, 'test-sha-high'),
+    ('tc_i1', 'boost_test', 'confidence boost guc integration test xylophone zebra alpha bravo charlie', 0.1, 'test-sha-low'),
+    ('tc_i1', 'boost_test', 'confidence boost guc integration test xylophone zebra alpha bravo charlie', 0.5, 'test-sha-mid');
 
 -- =============================================================================
 -- T1: GUC default — unset returns empty string (function defaults to 0.0)

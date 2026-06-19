@@ -12,7 +12,7 @@
 --   T5b: MINOR-2 batch reinforce() all-missing → 0, no exception
 --   T5c: MINOR-2 batch reinforce() empty array → 0
 --   T5d: MINOR-2 batch reinforce() unknown outcome → RAISE EXCEPTION
---   T6a: MINOR-2 batch confidence upper clamp: 0.95 + success → 1.0
+--   T6a: MINOR-2 batch confidence upper clamp: 0.99 + success → 1.0
 --   T6b: MINOR-2 batch confidence lower clamp: 0.10 + failure → 0.0
 --   T7:  MINOR-3 graph_proximity dormancy note in recall_hybrid COMMENT
 --
@@ -163,8 +163,9 @@ END;
 $$;
 
 -- =============================================================================
--- T6a: MINOR-2 — batch confidence upper clamp: 0.95 + success → 1.0
+-- T6a: MINOR-2 — batch confidence upper clamp: 0.99 + success → 1.0
 --      Uses DO block so reinforce() writes are visible in the same transaction.
+--      Starting value 0.99 so that even the small default +0.02 delta triggers the clamp.
 -- =============================================================================
 
 DO $$
@@ -172,7 +173,7 @@ DECLARE _id BIGINT; _conf REAL;
 BEGIN
     INSERT INTO pgmnemo.agent_lesson (role, topic, lesson_text, confidence)
     VALUES ('tc_v071', 'batch_clamp_high',
-            'batch reinforce upper boundary clamp test lesson epsilon text', 0.95)
+            'batch reinforce upper boundary clamp test lesson epsilon text', 0.99)
     RETURNING id INTO _id;
 
     PERFORM pgmnemo.reinforce(ARRAY[_id]::BIGINT[], 'success');
@@ -180,7 +181,7 @@ BEGIN
     SELECT confidence INTO _conf FROM pgmnemo.agent_lesson WHERE id = _id;
 
     IF _conf = 1.0 THEN
-        RAISE NOTICE 'T6a PASS: batch success 0.95+0.10 clamped to 1.0';
+        RAISE NOTICE 'T6a PASS: batch success 0.99+delta clamped to 1.0';
     ELSE
         RAISE EXCEPTION 'T6a FAIL: expected 1.0, got %', _conf;
     END IF;
