@@ -3151,7 +3151,7 @@ COMMENT ON FUNCTION pgmnemo.reinforce(BIGINT, TEXT) IS
     'neutral: no-op -- returns current confidence without any write. '
     'Unknown outcome string: RAISE EXCEPTION. '
     'Row-locked (SELECT ... FOR UPDATE) for concurrent-safe update on hot lessons. '
-    'Defaults base-rate-adjusted for 83.5% success workload (OL-260605): r_pb=+0.107..0.124.'
+    'Defaults base-rate-adjusted for 83.5% success workload.';
 
 -- =============================================================================
 -- B2) pgmnemo.reinforce(BIGINT[], TEXT) — batch form (v0.9.3/D1, was v0.7.1)

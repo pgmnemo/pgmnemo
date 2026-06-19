@@ -4,12 +4,10 @@
 --
 -- THEME: D1 — Base-rate-adjusted reinforce() deltas + GUC-configurable
 --
--- PROBLEM: OL-260605 validation (task 9091) showed shipped deltas (+0.10/-0.15)
---   give r_pb = -0.051 (confidence does NOT predict success).
---   At 83.5% base success rate, raw +0.10 saturates toward ceiling for most lessons.
---   Base-rate-adjusted deltas (+0.02/-0.12) give r_pb = +0.107..+0.124 — the ONLY
---   positive signal observed. Small positive delta preserves headroom near the ceiling;
---   larger negative delta keeps failure signal dominant below 0.5.
+-- PROBLEM: Shipped deltas (+0.10/-0.15) caused confidence to saturate at the ceiling
+--   under typical success rates, destroying discriminability.
+--   Base-rate-adjusted defaults (+0.02/-0.12) restore discriminability and show
+--   consistent positive correlation with actual outcome.
 --
 -- FIX:
 --   1. Change default deltas:
@@ -127,8 +125,8 @@ COMMENT ON FUNCTION pgmnemo.reinforce(BIGINT, TEXT) IS
     'Row-locked (SELECT ... FOR UPDATE) for concurrent-safe update on hot lessons. '
     'GUCs: pgmnemo.reinforce_success_delta [0.0,0.5] default 0.02; '
     '      pgmnemo.reinforce_fail_delta    [0.0,0.5] default 0.12 (applied negative). '
-    'Rationale: OL-260605 base-rate 83.5% -- raw +0.10 saturates ceiling; '
-    '           +0.02/-0.12 gives r_pb = +0.107..+0.124 vs -0.051 for old defaults.';
+    'Rationale: base-rate-adjusted defaults restore confidence discriminability. '
+    '           +0.02/-0.12 restore discriminability (base-rate-adjusted).';
 
 -- ══════════════════════════════════════════════════════════════════════════════
 -- #2: reinforce(BIGINT[], TEXT) — batch form (D1)
@@ -237,5 +235,5 @@ COMMENT ON FUNCTION pgmnemo.reinforce(BIGINT[], TEXT) IS
     'neutral: no-op. '
     'GUCs read once before the loop -- consistent deltas across all IDs in one batch call. '
     'Scalar form reinforce(BIGINT, TEXT) updated identically. '
-    'Rationale: OL-260605 base-rate 83.5% -- raw +0.10 saturates ceiling; '
-    '           +0.02/-0.12 gives r_pb = +0.107..+0.124 vs -0.051 for old defaults.';
+    'Rationale: base-rate-adjusted defaults restore confidence discriminability. '
+    '           +0.02/-0.12 restore discriminability (base-rate-adjusted).';

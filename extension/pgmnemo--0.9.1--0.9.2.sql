@@ -19,9 +19,9 @@
 -- GUC: pgmnemo.confidence_boost_weight
 --   DEFAULT 0.0 (OFF — byte-identical to 0.9.1 behavior)
 --   RANGE: [0.0, 0.01]  (clamped)
---   RECOMMENDED ACTIVATION: 0.003 (OL-260605 §1.3)
+--   RECOMMENDED ACTIVATION: 0.003
 --   A/B-ready: SET pgmnemo.confidence_boost_weight = '0.003' enables the boost.
---   Activation gate: pending validation task 9091 + positive A/B result.
+--   Activation gate: pending positive A/B validation.
 --
 -- ITEMS:
 --   #1  recall_hybrid(): add _conf_boost_w variable + GUC read + additive term
@@ -358,9 +358,9 @@ $func$;
 COMMENT ON FUNCTION pgmnemo.recall_hybrid(vector, TEXT, INT, TEXT, INT, DOUBLE PRECISION, DOUBLE PRECISION, INT) IS
     'v0.9.2 — I1: confidence-weighted ranking (additive, zero-centered). '
     'GUC pgmnemo.confidence_boost_weight (default 0.0 = OFF, range [0.0, 0.01]). '
-    'When ON: final_score += w * (confidence - 0.5). Recommended w=0.003 (OL-260605 §1.3). '
+    'When ON: final_score += w * (confidence - 0.5). Recommended w=0.003. '
     'Cold-start (confidence=0.5) gets zero boost. High-vs-low delta at w=0.003 ≈ 0.0024 ≈ 8-15 RRF positions. '
-    'Activation gate: pending validation (task 9091) + positive A/B result. '
+    'Activation gate: pending positive A/B validation. '
     'v0.8.2 — F2: NOTICE when 0 rows returned and ghost lessons exist in scope. '
     'Two-phase indexed retrieval: HNSW (pgvector) + GIN (BM25) → RRF fusion → graph proximity boost. '
     'match_confidence: vec_score (cosine similarity, [0,1]). On text-only path (NULL embedding) = 0.0. '
@@ -370,10 +370,10 @@ COMMENT ON FUNCTION pgmnemo.recall_hybrid(vector, TEXT, INT, TEXT, INT, DOUBLE P
 -- #2: reinforce() — base-rate-adjusted deltas + GUC-configurable (D1)
 -- ══════════════════════════════════════════════════════════════════════════════
 --
--- PROBLEM: Shipped deltas (+0.10/-0.15) give r_pb=-0.051 (OL-260605 task 9091).
+-- PROBLEM: Shipped deltas (+0.10/-0.15) caused confidence to saturate, destroying discriminability.
 --   At 83.5% base success rate, +0.10 saturates to ceiling — confidence always
 --   drifts toward 1.0 and fails to differentiate.
---   Base-rate-adjusted deltas (+0.02/-0.12) give r_pb=+0.107..0.124 (the ONLY
+--   Base-rate-adjusted deltas (+0.02/-0.12) restore discriminability; consistent
 --   positive signal observed).
 --
 -- FIX: Change reinforce() defaults to +0.02/-0.12.
@@ -466,7 +466,7 @@ COMMENT ON FUNCTION pgmnemo.reinforce(BIGINT, TEXT) IS
     'neutral: no-op — returns current confidence without any write. '
     'Unknown outcome string: RAISE EXCEPTION. '
     'Row-locked (SELECT ... FOR UPDATE) for concurrent-safe update on hot lessons. '
-    'Defaults base-rate-adjusted for 83.5% success workload (OL-260605): r_pb=+0.107..0.124.';
+    'Defaults base-rate-adjusted for 83.5% success workload.';
 
 -- Batch reinforce(): GUC-aware delta reads
 CREATE OR REPLACE FUNCTION pgmnemo.reinforce(
@@ -564,4 +564,4 @@ COMMENT ON COLUMN pgmnemo.agent_lesson.confidence IS
     'Updated by pgmnemo.reinforce(): success +pgmnemo.reinforce_success_delta (default 0.02), '
     'failure -pgmnemo.reinforce_fail_delta (default 0.12), neutral no-op. '
     'Clamped to [0.0, 1.0] by CHECK constraint + reinforce() logic. '
-    'Defaults base-rate-adjusted (OL-260605): legacy +0.10/-0.15 gave r_pb=-0.051 at 83.5% base success.';
+    'Defaults base-rate-adjusted for 83.5% base success rate.';
