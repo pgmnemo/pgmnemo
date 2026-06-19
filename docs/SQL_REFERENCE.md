@@ -533,6 +533,69 @@ for the detection + recovery procedure.
 
 ---
 
+### 2.9 `pgmnemo.mark_stale(...)` (v0.9.5+)
+
+Usage-based corpus curation primitive. Identifies lessons that have not been
+recalled within a configurable window and optionally deprecates them.
+
+```sql
+pgmnemo.mark_stale(
+    p_unused_days         INT     DEFAULT 45,     -- stale if not recalled in this many days
+    p_min_confidence_keep REAL    DEFAULT 0.6,    -- safeguard: keep confidence >= this
+    p_keep_provenance     BOOLEAN DEFAULT TRUE,   -- safeguard: keep commit_sha / artifact_hash
+    p_dry_run             BOOLEAN DEFAULT TRUE,   -- TRUE = preview only, no state change
+    p_cap                 INT     DEFAULT 500     -- refuse to act if candidates > cap
+)
+RETURNS TABLE (
+    lesson_id        BIGINT,
+    role             TEXT,
+    topic            TEXT,
+    last_recalled_at TIMESTAMPTZ,
+    confidence       REAL,
+    would_deprecate  BOOLEAN        -- FALSE = safeguard protects this lesson
+)
+```
+
+**Candidate rule:** a lesson is a candidate when:
+- `last_recalled_at < NOW() - p_unused_days * INTERVAL '1 day'`, OR
+- `last_recalled_at IS NULL AND created_at < NOW() - p_unused_days * INTERVAL '1 day'`
+
+**Safeguards** — lessons matching any of these are returned but `would_deprecate = FALSE`
+and are never touched even in non-dry-run mode:
+- `confidence >= p_min_confidence_keep` (default 0.6)
+- `importance = 5`
+- `p_keep_provenance = TRUE` and `commit_sha IS NOT NULL` or `artifact_hash IS NOT NULL`
+
+**Cap guard:** if `p_dry_run = FALSE` and candidate count exceeds `p_cap`, a `RAISE NOTICE`
+is emitted, the full candidate list is returned, but **no lessons are deprecated**. The caller
+must explicitly raise `p_cap` to proceed.
+
+**Typical usage:**
+
+```sql
+-- Always preview first (default dry_run=TRUE):
+SELECT * FROM pgmnemo.mark_stale() WHERE would_deprecate;
+
+-- Review, then apply with explicit cap:
+SELECT COUNT(*) FROM pgmnemo.mark_stale(p_dry_run=>FALSE, p_cap=>200)
+WHERE would_deprecate;
+
+-- Agency policy (45d unused, confidence < 0.6, provenance kept):
+SELECT * FROM pgmnemo.mark_stale(
+    p_unused_days         => 45,
+    p_min_confidence_keep => 0.6,
+    p_keep_provenance     => TRUE,
+    p_dry_run             => TRUE
+) WHERE would_deprecate;
+```
+
+> ⚠️ **Never run `p_dry_run=>FALSE` without reviewing the candidate set first.**
+> The deprecation is a direct `UPDATE state = 'deprecated'` that bypasses the normal
+> state-machine guard — it is intentional (mark_stale covers draft/candidate/validated/canonical
+> equally) but irreversible without a manual `UPDATE`.
+
+---
+
 ## 3. GUCs
 
 > **Reading GUCs:** `SHOW pgmnemo.*` will fail because pgmnemo is a pure-SQL extension
