@@ -6842,6 +6842,7 @@ RETURNS TABLE (
 LANGUAGE plpgsql
 VOLATILE
 AS $$
+#variable_conflict use_column
 BEGIN
     IF ids IS NULL OR array_length(ids, 1) IS NULL THEN
         RETURN;
