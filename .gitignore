@@ -63,7 +63,7 @@ design/
 index-*.html.bak
 .claude/
 
-# Site source — lives in Agency-private (spec/v2/pgmnemo/site/), not here
+# Site source (managed separately, not in this repo)
 index.html
 docs/RESEARCH_BRIEF_v0.7.md
 site-internal/
