@@ -7035,6 +7035,7 @@ RETURNS TABLE(
 )
 LANGUAGE plpgsql
 AS $func$
+#variable_conflict use_column
 DECLARE
     _candidate_count INT;
     _cutoff          TIMESTAMPTZ;
