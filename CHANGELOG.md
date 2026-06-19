@@ -15,6 +15,76 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.9.6] — 2026-06-19
+
+### Theme
+
+**R11/R12/R13 — Versioned skill items, DAG-scoped recall, migration ingest log.**
+Three community requirements addressed in one schema release: content-type classification
+for non-free-form lessons (`item_kind`), version tracking for evolving skills
+(`version_n`, `patch_count`), workflow-origin tagging and exclusion (`source_dag_id`,
+`exclude_dag_id`), and a migration helper table (`memory_ingest_log`) for operators
+moving from legacy memory schemas.
+
+### Added
+
+- **`item_kind TEXT NOT NULL DEFAULT 'note'`** on `pgmnemo.agent_lesson`.
+  CHECK constraint: `('note','skill_md','template','script','reference','config','spec')`.
+  Classifies lessons by content type; `'note'` is the default for free-form lessons.
+- **`version_n INT NOT NULL DEFAULT 1`** on `pgmnemo.agent_lesson`.
+  Monotonically increasing version counter. Increment when `lesson_text` is substantially
+  revised (e.g. after a major update to a `skill_md` document).
+- **`patch_count INT NOT NULL DEFAULT 0`** on `pgmnemo.agent_lesson`.
+  Minor patch edit counter. Reset to 0 on each `version_n` increment.
+- **`source_dag_id TEXT NULL`** on `pgmnemo.agent_lesson`.
+  Opaque identifier for the workflow/pipeline run that produced the lesson.
+  NULL = unknown origin (manually ingested). Sparse index
+  `ix_pgmnemo_agent_lesson_source_dag_id` covers non-NULL rows.
+- **`exclude_dag_id TEXT DEFAULT NULL`** parameter on `recall_hybrid()` and
+  `recall_lessons()`. When set, suppresses lessons whose `source_dag_id` matches the
+  given value (`IS DISTINCT FROM` semantics: `NULL source_dag_id` rows always pass).
+  Allows a workflow to exclude its own output from recall during the same run.
+- **`pgmnemo.memory_ingest_log`** table. Tracks migration batches from legacy memory
+  tables into `pgmnemo.agent_lesson`. Columns: `id BIGSERIAL PK`, `source_origin TEXT`,
+  `min_id BIGINT`, `max_id BIGINT`, `ingested_at TIMESTAMPTZ DEFAULT NOW()`,
+  `retired_at TIMESTAMPTZ NULL`. Operators drop it once the cutover window closes.
+- **`extension/sql/versioned_items.sql`** — 5-topic pg_regress test file covering
+  column defaults, CHECK enforcement, sparse index, `memory_ingest_log` CRUD, and
+  `exclude_dag_id` filter semantics.
+
+### Changed
+
+- **`recall_hybrid()`**: old 8-arg overload dropped; new 9-arg form adds `exclude_dag_id TEXT DEFAULT NULL`.
+  Positional callers unaffected (DEFAULT NULL).
+- **`recall_lessons()`**: old 6-arg overload dropped; new 7-arg form adds `exclude_dag_id TEXT DEFAULT NULL`.
+  Positional callers unaffected (DEFAULT NULL).
+- **`docs/SQL_REFERENCE.md`**: `agent_lesson` column table updated with four new columns;
+  new `§1.1 pgmnemo.memory_ingest_log` table entry; `recall_hybrid()` and `recall_lessons()`
+  signatures updated with `exclude_dag_id` parameter.
+- **`docs/MIGRATION.md`**: new section "Legacy table migration via `memory_ingest_log`"
+  with a worked example using `INSERT INTO pgmnemo.agent_lesson ... SELECT ...`.
+
+### Breaking changes
+
+`recall_hybrid()` and `recall_lessons()` drop their old fixed-arity overloads and
+replace them with new overloads that add `exclude_dag_id TEXT DEFAULT NULL` as the
+last parameter. **Positional callers are unaffected** — the new parameter defaults to
+NULL. Callers that hold explicit `GRANT EXECUTE` on the old fixed-arity type signatures
+(`vector, TEXT, INT, TEXT, INT, DOUBLE PRECISION, DOUBLE PRECISION, INT` and
+`vector, INT, TEXT, INT, TEXT, TIMESTAMPTZ`) must re-apply grants to the new signatures.
+
+### Upgrade
+
+```sql
+ALTER EXTENSION pgmnemo UPDATE TO '0.9.6';
+```
+
+Adds four columns to `pgmnemo.agent_lesson`, one sparse index, and one new table.
+Non-destructive; all existing rows receive default values. Estimated duration: <1 s on
+any corpus size (no table rewrite).
+
+---
+
 ## [0.9.5] — 2026-06-19
 
 ### Theme

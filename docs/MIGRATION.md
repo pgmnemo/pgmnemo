@@ -5,6 +5,106 @@ This guide covers version-to-version upgrade paths and migration from an externa
 
 ---
 
+## 0.9.5 → 0.9.6
+
+**Release date:** 2026-06-19 | **SQL changes:** Yes
+
+### Upgrade
+
+```sql
+ALTER EXTENSION pgmnemo UPDATE TO '0.9.6';
+```
+
+Adds four columns to `pgmnemo.agent_lesson` (`item_kind`, `version_n`, `patch_count`,
+`source_dag_id`), one sparse index (`ix_pgmnemo_agent_lesson_source_dag_id`), and one
+new table (`pgmnemo.memory_ingest_log`). No table rewrite; all existing rows receive
+default values. Estimated duration: &lt;1 s on any corpus size.
+
+### Breaking changes
+
+`recall_hybrid()` and `recall_lessons()` drop their old fixed-arity overloads and
+replace them with new overloads that add `exclude_dag_id TEXT DEFAULT NULL` as the
+last parameter. Positional callers are unaffected. Callers with explicit `GRANT EXECUTE`
+on the old type signatures must re-apply grants after upgrade:
+
+```sql
+-- recall_hybrid: old (8 args) → new (9 args)
+GRANT EXECUTE ON FUNCTION pgmnemo.recall_hybrid(
+    vector, TEXT, INT, TEXT, INT, DOUBLE PRECISION, DOUBLE PRECISION, INT, TEXT
+) TO <your_role>;
+
+-- recall_lessons: old (6 args) → new (7 args)
+GRANT EXECUTE ON FUNCTION pgmnemo.recall_lessons(
+    vector, INT, TEXT, INT, TEXT, TIMESTAMPTZ, TEXT
+) TO <your_role>;
+```
+
+### Legacy table migration via `memory_ingest_log`
+
+`pgmnemo.memory_ingest_log` provides a lightweight audit trail when migrating lessons
+from a legacy memory schema (e.g. `mem.item`) into `pgmnemo.agent_lesson`. Each row
+records one batch migration: origin table, id range, and timestamps.
+
+#### Worked example
+
+Suppose you have a legacy table `mem.item(id BIGSERIAL, role TEXT, body TEXT, created_at TIMESTAMPTZ)`.
+
+**Step 1 — Upgrade the extension:**
+
+```sql
+ALTER EXTENSION pgmnemo UPDATE TO '0.9.6';
+```
+
+**Step 2 — Migrate a batch and log it:**
+
+```sql
+BEGIN;
+
+-- Identify the id range for this batch
+WITH batch AS (
+    SELECT MIN(id) AS min_id, MAX(id) AS max_id
+    FROM mem.item
+    WHERE id BETWEEN 1 AND 10000
+)
+-- Insert into pgmnemo
+INSERT INTO pgmnemo.agent_lesson (role, project_id, topic, lesson_text, item_kind, commit_sha)
+SELECT
+    mi.role,
+    0,                           -- project_id: use your tenant id
+    'legacy-import',
+    mi.body,
+    'note',                      -- item_kind: all legacy rows are free-form notes
+    NULL                         -- no provenance SHA available for legacy rows
+FROM mem.item mi
+WHERE mi.id BETWEEN 1 AND 10000;
+
+-- Log the batch
+INSERT INTO pgmnemo.memory_ingest_log (source_origin, min_id, max_id)
+VALUES ('mem.item', 1, 10000);
+
+COMMIT;
+```
+
+**Step 3 — Mark the log row as retired when the source table is decommissioned:**
+
+```sql
+UPDATE pgmnemo.memory_ingest_log
+SET retired_at = NOW()
+WHERE source_origin = 'mem.item';
+```
+
+**Step 4 — Drop the migration log table once all windows are closed:**
+
+```sql
+DROP TABLE pgmnemo.memory_ingest_log;
+```
+
+> **Tip:** Run step 2 in multiple batches (e.g. 10 000 rows each) to avoid long-running
+> transactions on large tables. Each batch gets its own `memory_ingest_log` row so you
+> can track progress incrementally.
+
+---
+
 ## 0.5.1 → 0.6.0
 
 **Release date:** 2026-05-22 (target) | **SQL changes:** Yes

@@ -1,6 +1,6 @@
 # pgmnemo SQL Reference
 
-**Version coverage:** v0.9.5 (current)  
+**Version coverage:** v0.9.6 (current)  
 **Status:** authoritative — function signatures here match `extension/pgmnemo--*.sql`.
 
 For usage patterns and worked examples see `USAGE.md`; for upgrade paths see
@@ -44,9 +44,32 @@ installs the `pgmnemo` schema and pulls `vector` (pgvector) and `pg_trgm`.
 | `t_valid_from` | TIMESTAMPTZ | bitemporality: start of validity period; NULL = no start constraint (v0.5.0) |
 | `t_valid_to` | TIMESTAMPTZ | bitemporality: end of validity period; NULL = currently valid (v0.5.0) |
 | `content_hash` | TEXT | SHA-256 of `lesson_text` — detects content drift across versions (v0.5.0) |
+| `last_recalled_at` | TIMESTAMPTZ | timestamp of the most recent recall; NULL = never recalled since v0.9.5 (v0.9.5) |
+| `recall_count` | BIGINT DEFAULT 0 | total number of recall-function calls that returned this lesson (v0.9.5) |
+| `item_kind` | TEXT DEFAULT `'note'` | content category: `note`, `skill_md`, `template`, `script`, `reference`, `config`, `spec`. CHECK-constrained to this set. (v0.9.6) |
+| `version_n` | INT DEFAULT 1 | monotonically increasing version counter; increment on substantial revision (v0.9.6) |
+| `patch_count` | INT DEFAULT 0 | minor patch edit counter; reset to 0 on each `version_n` increment (v0.9.6) |
+| `source_dag_id` | TEXT NULL | opaque identifier of the workflow run that produced this lesson; NULL = unknown/manual origin. Covered by sparse index `ix_pgmnemo_agent_lesson_source_dag_id WHERE source_dag_id IS NOT NULL`. (v0.9.6) |
 
 Indexes: HNSW on `embedding` (cosine_ops), B-tree on `(role, project_id)`,
-GIN on `lesson_tsv` (v0.2.2+), GIN on `metadata`.
+GIN on `lesson_tsv` (v0.2.2+), GIN on `metadata`,
+partial B-tree on `(last_recalled_at ASC NULLS FIRST, created_at ASC) WHERE is_active` (v0.9.5),
+partial B-tree on `source_dag_id WHERE source_dag_id IS NOT NULL` (v0.9.6).
+
+#### `pgmnemo.memory_ingest_log` (v0.9.6)
+
+Migration batch tracking table. Tracks ingestion runs from legacy memory tables into
+`pgmnemo.agent_lesson`. One row per batch. Operators may `DROP` this table once the
+cutover window is complete and no further legacy batches are expected.
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | BIGSERIAL PRIMARY KEY | |
+| `source_origin` | TEXT NOT NULL | identifies the legacy source, e.g. `'mem.item'` or `'legacy.agent_memory'` |
+| `min_id` | BIGINT | lowest source-table id ingested in this batch (inclusive); NULL = unknown |
+| `max_id` | BIGINT | highest source-table id ingested in this batch (inclusive); NULL = unknown |
+| `ingested_at` | TIMESTAMPTZ DEFAULT NOW() | when the batch completed |
+| `retired_at` | TIMESTAMPTZ NULL | when the source was decommissioned; NULL = still active |
 
 #### `pgmnemo.mem_edge`
 
@@ -301,7 +324,8 @@ pgmnemo.recall_lessons(
     role_filter       TEXT         DEFAULT NULL,
     project_id_filter INT          DEFAULT NULL,
     query_text        TEXT         DEFAULT NULL,
-    as_of_ts          TIMESTAMPTZ  DEFAULT NULL  -- v0.6.0: point-in-time scope
+    as_of_ts          TIMESTAMPTZ  DEFAULT NULL, -- v0.6.0: point-in-time scope
+    exclude_dag_id    TEXT         DEFAULT NULL  -- v0.9.6: suppress lessons from this workflow run
 ) RETURNS TABLE (
     lesson_id     BIGINT,
     score         DOUBLE PRECISION,
@@ -332,6 +356,7 @@ pgmnemo.recall_lessons(
 | `project_id_filter` | `INT` | `NULL` | Restrict to a tenant/project. NULL = all projects. |
 | `query_text` | `TEXT` | `NULL` | Text for BM25 hybrid path. Requires `query_embedding` to activate hybrid routing. |
 | `as_of_ts` | `TIMESTAMPTZ` | `NULL` | **(v0.6.0)** Point-in-time scope. When set, restricts candidates to lessons where `t_valid_from ≤ as_of_ts < t_valid_to`. NULL = current active lessons only. |
+| `exclude_dag_id` | `TEXT` | `NULL` | **(v0.9.6)** When set, suppresses lessons whose `source_dag_id` matches this value (`IS DISTINCT FROM` semantics: rows with `source_dag_id IS NULL` always pass). Forwarded to `recall_hybrid()` on the hybrid path. |
 
 **Scoring (hybrid path, Fix-A v0.6.0):**
 ```
@@ -383,7 +408,8 @@ pgmnemo.recall_hybrid(
     project_id_filter INT              DEFAULT NULL,
     vec_weight        DOUBLE PRECISION DEFAULT 0.4,
     bm25_weight       DOUBLE PRECISION DEFAULT 0.4,
-    rrf_k             INT              DEFAULT 60
+    rrf_k             INT              DEFAULT 60,
+    exclude_dag_id    TEXT             DEFAULT NULL   -- v0.9.6: suppress lessons from this workflow run
 ) RETURNS TABLE (
     lesson_id     BIGINT,
     score         DOUBLE PRECISION,   -- Fix-A (v0.6.0): normalized rrf_diag + auxiliaries
