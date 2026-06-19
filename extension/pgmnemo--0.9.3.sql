@@ -5663,7 +5663,7 @@ BEGIN
     rrf_ranked AS (
         SELECT *,
             COUNT(*) OVER ()                                              AS n_candidates,
-            ROW_NUMBER() OVER (ORDER BY raw_vec_score DESC NULLS LAST)   AS vec_rank,
+            ROW_NUMBER() OVER (ORDER BY raw_vec_score DESC NULLS LAST, id ASC) AS vec_rank,
             CASE WHEN raw_bm25_score > 0
                  THEN RANK() OVER (PARTITION BY (raw_bm25_score > 0)
                                    ORDER BY raw_bm25_score DESC NULLS LAST)
@@ -5781,6 +5781,7 @@ COMMENT ON FUNCTION pgmnemo.recall_hybrid(vector, TEXT, INT, TEXT, INT, DOUBLE P
     'Cold-start (confidence=0.5) gets zero boost. High-vs-low delta at w=0.003 ≈ 0.0024 ≈ 8-15 RRF positions. '
     'graph_proximity contributes only when mem_edge is populated; with no edges the graph term is 0. '
     'v0.8.2 — F2: NOTICE when 0 rows returned and ghost lessons exist in scope. '
+    'RRF (Reciprocal Rank Fusion, Cormack 2009): combines vector + BM25 ranks. '
     'Two-phase indexed retrieval: HNSW (pgvector) + GIN (BM25) → RRF fusion → graph proximity boost. '
     'match_confidence: vec_score (cosine similarity, [0,1]). On text-only path (NULL embedding) = 0.0. '
     'STABLE PARALLEL SAFE.';
