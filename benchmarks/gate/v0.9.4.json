@@ -1,0 +1,15 @@
+{
+    "version": "v0.9.4",
+    "date": "2026-06-19",
+    "pgmnemo_version": "0.9.4",
+    "gate_status": "PASS",
+    "gate_type": "analytical_carry_forward",
+    "scope": "Documentation-only release. No SQL changes. SQL_REFERENCE and USAGE updated to document three GUCs shipped in v0.9.2–v0.9.3.",
+    "justification": "No SQL, schema, or scoring changes. Identical extension SQL to v0.9.3. All recall paths, GUC behaviors, and test assertions unchanged.",
+    "schema_change": false,
+    "scoring_impact": "none",
+    "recall_ranking_impact": "zero",
+    "carry_forward_from": "v0.9.3",
+    "new_regress_tests": [],
+    "verification": "No new tests needed. All existing REGRESS tests carry forward from v0.9.3 (local installcheck verified)."
+}

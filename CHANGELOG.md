@@ -15,6 +15,33 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.9.4] — 2026-06-19
+
+### Theme
+
+**Documentation-only release.** No SQL changes. Covers three GUCs shipped in
+v0.9.2–v0.9.3 that were missing from `SQL_REFERENCE` and `USAGE`:
+`confidence_boost_weight`, `reinforce_success_delta`, `reinforce_fail_delta`.
+
+### Changed
+
+- **`docs/SQL_REFERENCE.md`**: added `confidence_boost_weight` to §3.1 Recall scoring GUCs;
+  new §3.3 Outcome-learning GUCs covering `reinforce_success_delta` and `reinforce_fail_delta`;
+  §3.6 default-change history updated with v0.9.2–v0.9.3 entries.
+- **`docs/USAGE.md`**: `reinforce()` section updated to reflect new default deltas
+  (+0.02/−0.12); GUC override example added.
+- **`CHANGELOG.md`**: `[0.9.2]` entry annotated — no separate git tag, shipped as part of v0.9.3.
+
+### Upgrade
+
+```sql
+ALTER EXTENSION pgmnemo UPDATE TO '0.9.4';
+```
+
+No-op — schema unchanged. Safe to run at any time.
+
+---
+
 ## [0.9.3] — 2026-06-17
 
 ### Theme
