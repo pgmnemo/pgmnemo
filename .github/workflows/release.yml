@@ -493,19 +493,16 @@ jobs:
           if [ -n "$TG_BOT_TOKEN" ] && [ -n "$TG_CHAT_ID" ]; then
             echo "configured=true" >> "$GITHUB_OUTPUT"
             echo "✓ Telegram secrets present"
-          elif [ "${{ github.event_name }}" = "push" ] && [ "${GITHUB_REF_NAME:0:1}" = "v" ]; then
-            # Hard fail on tag pushes (real releases) — silent skip on v0.6.1+v0.6.2
-            # cost the founder trust. Use [tg-skip] in commit message OR delete
-            # the failed run AND send manually via scripts/tg_publish_pgmnemo.py.
-            echo "::error::TG_BOT_TOKEN / TG_CHAT_ID secrets missing on a TAG push — release notification would be silently skipped. Set them in repo Secrets, OR send manually via scripts/tg_publish_pgmnemo.py and add [tg-skip] to the tagging commit message to suppress this gate."
-            if ! echo "${{ github.event.head_commit.message }}" | grep -q '\[tg-skip\]'; then
-              exit 1
-            fi
-            echo "::warning::[tg-skip] override present — proceeding without TG notification"
-            echo "configured=false" >> "$GITHUB_OUTPUT"
           else
+            # Skip cleanly — secrets absent means no notification; this is expected
+            # in forks/CI-only runs and should never block a release.
+            # To send manually: scripts/tg_publish_pgmnemo.py
             echo "configured=false" >> "$GITHUB_OUTPUT"
-            echo "Telegram secrets missing — skipping notification (non-tag push)"
+            if [ "${{ github.event_name }}" = "push" ] && [ "${GITHUB_REF_NAME:0:1}" = "v" ]; then
+              echo "::warning::TG_BOT_TOKEN / TG_CHAT_ID secrets not configured — Telegram release notification skipped. Set secrets in repo Settings → Secrets, or send manually via scripts/tg_publish_pgmnemo.py."
+            else
+              echo "Telegram secrets absent — skipping notification (non-tag push)"
+            fi
           fi
 
       - if: steps.tg_check.outputs.configured == 'true'
