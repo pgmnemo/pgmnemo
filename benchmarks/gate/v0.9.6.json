@@ -1,0 +1,17 @@
+{
+    "version": "v0.9.6",
+    "date": "2026-06-20",
+    "pgmnemo_version": "0.9.6",
+    "gate_status": "PASS",
+    "gate_type": "schema_extension_smoke",
+    "scope": "Versioned skill items (R11: item_kind/version_n/patch_count CHECK), DAG-scoped recall exclusion (R12: exclude_dag_id param on recall_hybrid), memory ingest audit log (R13: memory_ingest_log table). No change to RRF/BM25/HNSW scoring path.",
+    "justification": "recall_hybrid: new 9th parameter exclude_dag_id DEFAULT NULL — callers omitting it get byte-identical results to v0.9.5. Existing 8-param overload DROPped in upgrade script before new 9-param CREATE (no ambiguity). item_kind/version_n/patch_count are additive columns with DEFAULT values — no existing rows affected. memory_ingest_log is a new audit-only table with no effect on recall ranking. pg_regress versioned_items covers T1–T5.",
+    "schema_change": true,
+    "schema_change_detail": "ADD COLUMN IF NOT EXISTS item_kind TEXT CHECK (item_kind IN ('fact','procedure','reference','goal','lesson')) DEFAULT 'lesson'; ADD COLUMN IF NOT EXISTS version_n SMALLINT NOT NULL DEFAULT 1; ADD COLUMN IF NOT EXISTS patch_count INT NOT NULL DEFAULT 0; ADD COLUMN IF NOT EXISTS source_dag_id TEXT DEFAULT NULL; CREATE TABLE IF NOT EXISTS pgmnemo.memory_ingest_log (...); recall_hybrid: DROP old 8-param overload, CREATE 9-param with exclude_dag_id TEXT DEFAULT NULL.",
+    "scoring_impact": "none",
+    "recall_ranking_impact": "zero for all callers not passing exclude_dag_id; optional DAG-scope exclusion is a pure filter on pre-existing rows",
+    "carry_forward_from": "v0.9.5",
+    "new_regress_tests": ["versioned_items"],
+    "new_regress_test_count": 5,
+    "verification": "pg_regress versioned_items: T1–T5 pass. make installcheck REGRESS=versioned_items. CI installcheck green on commit 24d28fc."
+}
