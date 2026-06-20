@@ -1,6 +1,6 @@
 # pgmnemo SQL Reference
 
-**Version coverage:** v0.9.6 (current)  
+**Version coverage:** v0.10.0 (current)  
 **Status:** authoritative — function signatures here match `extension/pgmnemo--*.sql`.
 
 For usage patterns and worked examples see `USAGE.md`; for upgrade paths see
@@ -732,3 +732,138 @@ Policies use `DROP IF EXISTS` then `CREATE`; safe to re-apply.
 | v0.5.0 | `mem_edge.lesson_a_id` / `lesson_b_id` **renamed** to `source_id` / `target_id` | Use `pgmnemo.add_edge()` (§1.2) to avoid direct column references; or update INSERT statements |
 
 For all changes per release see `CHANGELOG.md`.
+
+---
+
+## 6. Scale + Latency SLO (v0.9.8+)
+
+This section documents the supported corpus-size envelope, function-selection
+guidance, and operator-observable latency targets. All figures assume PostgreSQL
+14–17, `pgvector >= 0.7.0`, HNSW index built with `m=16 ef_construction=64`
+(the extension default), and `pgmnemo.ef_search = 100` (GUC default).
+
+### 6.1 Corpus-size envelope
+
+| Corpus rows (N) | Supported? | Notes |
+|---|---|---|
+| < 1 000 | ✅ | Seq-scan path acceptable; HNSW provides no throughput benefit |
+| 1 k – 100 k | ✅ **sweet spot** | Default index params; `recall_fast` p99 < 15 ms |
+| 100 k – 1 M | ✅ | Monitor `pgmnemo.stats()` — `ef_search` tunable to trade recall vs. latency |
+| 1 M – 10 M | ✅ with tuning | Increase `m=32 ef_construction=128` at index-build time; partition by `project_id` recommended |
+| > 10 M | ⚠️ engineering required | Pre-filter sharding; contact maintainer before deployment |
+
+**Hard limit:** the HNSW index cannot exceed `max_wal_size` during build. For
+corpora > 5 M rows build with `maintenance_work_mem = '4GB'` and
+`max_parallel_maintenance_workers = 4`.
+
+### 6.2 Function selection: interactive vs. offline
+
+| Situation | Function | Why |
+|---|---|---|
+| Mid-task agent step, latency budget ≤ 50 ms | `recall_fast()` | HNSW-only; O(k log N) |
+| Background analysis, cron job, batch eval | `recall_hybrid()` | BM25+graph+RRF; higher recall@10 |
+| MCP default (no `deep` param) | `recall_fast()` via MCP `deep=False` | Lowest latency for interactive agents |
+| MCP with keyword recall or graph signals needed | `recall_hybrid()` via MCP `deep=True` | Full 6-signal RRF |
+| Any recall from application code (psycopg2) | `pgmnemo-client` `recall(deep=False)` | Wraps `recall_fast` |
+
+```sql
+-- interactive (agent mid-task): O(k log N), no BM25, no graph
+SELECT * FROM pgmnemo.recall_fast(
+    $1::vector(1024),       -- query embedding
+    10,                     -- k
+    'engineer',             -- role_filter (NULL = all roles)
+    42,                     -- project_id_filter (NULL = all projects)
+    'dag-2026-abc'          -- exclude_dag_id (NULL = no exclusion)
+) ORDER BY score DESC;
+
+-- batch / offline: full 6-signal RRF (higher recall@10, ~8× higher latency)
+SELECT * FROM pgmnemo.recall_hybrid(
+    $1::vector(1024),       -- query embedding
+    $2,                     -- query_text (activates BM25)
+    10,                     -- k
+    'engineer',             -- role_filter
+    42,                     -- project_id_filter
+    0.4, 0.4, 60,           -- vec_weight, bm25_weight, rrf_k (defaults)
+    'dag-2026-abc'          -- exclude_dag_id
+) ORDER BY score DESC;
+```
+
+### 6.3 Latency SLO targets
+
+Measured on a single-node instance (4 vCPU, 16 GB RAM, NVMe SSD) with HNSW
+`m=16 ef_construction=64 ef_search=100`. Numbers are wall-clock at the
+PostgreSQL function boundary (no network round-trip).
+
+| Function | N = 10 k | N = 100 k | N = 1 M |
+|---|---|---|---|
+| `recall_fast` — p50 | ~1 ms | ~3 ms | ~12 ms |
+| `recall_fast` — p99 | ~3 ms | ~12 ms | ~45 ms |
+| `recall_hybrid` — p50 | ~8 ms | ~22 ms | ~90 ms |
+| `recall_hybrid` — p99 | ~25 ms | ~80 ms | ~320 ms |
+| `stats()` | < 5 ms | < 5 ms | < 10 ms |
+| `ingest()` (single row) | < 2 ms | < 2 ms | < 2 ms |
+
+**Tuning levers:**
+
+```sql
+-- raise ef_search for more accurate ANN (raises recall_fast latency)
+SET pgmnemo.ef_search = 200;
+
+-- lower ef_search for lower latency (reduces recall quality)
+SET pgmnemo.ef_search = 40;
+
+-- disable graph-proximity scoring (reduces recall_hybrid latency ~20%)
+SET pgmnemo.graph_proximity_weight = 0.0;
+```
+
+### 6.4 `project_id_filter` post-filter gotcha
+
+`project_id_filter` is applied as a **WHERE predicate on the HNSW candidate
+set**, not as an index-side pre-filter. This means:
+
+1. HNSW selects `ef_search` candidates from the **full corpus** (all projects).
+2. The WHERE clause then keeps only rows matching `project_id = $filter`.
+3. If your per-project row count is small relative to N, you may receive
+   **fewer than `k` results** even when more qualifying rows exist.
+
+**Mitigation options (pick one):**
+
+```sql
+-- Option A: raise k to oversample, then trim in application code
+SELECT * FROM pgmnemo.recall_fast(embedding, 50, NULL, 42, NULL)
+ORDER BY score DESC LIMIT 10;
+
+-- Option B: raise ef_search for this session to widen the candidate pool
+SET pgmnemo.ef_search = 300;
+SELECT * FROM pgmnemo.recall_fast(embedding, 10, NULL, 42, NULL);
+
+-- Option C (v1.0 roadmap): partition the HNSW index per project_id
+-- Requires separate HNSW indexes per project; not yet supported natively.
+```
+
+**Rule of thumb:** if `project_id_filter` reduces your corpus to < 20% of N,
+use Option A or B. If you consistently need per-project recall with a large
+corpus, plan for per-project HNSW partitioning in a future release.
+
+The same gotcha applies to `role_filter` and the `exclude_dag_id` exclusion
+predicate — all are post-HNSW-selection WHERE conditions.
+
+### 6.5 Monitoring corpus health
+
+```sql
+-- one-row snapshot: corpus size, GUC values, index stats
+SELECT * FROM pgmnemo.stats();
+
+-- recall quality proxy: lessons recalled but never reinforced
+SELECT COUNT(*) AS unreinforced
+FROM pgmnemo.agent_lesson
+WHERE recall_count > 3 AND confidence < 0.4 AND is_active;
+
+-- stale lessons (candidates for mark_stale())
+SELECT COUNT(*)
+FROM pgmnemo.agent_lesson
+WHERE last_recalled_at < NOW() - INTERVAL '90 days' AND is_active;
+```
+
+See `USAGE.md §Outcome-learning` for guidance on when to enable
+`confidence_boost_weight` after the corpus has sufficient reinforcement signal.
