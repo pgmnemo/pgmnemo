@@ -15,7 +15,18 @@ from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 
-from .config import embed, get_pool, to_pgvector
+import re
+
+from .config import (
+    DATABASE_URL,
+    EMBEDDING_DIM,
+    EMBEDDING_MODEL,
+    EMBEDDING_SERVER,
+    MCP_PORT,
+    embed,
+    get_pool,
+    to_pgvector,
+)
 
 mcp = FastMCP("pgmnemo", port=8765)
 
@@ -30,6 +41,8 @@ def ingest(
     commit_sha: str | None = None,
     artifact_hash: str | None = None,
     metadata: dict[str, Any] | None = None,
+    item_kind: str = "note",
+    source_dag_id: str | None = None,
 ) -> dict[str, Any]:
     """Store a lesson via pgmnemo.ingest() SP and return its id.
 
@@ -37,9 +50,10 @@ def ingest(
     - Gate enforcement (provenance checks) runs inside the SP.
     - verified_at is stamped automatically when commit_sha/artifact_hash are present.
     - Embedding dimension validation fires before the INSERT.
+
+    item_kind: content-type classification — note|skill_md|template|script|reference|config|spec
+    source_dag_id: opaque workflow/DAG run id that produced this lesson (v0.9.6)
     """
-    # v0.8.2: embed the lesson text via EMBEDDING_SERVER if configured;
-    # falls back to NULL (text-only) when unset/unavailable.
     embedding = to_pgvector(embed(text))
     p = get_pool()
     conn = p.getconn()
@@ -65,6 +79,16 @@ def ingest(
                 ),
             )
             new_id = cur.fetchone()[0]
+            if item_kind != "note" or source_dag_id is not None:
+                cur.execute(
+                    """
+                    UPDATE pgmnemo.agent_lesson
+                    SET item_kind = %s,
+                        source_dag_id = COALESCE(source_dag_id, %s)
+                    WHERE id = %s
+                    """,
+                    (item_kind, source_dag_id, new_id),
+                )
             conn.commit()
         return {"id": new_id}
     finally:
@@ -72,33 +96,103 @@ def ingest(
 
 
 @mcp.tool(name="pgmnemo.recall", description="Recall lessons from pgmnemo agent memory.")
-def recall(query: str, top_k: int = 5) -> list[dict[str, Any]]:
+def recall(
+    query: str,
+    top_k: int = 5,
+    role_filter: str | None = None,
+    project_id_filter: int | None = None,
+    exclude_dag_id: str | None = None,
+) -> list[dict[str, Any]]:
     """Return up to top_k lessons whose text matches query via pgmnemo.recall_lessons.
 
     recall_lessons() RETURNS TABLE (lesson_id bigint, score, role, ...) — the output
     column is 'lesson_id' (an alias), not 'id' (the physical table column).
+
+    role_filter: restrict to lessons from this role (v0.9.6)
+    project_id_filter: restrict to lessons from this project (v0.9.6)
+    exclude_dag_id: suppress lessons whose source_dag_id matches — prevents a workflow
+      from recalling its own in-flight outputs (v0.9.6)
     """
-    # v0.8.2: embed the query via EMBEDDING_SERVER if configured → real
-    # vector+BM25 hybrid recall; falls back to NULL (BM25 keyword only) when unset.
     query_vec = to_pgvector(embed(query))
     p = get_pool()
     conn = p.getconn()
     try:
         with conn.cursor() as cur:
-            # recall_lessons(query_vec, top_k, role_filter, project_id_filter, query_text)
+            # recall_lessons v0.9.6: (query_embedding, k, role_filter, project_id_filter,
+            #                         query_text, as_of_ts, exclude_dag_id)
             cur.execute(
                 """
                 SELECT lesson_id, role, topic, lesson_text, importance, created_at
                 FROM pgmnemo.recall_lessons(
-                    %s::vector(1024), %s, NULL, NULL, %s
+                    %s::vector(1024), %s, %s, %s, %s, NULL, %s
                 )
                 """,
-                (query_vec, top_k, query),
+                (query_vec, top_k, role_filter, project_id_filter, query, exclude_dag_id),
             )
             cols = [d[0] for d in cur.description]
             return [dict(zip(cols, row)) for row in cur.fetchall()]
     finally:
         p.putconn(conn)
+
+
+@mcp.tool(
+    name="pgmnemo.patch",
+    description="Update lesson text for an existing lesson (increments version_n and patch_count).",
+)
+def patch(lesson_id: int, lesson_text: str) -> dict[str, Any]:
+    """Revise an existing lesson in place.
+
+    Increments version_n and patch_count. Use when a prior lesson is factually
+    outdated rather than creating a duplicate via ingest().
+    """
+    p = get_pool()
+    conn = p.getconn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE pgmnemo.agent_lesson
+                SET lesson_text = %s,
+                    version_n   = version_n + 1,
+                    patch_count = patch_count + 1
+                WHERE id = %s
+                RETURNING id, version_n, patch_count
+                """,
+                (lesson_text, lesson_id),
+            )
+            row = cur.fetchone()
+            if row is None:
+                raise ValueError(f"lesson_id {lesson_id} not found")
+            conn.commit()
+        return {"id": row[0], "version_n": row[1], "patch_count": row[2]}
+    finally:
+        p.putconn(conn)
+
+
+@mcp.tool(
+    name="pgmnemo.get_params",
+    description=(
+        "Return the current pgmnemo MCP server configuration. "
+        "DATABASE_URL password is masked. Use this to verify the server is "
+        "connected to the expected PostgreSQL instance and embedding service."
+    ),
+)
+def get_params() -> dict[str, Any]:
+    """Return server configuration parameters (DATABASE_URL password is masked).
+
+    v0.9.7: MCP params exposure — lets clients inspect the connection without
+    accessing environment variables directly. Password component of DATABASE_URL
+    is replaced with '***' before returning.
+    """
+    masked_url = re.sub(r"://([^:]+):([^@]+)@", r"://\1:***@", DATABASE_URL)
+    return {
+        "database_url": masked_url,
+        "embedding_server": EMBEDDING_SERVER or None,
+        "embedding_model": EMBEDDING_MODEL or None,
+        "embedding_dim": EMBEDDING_DIM,
+        "mcp_port": MCP_PORT,
+        "version": "0.9.7",
+    }
 
 
 def run() -> None:

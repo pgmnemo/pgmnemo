@@ -15,6 +15,52 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.9.7] — 2026-06-20
+
+### Theme
+
+**MCP params exposure + smoke-test validation.**
+Adds a new `pgmnemo.get_params` MCP tool that exposes current server configuration
+(DATABASE_URL with masked password, embedding server, embedding model, embedding
+dimension, MCP port) so AI clients can verify their connection without accessing
+environment variables directly. Companion smoke tests validate all three MCP tools are
+registered and functional.
+
+### Added
+
+- **`pgmnemo.get_params` MCP tool** in `pgmnemo_mcp`. Returns `database_url`
+  (password masked as `***`), `embedding_server`, `embedding_model`,
+  `embedding_dim`, `mcp_port`, and `version`. Allows MCP clients to verify server
+  configuration without shell access.
+- **`tests/test_mcp_smoke.py`** — 7-test smoke suite covering package import,
+  `__version__` assertion, tool registration (ingest / recall / get_params), unit-level
+  DB call verification for ingest and recall, and `get_params` password masking.
+- **`tests/conftest.py`** — shared pytest fixtures for smoke test suite.
+
+### Changed
+
+- **`pgmnemo_mcp/__init__.py`**: exports `get_params` alongside `ingest`,
+  `recall`, `mcp`, `main`. `__version__` bumped to `0.9.7`.
+- **`pgmnemo_mcp/pyproject.toml`**: version `0.9.7`; build system updated from
+  hatchling to setuptools for compatibility.
+- **`pgmnemo_mcp/tests/test_server.py`**: arg-index assertions updated to account for
+  the embedding vector at position 5 (commit\_sha → 6, artifact\_hash → 7, metadata → 8
+  for ingest; query\_vec → 0, top\_k → 1, query\_text → 2 for recall).
+
+### Extension
+
+No schema changes in v0.9.7. Extension `default_version` updated to `0.9.7`; flat
+install file `pgmnemo--0.9.7.sql` and delta `pgmnemo--0.9.6--0.9.7.sql` added
+(no-op delta — schema unchanged from 0.9.6).
+
+### Upgrade
+
+
+
+No schema changes — this upgrade is a no-op. MCP server: `pip install --upgrade pgmnemo-mcp==0.9.7`.
+
+---
+
 ## [0.9.6] — 2026-06-19
 
 ### Theme

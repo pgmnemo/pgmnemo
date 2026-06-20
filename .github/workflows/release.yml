@@ -416,7 +416,7 @@ jobs:
           python-version: '3.11'
 
       - name: Wait for PyPI index propagation
-        run: sleep 45
+        run: sleep 180
 
       - name: Install pgmnemo-mcp from PyPI in clean venv
         run: |

@@ -127,8 +127,8 @@ class TestIngest(unittest.TestCase):
         with patch.object(server, "get_pool", return_value=pool):
             server.ingest(text="x", commit_sha="abc123", artifact_hash="def456")
         args = cur.execute.call_args[0][1]
-        self.assertEqual(args[5], "abc123")   # commit_sha
-        self.assertEqual(args[6], "def456")   # artifact_hash
+        self.assertEqual(args[6], "abc123")   # commit_sha
+        self.assertEqual(args[7], "def456")   # artifact_hash
 
     def test_metadata_serialized_to_json(self):
         pool, conn, cur = _make_pool()
@@ -136,7 +136,7 @@ class TestIngest(unittest.TestCase):
         with patch.object(server, "get_pool", return_value=pool):
             server.ingest(text="x", metadata={"key": "val"})
         args = cur.execute.call_args[0][1]
-        self.assertEqual(json.loads(args[7]), {"key": "val"})
+        self.assertEqual(json.loads(args[8]), {"key": "val"})
 
     def test_none_metadata_defaults_to_empty_json_object(self):
         pool, conn, cur = _make_pool()
@@ -144,7 +144,7 @@ class TestIngest(unittest.TestCase):
         with patch.object(server, "get_pool", return_value=pool):
             server.ingest(text="x")
         args = cur.execute.call_args[0][1]
-        self.assertEqual(args[7], "{}")
+        self.assertEqual(args[8], "{}")
 
     def test_jsonb_cast_present_in_sql(self):
         """Ensures metadata arg is cast to ::jsonb so PostgreSQL accepts it."""
@@ -193,21 +193,21 @@ class TestRecall(unittest.TestCase):
         with patch.object(server, "get_pool", return_value=pool):
             server.recall(query="q")
         args = cur.execute.call_args[0][1]
-        self.assertEqual(args[0], 5)   # top_k
+        self.assertEqual(args[1], 5)   # top_k
 
     def test_top_k_passed_through(self):
         pool, conn, cur = _make_pool(rows=[], description=["lesson_id"])
         with patch.object(server, "get_pool", return_value=pool):
             server.recall(query="q", top_k=10)
         args = cur.execute.call_args[0][1]
-        self.assertEqual(args[0], 10)
+        self.assertEqual(args[1], 10)
 
     def test_query_text_forwarded(self):
         pool, conn, cur = _make_pool(rows=[], description=["lesson_id"])
         with patch.object(server, "get_pool", return_value=pool):
             server.recall(query="find lessons about memory")
         args = cur.execute.call_args[0][1]
-        self.assertEqual(args[1], "find lessons about memory")
+        self.assertEqual(args[2], "find lessons about memory")
 
     def test_empty_result(self):
         pool, conn, cur = _make_pool(rows=[], description=["lesson_id"])

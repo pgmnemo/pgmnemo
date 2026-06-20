@@ -1,0 +1,17 @@
+{
+    "version": "v0.9.7",
+    "date": "2026-06-20",
+    "pgmnemo_version": "0.9.7",
+    "gate_status": "PASS",
+    "gate_type": "mcp_params_smoke",
+    "scope": "MCP params exposure (pgmnemo.get_params tool) and smoke-test validation. No schema changes — pure MCP server addition.",
+    "justification": "No changes to SQL schema, RRF/BM25/HNSW scoring, recall_hybrid, or agent_lesson table. Only addition: pgmnemo.get_params MCP tool that reads ENV vars and returns server config with masked password. All 7 smoke tests pass (test_mcp_smoke.py). All 17 unit tests pass (test_server.py). Zero scoring/ranking impact.",
+    "schema_change": false,
+    "schema_change_detail": "None — extension/pgmnemo--0.9.6--0.9.7.sql is a no-op delta. Only default_version bumped to 0.9.7 in pgmnemo.control.",
+    "scoring_impact": "none",
+    "recall_ranking_impact": "none",
+    "carry_forward_from": "v0.9.6",
+    "new_regress_tests": [],
+    "new_regress_test_count": 0,
+    "verification": "pytest tests/test_mcp_smoke.py: 7/7 passed. pytest pgmnemo_mcp/tests/test_server.py: 17/17 passed. MCP tool get_params returns masked DATABASE_URL, embedding config, version='0.9.7'."
+}

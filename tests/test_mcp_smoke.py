@@ -8,13 +8,14 @@ from unittest.mock import MagicMock, patch
 class TestImport(unittest.TestCase):
     def test_package_imports(self):
         import pgmnemo_mcp
-        assert pgmnemo_mcp.__version__ == "0.5.0"
+        assert pgmnemo_mcp.__version__ == "0.9.7"
 
     def test_server_imports(self):
         from pgmnemo_mcp import server
         assert hasattr(server, "mcp")
         assert hasattr(server, "ingest")
         assert hasattr(server, "recall")
+        assert hasattr(server, "get_params")
 
 
 class TestToolsRegistered(unittest.TestCase):
@@ -26,6 +27,7 @@ class TestToolsRegistered(unittest.TestCase):
         names = [t.name for t in tools]
         assert "pgmnemo.ingest" in names, f"pgmnemo.ingest not found in {names}"
         assert "pgmnemo.recall" in names, f"pgmnemo.recall not found in {names}"
+        assert "pgmnemo.get_params" in names, f"pgmnemo.get_params not found in {names}"
 
 
 class TestIngestUnit(unittest.TestCase):
@@ -36,16 +38,16 @@ class TestIngestUnit(unittest.TestCase):
         mock_cur = MagicMock()
         mock_cur.__enter__ = lambda s: s
         mock_cur.__exit__ = MagicMock(return_value=False)
-        mock_cur.fetchone.return_value = (42, "2026-01-01T00:00:00+00:00")
+        mock_cur.fetchone.return_value = (42,)
         mock_conn.cursor.return_value = mock_cur
 
         mock_pool = MagicMock()
         mock_pool.getconn.return_value = mock_conn
 
         with patch("pgmnemo_mcp.server.get_pool", return_value=mock_pool):
-            result = server.ingest("test lesson", {"role": "tester", "topic": "smoke"})
+            result = server.ingest("test lesson", role="tester", topic="smoke")
 
-        assert result["lesson_id"] == 42
+        assert result["id"] == 42
 
 
 class TestRecallUnit(unittest.TestCase):
@@ -68,6 +70,26 @@ class TestRecallUnit(unittest.TestCase):
 
         assert len(results) == 1
         assert results[0]["lesson_id"] == 1
+
+
+class TestGetParams(unittest.TestCase):
+    def test_get_params_returns_config(self):
+        from pgmnemo_mcp import server
+
+        result = server.get_params()
+        assert "database_url" in result
+        assert "version" in result
+        assert result["version"] == "0.9.7"
+        assert "embedding_dim" in result
+        assert "mcp_port" in result
+
+    def test_get_params_masks_password(self):
+        from pgmnemo_mcp import server
+
+        with patch("pgmnemo_mcp.server.DATABASE_URL", "postgresql://user:secretpass@localhost/pgmnemo"):
+            result = server.get_params()
+        assert "secretpass" not in result["database_url"]
+        assert "***" in result["database_url"]
 
 
 if __name__ == "__main__":
