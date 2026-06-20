@@ -29,7 +29,7 @@ import psycopg2
 import torch
 from transformers import AutoTokenizer, AutoModel
 
-ROOT = Path("/Users/gaidabura/pgmnemo/benchmarks")
+ROOT = Path(__file__).resolve().parents[1]  # benchmarks/ (was hardcoded home path)
 DEVICE = "mps" if torch.backends.mps.is_available() else "cpu"
 
 # LoCoMo categories per paper §4.2

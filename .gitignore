@@ -67,3 +67,6 @@ index-*.html.bak
 index.html
 docs/RESEARCH_BRIEF_v0.7.md
 site-internal/
+
+# Private internal-leak markers (Agency release gate) — never ship
+scripts/.internal-leak-patterns

@@ -27,7 +27,7 @@ import torch
 from sentence_transformers import SentenceTransformer
 from transformers import AutoTokenizer, AutoModel
 
-ROOT = Path("/Users/gaidabura/pgmnemo/benchmarks")
+ROOT = Path(__file__).resolve().parents[1]  # benchmarks/ (was hardcoded home path)
 DEVICE = "mps" if torch.backends.mps.is_available() else "cpu"
 
 

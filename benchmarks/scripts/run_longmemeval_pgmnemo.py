@@ -18,7 +18,7 @@ import psycopg2
 import torch
 from sentence_transformers import SentenceTransformer
 
-ROOT = Path("/Users/gaidabura/pgmnemo/benchmarks")
+ROOT = Path(__file__).resolve().parents[1]  # benchmarks/ (was hardcoded home path)
 DEVICE = "mps" if torch.backends.mps.is_available() else "cpu"
 
 
