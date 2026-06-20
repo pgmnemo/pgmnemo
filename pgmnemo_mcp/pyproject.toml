@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pgmnemo-mcp"
-version = "0.9.7"
+version = "0.9.8"
 description = "MCP server wrapping pgmnemo ingest and recall for AI agent memory"
 readme = "README.md"
 license = { text = "Apache-2.0" }

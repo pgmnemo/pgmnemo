@@ -102,33 +102,53 @@ def recall(
     role_filter: str | None = None,
     project_id_filter: int | None = None,
     exclude_dag_id: str | None = None,
+    deep: bool = False,
 ) -> list[dict[str, Any]]:
-    """Return up to top_k lessons whose text matches query via pgmnemo.recall_lessons.
+    """Return up to top_k lessons whose text matches query.
 
-    recall_lessons() RETURNS TABLE (lesson_id bigint, score, role, ...) — the output
-    column is 'lesson_id' (an alias), not 'id' (the physical table column).
+    Default (deep=False): calls recall_fast() — pure HNSW vector search, O(k log n).
+    deep=True: calls recall_hybrid() — full 6-signal RRF fusion (vector + BM25 +
+      graph proximity + recency + confidence + provenance). Slower but higher recall.
 
-    role_filter: restrict to lessons from this role (v0.9.6)
-    project_id_filter: restrict to lessons from this project (v0.9.6)
+    recall_fast() RETURNS TABLE (lesson_id bigint, score, role, ...) — 12-column shape.
+    recall_hybrid() returns the same 12-column subset; extra diagnostic columns dropped.
+
+    role_filter: restrict to lessons from this role (v0.9.6+)
+    project_id_filter: restrict to lessons from this project (v0.9.6+)
     exclude_dag_id: suppress lessons whose source_dag_id matches — prevents a workflow
-      from recalling its own in-flight outputs (v0.9.6)
+      from recalling its own in-flight outputs (v0.9.6+)
+    deep: when True, use recall_hybrid() for BM25 + graph fusion (v0.9.8+)
     """
     query_vec = to_pgvector(embed(query))
     p = get_pool()
     conn = p.getconn()
     try:
         with conn.cursor() as cur:
-            # recall_lessons v0.9.6: (query_embedding, k, role_filter, project_id_filter,
-            #                         query_text, as_of_ts, exclude_dag_id)
-            cur.execute(
-                """
-                SELECT lesson_id, role, topic, lesson_text, importance, created_at
-                FROM pgmnemo.recall_lessons(
-                    %s::vector(1024), %s, %s, %s, %s, NULL, %s
+            if deep:
+                # recall_hybrid v0.9.6: (query_embedding, query_text, k,
+                #   role_filter, project_id_filter, vec_weight, bm25_weight,
+                #   rrf_k, exclude_dag_id)
+                cur.execute(
+                    """
+                    SELECT lesson_id, role, topic, lesson_text, importance, created_at
+                    FROM pgmnemo.recall_hybrid(
+                        %s::vector(1024), %s, %s, %s, %s, 0.4, 0.4, 60, %s
+                    )
+                    """,
+                    (query_vec, query, top_k, role_filter, project_id_filter, exclude_dag_id),
                 )
-                """,
-                (query_vec, top_k, role_filter, project_id_filter, query, exclude_dag_id),
-            )
+            else:
+                # recall_fast v0.9.8: (query_embedding, k,
+                #   role_filter, project_id_filter, exclude_dag_id)
+                cur.execute(
+                    """
+                    SELECT lesson_id, role, topic, lesson_text, importance, created_at
+                    FROM pgmnemo.recall_fast(
+                        %s::vector(1024), %s, %s, %s, %s
+                    )
+                    """,
+                    (query_vec, top_k, role_filter, project_id_filter, exclude_dag_id),
+                )
             cols = [d[0] for d in cur.description]
             return [dict(zip(cols, row)) for row in cur.fetchall()]
     finally:
@@ -191,7 +211,7 @@ def get_params() -> dict[str, Any]:
         "embedding_model": EMBEDDING_MODEL or None,
         "embedding_dim": EMBEDDING_DIM,
         "mcp_port": MCP_PORT,
-        "version": "0.9.7",
+        "version": "0.9.8",
     }
 
 

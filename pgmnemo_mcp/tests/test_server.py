@@ -202,12 +202,25 @@ class TestRecall(unittest.TestCase):
         args = cur.execute.call_args[0][1]
         self.assertEqual(args[1], 10)
 
-    def test_query_text_forwarded(self):
+    def test_fast_path_calls_recall_fast(self):
+        """Default (deep=False) must call recall_fast, not recall_lessons/recall_hybrid."""
         pool, conn, cur = _make_pool(rows=[], description=["lesson_id"])
         with patch.object(server, "get_pool", return_value=pool):
             server.recall(query="find lessons about memory")
+        sql = cur.execute.call_args[0][0]
+        self.assertIn("recall_fast", sql)
+        self.assertNotIn("recall_hybrid", sql)
+        self.assertNotIn("recall_lessons", sql)
+
+    def test_deep_path_calls_recall_hybrid(self):
+        """deep=True must call recall_hybrid with query text at args[1]."""
+        pool, conn, cur = _make_pool(rows=[], description=["lesson_id"])
+        with patch.object(server, "get_pool", return_value=pool):
+            server.recall(query="find lessons about memory", deep=True)
+        sql = cur.execute.call_args[0][0]
+        self.assertIn("recall_hybrid", sql)
         args = cur.execute.call_args[0][1]
-        self.assertEqual(args[2], "find lessons about memory")
+        self.assertEqual(args[1], "find lessons about memory")  # query_text at pos 1
 
     def test_empty_result(self):
         pool, conn, cur = _make_pool(rows=[], description=["lesson_id"])

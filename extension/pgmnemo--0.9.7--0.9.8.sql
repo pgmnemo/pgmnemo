@@ -489,3 +489,137 @@ Run AFTER navigate_locate_dispatch is deployed so non-semantic types are still f
 
 -- Update extension version
 -- (version number managed by pgmnemo.control; this script is the canonical change record)
+
+-- ============================================================================
+-- 4. recall_fast — HNSW-only vector recall (O(k log n), no BM25/graph/RRF)
+-- ============================================================================
+--
+-- Fast path for latency-sensitive MCP recall. Uses HNSW ORDER BY <=> LIMIT k
+-- directly — no BM25 TSV scoring, no graph BFS, no RRF, no recency weighting.
+-- Returns pure cosine similarity as score.
+--
+-- Filters: role_filter / project_id_filter / exclude_dag_id (same as recall_hybrid).
+-- Stamping: last_recalled_at + recall_count updated iff track_recall_recency = on.
+-- Return shape: 12-column — identical to recall_lessons() (MCP-compatible).
+--
+-- Use recall_fast() as the default MCP recall path.
+-- Use recall_hybrid() (deep=true in MCP) when BM25 + graph fusion is required.
+-- ============================================================================
+
+CREATE OR REPLACE FUNCTION pgmnemo.recall_fast(
+    query_embedding   vector(1024),
+    k                 INT     DEFAULT 10,
+    role_filter       TEXT    DEFAULT NULL,
+    project_id_filter INT     DEFAULT NULL,
+    exclude_dag_id    TEXT    DEFAULT NULL
+)
+RETURNS TABLE (
+    lesson_id     BIGINT,
+    score         DOUBLE PRECISION,
+    role          TEXT,
+    project_id    INT,
+    topic         TEXT,
+    lesson_text   TEXT,
+    importance    SMALLINT,
+    metadata      JSONB,
+    commit_sha    TEXT,
+    artifact_hash TEXT,
+    verified_at   TIMESTAMPTZ,
+    created_at    TIMESTAMPTZ
+)
+LANGUAGE plpgsql
+VOLATILE
+AS $$
+#variable_conflict use_column
+DECLARE
+    _ef_search          INT;
+    _include_unverified BOOLEAN;
+    _track_recency      BOOLEAN;
+BEGIN
+    -- Set HNSW ef_search from GUC (same pattern as recall_hybrid)
+    BEGIN
+        _ef_search := COALESCE(
+            NULLIF(current_setting('pgmnemo.ef_search', TRUE), '')::INT, 100);
+        IF _ef_search BETWEEN 10 AND 500 THEN
+            EXECUTE format('SET LOCAL pgvector.hnsw.ef_search = %s', _ef_search);
+        END IF;
+    EXCEPTION WHEN OTHERS THEN NULL;
+    END;
+
+    BEGIN
+        _include_unverified := COALESCE(
+            current_setting('pgmnemo.include_unverified', TRUE)::BOOLEAN, FALSE);
+    EXCEPTION WHEN OTHERS THEN _include_unverified := FALSE;
+    END;
+
+    BEGIN
+        _track_recency := COALESCE(
+            NULLIF(current_setting('pgmnemo.track_recall_recency', TRUE), '')::BOOLEAN, TRUE);
+    EXCEPTION WHEN OTHERS THEN _track_recency := TRUE;
+    END;
+
+    RETURN QUERY
+    WITH fast_ranked AS (
+        SELECT
+            al.id,
+            (1.0 - (al.embedding <=> query_embedding))::DOUBLE PRECISION AS vec_score,
+            al.role,
+            al.project_id,
+            al.topic,
+            al.lesson_text,
+            al.importance,
+            al.metadata,
+            al.commit_sha,
+            al.artifact_hash,
+            al.verified_at,
+            al.created_at
+        FROM pgmnemo.agent_lesson al
+        WHERE al.is_active
+          AND al.embedding IS NOT NULL
+          AND (_include_unverified OR al.verified_at IS NOT NULL)
+          AND (recall_fast.role_filter IS NULL
+               OR al.role = recall_fast.role_filter)
+          AND (recall_fast.project_id_filter IS NULL
+               OR al.project_id = recall_fast.project_id_filter)
+          AND (recall_fast.exclude_dag_id IS NULL
+               OR al.source_dag_id IS DISTINCT FROM recall_fast.exclude_dag_id)
+        ORDER BY al.embedding <=> query_embedding
+        LIMIT k
+    ),
+    stamped AS (
+        UPDATE pgmnemo.agent_lesson al2
+        SET
+            last_recalled_at = NOW(),
+            recall_count     = al2.recall_count + 1
+        FROM fast_ranked fr
+        WHERE al2.id = fr.id
+          AND _track_recency
+        RETURNING al2.id
+    )
+    SELECT
+        fr.id          AS lesson_id,
+        fr.vec_score   AS score,
+        fr.role,
+        fr.project_id,
+        fr.topic,
+        fr.lesson_text,
+        fr.importance,
+        fr.metadata,
+        fr.commit_sha,
+        fr.artifact_hash,
+        fr.verified_at,
+        fr.created_at
+    FROM fast_ranked fr
+    -- stamped CTE is a side-effect sink; reference it to prevent optimiser elision
+    LEFT JOIN stamped s ON s.id = fr.id
+    ORDER BY fr.vec_score DESC;
+END;
+$$;
+
+COMMENT ON FUNCTION pgmnemo.recall_fast(vector, INT, TEXT, INT, TEXT) IS
+    'HNSW-only vector recall — O(k log n), no BM25/graph/RRF. '
+    'Uses ORDER BY embedding <=> query LIMIT k to activate the HNSW index. '
+    'score = cosine similarity (1 - distance). '
+    'Respects include_unverified, ef_search, track_recall_recency GUCs. '
+    'Filters: role_filter, project_id_filter, exclude_dag_id (same as recall_hybrid). '
+    'v0.9.8: default MCP recall path. Use recall_hybrid for full 6-signal fusion.';

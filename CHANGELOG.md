@@ -15,6 +15,86 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.9.8] — 2026-06-20
+
+### Theme
+
+**Tiered-memory dispatch + `recall_fast()` + MCP recall fast-by-default.**
+Adds per-content-type access-path routing (`navigate_locate_dispatch`), typed
+dereference (`navigate_expand_typed`), selective-embedding backfill
+(`apply_selective_embedding_policy`), and a new `recall_fast()` function for
+pure HNSW vector recall at O(k log n). MCP `pgmnemo.recall` now routes to
+`recall_fast()` by default; `deep=true` opts into `recall_hybrid()` for full
+6-signal RRF fusion. Closes #81: `role_filter` / `project_id_filter` /
+`exclude_dag_id` confirmed present in the published wheel (wired in v0.9.7 /
+cdc1524b) and covered by a new introspection test.
+
+### Added
+
+- **`pgmnemo.recall_fast(query_embedding, k, role_filter, project_id_filter, exclude_dag_id)`**
+  Pure HNSW vector recall — `ORDER BY embedding <=> query LIMIT k`.
+  No BM25, no graph BFS, no RRF, no recency weighting. score = cosine similarity.
+  Return shape: 12-column (identical to `recall_lessons()` — MCP-compatible).
+  Respects `include_unverified`, `ef_search`, `track_recall_recency` GUCs.
+  Same filter surface as `recall_hybrid`: `role_filter`, `project_id_filter`,
+  `exclude_dag_id`. Use when latency matters more than BM25/graph recall depth.
+
+- **`pgmnemo.navigate_locate_dispatch(query_embedding, query_text, token_budget_chars,
+  jsonb_filter, project_id_filter, content_type_dispatch)`**
+  Routes each query to the cheapest adequate index per `content_type_dispatch`:
+  `'entity'` → GIN BM25 on `lesson_tsv`; `'temporal'` → btree on `t_valid_from`;
+  `'relation'` → `mem_edge` BFS from BM25 seed; `NULL` → existing `navigate_locate`.
+  Return schema identical to `navigate_locate`.
+
+- **`pgmnemo.navigate_expand_typed(ids, expand_fields, graph_depth, weight_threshold,
+  content_type_hint)`**
+  Content-type-aware typed dereference:
+  `'entity'` → metadata JSONB (`canonical_name`, `entity_type`) + connected lessons;
+  `'lesson'` / `NULL` → full `lesson_text` (same as `navigate_expand`);
+  `'relation'` → `mem_edge` neighbours only.
+
+- **`pgmnemo.apply_selective_embedding_policy(p_dry_run)`**
+  Sets `embedding = NULL` for non-semantic content types (`entity`, `fact`,
+  `relation`, `temporal`) to reduce HNSW index noise.
+  `p_dry_run = TRUE` (default) → preview only; `FALSE` → executes update.
+
+- **New indexes:**
+  `ix_pgmnemo_lesson_tsv_entity` (GIN on `lesson_tsv WHERE content_type='entity'`);
+  `ix_pgmnemo_content_type_active` (btree on `content_type WHERE is_active`);
+  `ix_pgmnemo_temporal_content_type` (btree on `t_valid_from WHERE content_type='temporal'`).
+
+### Changed
+
+- **`pgmnemo.recall` MCP tool (pgmnemo-mcp v0.9.8):**
+  Default path changed from `recall_lessons()` → **`recall_fast()`**
+  (pure HNSW, lower latency).
+  New `deep: bool = False` parameter: when `True`, calls `recall_hybrid()`
+  for full vector + BM25 + graph proximity + recency + confidence + provenance fusion.
+  `role_filter`, `project_id_filter`, `exclude_dag_id` present in both paths.
+
+- **`pgmnemo.get_params` MCP tool:** version string updated to `"0.9.8"`.
+
+### Extension
+
+Schema additions only — no existing function signatures changed. Upgrade is
+non-breaking for all existing callers.
+
+### Upgrade
+
+```sql
+ALTER EXTENSION pgmnemo UPDATE TO '0.9.8';
+```
+
+MCP server: `pip install --upgrade pgmnemo-mcp==0.9.8`.
+
+### Closes
+
+- **#81** — `role_filter` / `project_id_filter` / `exclude_dag_id` in published
+  MCP wheel confirmed and covered by `test_recall_exposes_filter_params` in
+  `tests/test_mcp_smoke.py`. These were wired in v0.9.7 (commit cdc1524b).
+
+---
+
 ## [0.9.7] — 2026-06-20
 
 ### Theme
