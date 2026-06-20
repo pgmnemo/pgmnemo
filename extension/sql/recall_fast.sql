@@ -1,0 +1,221 @@
+-- recall_fast.sql
+-- pg_regress tests for pgmnemo v0.9.8: recall_fast() HNSW-only interactive recall
+--
+-- Coverage:
+--   T1: recall_fast() exists with correct 5-arg signature
+--   T2: Parameter names match published API (role_filter, project_id_filter, exclude_dag_id)
+--   T3: Returns 0 rows when corpus has no embedded rows
+--   T4: Returns k rows when k embedded rows exist (k parameter respected)
+--   T5: role_filter narrows results to matching role only
+--   T6: project_id_filter scopes by project
+--   T7: exclude_dag_id suppresses lessons with matching source_dag_id
+--   T8: score = cosine similarity — identical embeddings score = 1.0
+--   T9: track_recall_recency=on → recall_count increments for recalled rows
+--   T10: track_recall_recency=off → recall_count unchanged after recall
+--
+-- Note: recall_fast() requires non-NULL embeddings.
+-- Test vector: uniform unit-ish vector array_fill(1.0, 1024)::vector(1024).
+-- Two identical embeddings → cosine distance = 0 → score = 1.0.
+
+SET pgmnemo.gate_strict = 'off';
+SET pgmnemo.include_unverified = 'on';
+SET pgmnemo.track_recall_recency = 'on';
+
+ALTER EXTENSION pgmnemo UPDATE TO '0.10.0';
+
+-- ============================================================================
+-- T1: Function exists with correct 5-arg signature
+-- ============================================================================
+
+SELECT COUNT(*) = 1 AS t1_recall_fast_exists
+FROM pg_proc p
+JOIN pg_namespace n ON n.oid = p.pronamespace
+WHERE n.nspname = 'pgmnemo'
+  AND p.proname = 'recall_fast'
+  AND pronargs = 5;
+
+-- ============================================================================
+-- T2: Parameter names match published API
+-- ============================================================================
+
+SELECT
+    proargnames @> ARRAY['query_embedding','k','role_filter','project_id_filter','exclude_dag_id']
+        AS t2_param_names_correct
+FROM pg_proc p
+JOIN pg_namespace n ON n.oid = p.pronamespace
+WHERE n.nspname = 'pgmnemo'
+  AND p.proname = 'recall_fast'
+  AND pronargs = 5;
+
+-- ============================================================================
+-- T3: Returns 0 rows when no embedded rows in corpus
+-- Insert unembedded rows, confirm recall_fast cannot retrieve them.
+-- ============================================================================
+
+INSERT INTO pgmnemo.agent_lesson (role, topic, lesson_text, commit_sha)
+VALUES ('tc_rf_noem', 'no_embed', 'recall fast test no embedding row alpha bravo', 'rf-ne-sha-1');
+
+SELECT COUNT(*) = 0 AS t3_no_embedding_rows_return_empty
+FROM pgmnemo.recall_fast(
+    array_fill(1.0::float4, ARRAY[1024])::vector(1024),
+    10,
+    'tc_rf_noem', NULL, NULL
+);
+
+DELETE FROM pgmnemo.agent_lesson WHERE role = 'tc_rf_noem';
+
+-- ============================================================================
+-- Setup: 4 embedded rows across 2 roles and 2 projects for T4–T8
+-- Uniform embeddings → all scores = 1.0 (identical vectors, cosine distance 0)
+-- ============================================================================
+
+INSERT INTO pgmnemo.agent_lesson
+    (role, project_id, topic, lesson_text, embedding, commit_sha, source_dag_id)
+VALUES
+    ('tc_rf_a', 1, 'fast_test', 'recall fast role A project 1 row one xylophone quasar',
+     array_fill(1.0::float4, ARRAY[1024])::vector(1024), 'rf-sha-a1', NULL),
+    ('tc_rf_a', 1, 'fast_test', 'recall fast role A project 1 row two nebula foxtrot',
+     array_fill(1.0::float4, ARRAY[1024])::vector(1024), 'rf-sha-a2', NULL),
+    ('tc_rf_b', 2, 'fast_test', 'recall fast role B project 2 row one delta gamma',
+     array_fill(1.0::float4, ARRAY[1024])::vector(1024), 'rf-sha-b1', NULL),
+    ('tc_rf_b', 2, 'fast_test', 'recall fast role B project 2 dag self omega',
+     array_fill(1.0::float4, ARRAY[1024])::vector(1024), 'rf-sha-b2', 'dag-xyz');
+
+-- ============================================================================
+-- T4: k parameter limits result count
+-- With 4 total embedded rows (role_filter=NULL), k=2 should return exactly 2.
+-- ============================================================================
+
+SELECT COUNT(*) = 2 AS t4_k_limits_to_two
+FROM pgmnemo.recall_fast(
+    array_fill(1.0::float4, ARRAY[1024])::vector(1024),
+    2,
+    NULL, NULL, NULL
+);
+
+-- ============================================================================
+-- T5: role_filter narrows results to matching role only
+-- ============================================================================
+
+SELECT COUNT(*) = 2 AS t5_role_filter_returns_two
+FROM pgmnemo.recall_fast(
+    array_fill(1.0::float4, ARRAY[1024])::vector(1024),
+    10,
+    'tc_rf_a', NULL, NULL
+);
+
+SELECT COUNT(*) = 0 AS t5_role_filter_excludes_other
+FROM pgmnemo.recall_fast(
+    array_fill(1.0::float4, ARRAY[1024])::vector(1024),
+    10,
+    'tc_rf_nonexistent', NULL, NULL
+);
+
+-- ============================================================================
+-- T6: project_id_filter scopes by project
+-- ============================================================================
+
+SELECT COUNT(*) = 2 AS t6_project_filter_returns_two
+FROM pgmnemo.recall_fast(
+    array_fill(1.0::float4, ARRAY[1024])::vector(1024),
+    10,
+    NULL, 2, NULL
+);
+
+SELECT COUNT(*) = 0 AS t6_project_filter_excludes_other
+FROM pgmnemo.recall_fast(
+    array_fill(1.0::float4, ARRAY[1024])::vector(1024),
+    10,
+    NULL, 99, NULL
+);
+
+-- ============================================================================
+-- T7: exclude_dag_id suppresses lessons with matching source_dag_id
+-- role B has 2 rows: one with source_dag_id='dag-xyz', one NULL.
+-- exclude_dag_id='dag-xyz' should return only the NULL-source_dag_id row.
+-- ============================================================================
+
+SELECT COUNT(*) = 1 AS t7_exclude_dag_suppresses_self_recall
+FROM pgmnemo.recall_fast(
+    array_fill(1.0::float4, ARRAY[1024])::vector(1024),
+    10,
+    'tc_rf_b', NULL, 'dag-xyz'
+);
+
+-- ============================================================================
+-- T8: score = cosine similarity — identical embeddings score = 1.0
+-- All 4 test rows have embedding identical to query → all scores = 1.0.
+-- ============================================================================
+
+SELECT
+    COUNT(*) = 2             AS t8_two_rows_returned,
+    MIN(score) > 0.99        AS t8_min_score_near_one,
+    MAX(score) <= 1.0        AS t8_max_score_le_one
+FROM pgmnemo.recall_fast(
+    array_fill(1.0::float4, ARRAY[1024])::vector(1024),
+    10,
+    'tc_rf_a', NULL, NULL
+);
+
+-- ============================================================================
+-- T9: track_recall_recency=on → recall_count increments for recalled rows
+-- ============================================================================
+
+SET pgmnemo.track_recall_recency = 'on';
+
+-- Capture pre-recall recall_count for role A rows
+CREATE TEMP TABLE _rf_before_counts AS
+SELECT id, recall_count
+FROM pgmnemo.agent_lesson
+WHERE role = 'tc_rf_a';
+
+-- Perform recall
+SELECT COUNT(*) = 2 AS t9_recall_returned_two
+FROM pgmnemo.recall_fast(
+    array_fill(1.0::float4, ARRAY[1024])::vector(1024),
+    10,
+    'tc_rf_a', NULL, NULL
+);
+
+-- After recall: recall_count should have incremented by 1 for each recalled row
+SELECT COUNT(*) = 2 AS t9_recall_count_incremented
+FROM pgmnemo.agent_lesson al
+JOIN _rf_before_counts bc ON bc.id = al.id
+WHERE al.recall_count = bc.recall_count + 1
+  AND al.role = 'tc_rf_a';
+
+DROP TABLE _rf_before_counts;
+
+-- ============================================================================
+-- T10: track_recall_recency=off → recall_count unchanged after recall
+-- ============================================================================
+
+SET pgmnemo.track_recall_recency = 'off';
+
+CREATE TEMP TABLE _rf_b_before AS
+SELECT id, recall_count
+FROM pgmnemo.agent_lesson
+WHERE role = 'tc_rf_b';
+
+SELECT COUNT(*) >= 1 AS t10_recall_returned_rows
+FROM pgmnemo.recall_fast(
+    array_fill(1.0::float4, ARRAY[1024])::vector(1024),
+    10,
+    'tc_rf_b', NULL, NULL
+);
+
+SELECT COUNT(*) = 2 AS t10_recall_count_unchanged
+FROM pgmnemo.agent_lesson al
+JOIN _rf_b_before bb ON bb.id = al.id
+WHERE al.recall_count = bb.recall_count
+  AND al.role = 'tc_rf_b';
+
+DROP TABLE _rf_b_before;
+
+-- ============================================================================
+-- Cleanup
+-- ============================================================================
+
+RESET pgmnemo.track_recall_recency;
+
+DELETE FROM pgmnemo.agent_lesson WHERE role IN ('tc_rf_a', 'tc_rf_b');
