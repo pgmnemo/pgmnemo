@@ -2,7 +2,7 @@
 -- Verifies: default=1.0, clamping [0.0,5.0], helper function, SET/RESET round-trip.
 
 -- Apply the v0.4.1→v0.5.1 migration to expose get_temporal_boost().
-ALTER EXTENSION pgmnemo UPDATE TO '0.9.5';
+ALTER EXTENSION pgmnemo UPDATE TO '0.9.6';
 
 -- Default value via helper
 SELECT pgmnemo.get_temporal_boost() AS default_boost;

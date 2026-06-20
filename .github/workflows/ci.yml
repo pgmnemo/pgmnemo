@@ -140,7 +140,6 @@ jobs:
         run: |
           cd extension && make PG_CONFIG=/usr/lib/postgresql/17/bin/pg_config && sudo make install PG_CONFIG=/usr/lib/postgresql/17/bin/pg_config
           /usr/lib/postgresql/17/bin/psql -c "CREATE EXTENSION pgmnemo CASCADE;"
-          /usr/lib/postgresql/17/bin/psql -f pgmnemo--0.2.1--0.2.2-hybrid.sql
       - name: Run smoke test
         env:
           DATABASE_URL: postgresql://runner:runner@localhost:5433/pgmnemo_test
