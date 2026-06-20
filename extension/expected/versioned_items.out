@@ -11,7 +11,6 @@
 --       exclude_dag_id is NULL or 'dag-y', but NOT when exclude_dag_id='dag-x'
 -- Prerequisites: pgmnemo 0.9.5+ installed. gate_strict=off for raw INSERTs.
 SET pgmnemo.gate_strict = 'off';
-SET
 SET pgmnemo.include_unverified = 'on';
 ALTER EXTENSION pgmnemo UPDATE TO '0.9.6';
 NOTICE:  version "0.9.6" of extension "pgmnemo" is already installed
@@ -27,7 +26,7 @@ FROM information_schema.columns
 WHERE table_schema = 'pgmnemo'
   AND table_name   = 'agent_lesson'
   AND column_name  IN ('item_kind', 'version_n', 'patch_count', 'source_dag_id');
- has_item_kind | has_version_n | has_patch_count | has_source_dag_id
+ has_item_kind | has_version_n | has_patch_count | has_source_dag_id 
 ---------------+---------------+-----------------+-------------------
  t             | t             | t               | t
 (1 row)
@@ -37,7 +36,7 @@ SELECT COUNT(*) = 1 AS has_memory_ingest_log
 FROM information_schema.tables
 WHERE table_schema = 'pgmnemo'
   AND table_name   = 'memory_ingest_log';
- has_memory_ingest_log
+ has_memory_ingest_log 
 -----------------------
  t
 (1 row)
@@ -51,7 +50,7 @@ VALUES ('tc_vi_ik', 'item_kind_test', 'item kind default test lesson', 'vi-sha-i
 SELECT item_kind = 'note' AS t1_default_note
 FROM pgmnemo.agent_lesson
 WHERE role = 'tc_vi_ik' AND commit_sha = 'vi-sha-ik-1';
- t1_default_note
+ t1_default_note 
 -----------------
  t
 (1 row)
@@ -65,10 +64,9 @@ VALUES
     ('tc_vi_ik', 'item_kind_reference', 'reference test lesson',  'vi-sha-ik-5', 'reference'),
     ('tc_vi_ik', 'item_kind_config',    'config test lesson',     'vi-sha-ik-6', 'config'),
     ('tc_vi_ik', 'item_kind_spec',      'spec test lesson',       'vi-sha-ik-7', 'spec');
-INSERT 0 6
 SELECT COUNT(*) = 7 AS t1_all_valid_kinds_inserted
 FROM pgmnemo.agent_lesson WHERE role = 'tc_vi_ik';
- t1_all_valid_kinds_inserted
+ t1_all_valid_kinds_inserted 
 -----------------------------
  t
 (1 row)
@@ -84,7 +82,6 @@ EXCEPTION WHEN check_violation THEN
 END;
 $$;
 NOTICE:  T1 CHECK violation correctly raised for item_kind=invalid_kind
-DO
 -- =============================================================================
 -- T2: version_n default=1, patch_count default=0
 -- =============================================================================
@@ -95,7 +92,7 @@ SELECT
     patch_count = 0 AS t2_patch_count_default_0
 FROM pgmnemo.agent_lesson
 WHERE role = 'tc_vi_vn' AND commit_sha = 'vi-sha-vn-1';
- t2_version_n_default_1 | t2_patch_count_default_0
+ t2_version_n_default_1 | t2_patch_count_default_0 
 ------------------------+--------------------------
  t                      | t
 (1 row)
@@ -108,7 +105,7 @@ SELECT
     patch_count = 7 AS t2_patch_count_explicit_7
 FROM pgmnemo.agent_lesson
 WHERE role = 'tc_vi_vn' AND commit_sha = 'vi-sha-vn-2';
- t2_version_n_explicit_3 | t2_patch_count_explicit_7
+ t2_version_n_explicit_3 | t2_patch_count_explicit_7 
 -------------------------+---------------------------
  t                       | t
 (1 row)
@@ -122,7 +119,7 @@ VALUES ('tc_vi_dag', 'dag_null_test', 'dag id null default test', 'vi-sha-dag-0'
 SELECT source_dag_id IS NULL AS t3_source_dag_id_null_by_default
 FROM pgmnemo.agent_lesson
 WHERE role = 'tc_vi_dag' AND commit_sha = 'vi-sha-dag-0';
- t3_source_dag_id_null_by_default
+ t3_source_dag_id_null_by_default 
 ----------------------------------
  t
 (1 row)
@@ -133,7 +130,7 @@ VALUES ('tc_vi_dag', 'dag_set_test', 'dag id set test', 'vi-sha-dag-1', 'dag-tes
 SELECT source_dag_id = 'dag-test-run-42' AS t3_source_dag_id_stored
 FROM pgmnemo.agent_lesson
 WHERE role = 'tc_vi_dag' AND commit_sha = 'vi-sha-dag-1';
- t3_source_dag_id_stored
+ t3_source_dag_id_stored 
 -------------------------
  t
 (1 row)
@@ -144,7 +141,7 @@ FROM pg_indexes
 WHERE schemaname = 'pgmnemo'
   AND tablename  = 'agent_lesson'
   AND indexname  = 'ix_pgmnemo_agent_lesson_source_dag_id';
- t3_sparse_index_exists
+ t3_sparse_index_exists 
 ------------------------
  t
 (1 row)
@@ -155,7 +152,7 @@ WHERE schemaname = 'pgmnemo'
 INSERT INTO pgmnemo.memory_ingest_log (source_origin, min_id, max_id)
 VALUES ('legacy.agent_memory', 1, 5000)
 RETURNING id > 0 AS t4_insert_ok, source_origin, min_id, max_id;
- t4_insert_ok | source_origin       | min_id | max_id
+ t4_insert_ok |    source_origin    | min_id | max_id 
 --------------+---------------------+--------+--------
  t            | legacy.agent_memory |      1 |   5000
 (1 row)
@@ -171,7 +168,7 @@ FROM pgmnemo.memory_ingest_log
 WHERE source_origin = 'legacy.agent_memory'
 ORDER BY id DESC
 LIMIT 1;
- t4_origin_correct | t4_min_id_correct | t4_max_id_correct | t4_ingested_at_set | t4_retired_at_null
+ t4_origin_correct | t4_min_id_correct | t4_max_id_correct | t4_ingested_at_set | t4_retired_at_null 
 -------------------+-------------------+-------------------+--------------------+--------------------
  t                 | t                 | t                 | t                  | t
 (1 row)
@@ -185,7 +182,7 @@ FROM pgmnemo.memory_ingest_log
 WHERE source_origin = 'legacy.agent_memory'
 ORDER BY id DESC
 LIMIT 1;
- t4_retired_at_set
+ t4_retired_at_set 
 -------------------
  t
 (1 row)
@@ -222,7 +219,7 @@ FROM pgmnemo.recall_hybrid(
     NULL  -- exclude_dag_id=NULL: no exclusion
 );
 NOTICE:  pgmnemo: query_embedding IS NULL -- falling back to text-only recall; no semantic similarity
- t5a_both_present_when_exclude_null
+ t5a_both_present_when_exclude_null 
 ------------------------------------
  t
 (1 row)
@@ -237,8 +234,8 @@ FROM pgmnemo.recall_hybrid(
     'dag-y'  -- exclude_dag_id='dag-y': dag-x row not excluded
 );
 NOTICE:  pgmnemo: query_embedding IS NULL -- falling back to text-only recall; no semantic similarity
- t5b_dag_x_present_when_exclude_dag_y
----------------------------------------
+ t5b_dag_x_present_when_exclude_dag_y 
+--------------------------------------
  t
 (1 row)
 
@@ -257,8 +254,8 @@ WHERE lesson_text LIKE '%no dag%' IS FALSE  -- only check for the dag-x row
       WHERE role = 'tc_vi_exc' AND source_dag_id = 'dag-x'
   );
 NOTICE:  pgmnemo: query_embedding IS NULL -- falling back to text-only recall; no semantic similarity
- t5c_dag_x_excluded_when_exclude_dag_x
-----------------------------------------
+ t5c_dag_x_excluded_when_exclude_dag_x 
+---------------------------------------
  t
 (1 row)
 
@@ -277,8 +274,8 @@ WHERE lesson_id IN (
     WHERE role = 'tc_vi_exc' AND source_dag_id IS NULL
 );
 NOTICE:  pgmnemo: query_embedding IS NULL -- falling back to text-only recall; no semantic similarity
- t5d_null_dag_id_passes_exclude_filter
-----------------------------------------
+ t5d_null_dag_id_passes_exclude_filter 
+---------------------------------------
  t
 (1 row)
 
