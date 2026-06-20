@@ -15,7 +15,7 @@ ORDER  BY pronargs DESC
 LIMIT  1;
  recall_lessons_arg_count 
 --------------------------
-                        6
+                        7
 (1 row)
 
 -- recall_hybrid() still has 8 parameters (signature unchanged)
@@ -27,7 +27,7 @@ WHERE  n.nspname = 'pgmnemo'
 LIMIT  1;
  recall_hybrid_arg_count 
 -------------------------
-                       8
+                       9
 (1 row)
 
 -- ── Bitemporal filter predicate (F2) ─────────────────────────────────────────

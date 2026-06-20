@@ -13,7 +13,7 @@ WHERE  n.nspname = 'pgmnemo'
 LIMIT  1;
  recall_hybrid_arg_count 
 -------------------------
-                       8
+                       9
 (1 row)
 
 -- ── PARTITION trick: zero-BM25 items yield NULL bm25_rank_sparse ─────────────

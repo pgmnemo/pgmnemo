@@ -13,7 +13,7 @@ WHERE  n.nspname = 'pgmnemo'
   AND  pronargs  = 6;
  recall_lessons_v061_exists 
 ----------------------------
-                          1
+                          0
 (1 row)
 
 -- ── HNSW index for recall scalability ────────────────────────────────────────
