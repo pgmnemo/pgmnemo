@@ -333,9 +333,11 @@ CREATE TABLE pgmnemo.memory_ingest_log (
 
 ---
 
-## v0.10.0 — Extraction substrate (Planned)
+## v0.10.0 — Extraction substrate (Planned, P1)
 
 **Theme:** first substrate feature — turn text into a queryable knowledge graph automatically. Without auto-extraction the graph layer is empty and graph-augmented retrieval is hollow.
+
+**Priority rationale (P1):** closes S1 of the causal positioning chain (structured lesson capture); without `ingest_document()` adopters must hand-author every lesson, which blocks cold-start. `confidence_boost_weight` adoption guide also ships here — `reinforce()` is live since v0.7.0 but most adopters leave the GUC at default `0.0` and miss the ranking benefit.
 
 ### Extraction pipeline
 
@@ -364,8 +366,8 @@ Covers: `connect()`, `ingest()`, `ingest_document()`, `recall()`, `reinforce()`.
 
 - 2 consecutive releases with no breaking SQL function signature changes
 - Every public SQL function documented in `SQL_REFERENCE.md` with a worked example in `USAGE.md`
-- LongMemEval-S recall@10 ≥ 0.97 (p < 0.05)
-- LoCoMo session recall@10 held or improved vs v0.8.0 baseline
+- LongMemEval-S recall@10 no regression vs v0.9.6 baseline (CI bench-gate enforces this; active improvement sprints are deprioritized)
+- LoCoMo session recall@10 held vs v0.8.0 baseline
 - Rollback procedure validated end-to-end at least once
 
 **What v1.0 does NOT promise:**
@@ -383,6 +385,8 @@ Covers: `connect()`, `ingest()`, `ingest_document()`, `recall()`, `reinforce()`.
 | REST API wrapper | Out of scope | Extension, not a service |
 | Cloud-hosted SaaS | Out of scope | Self-hosted is the product |
 | Billion-row scale | Out of scope | Target range is 10k–10M; dedicated vector DBs own billion-row |
+| `recency_weight` GUC tuning / ablation | **Deprioritized (P3)** | Not in the causal positioning chain; optimising it argues against our own story. GUC remains as-is for compatibility; no new improvement investment. |
+| Benchmark improvement sprints (LoCoMo / LongMemEval marginal gains) | **Deprioritized (P3)** | CI bench-gate enforces no-regression. Active sprint goals chasing +pp numbers add cost without advancing the causal argument. New academic comparisons (DRAGON, retrieval suites) deferred to post-v1.0 research track. |
 
 ---
 
