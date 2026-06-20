@@ -6,14 +6,11 @@
 
 ## Strategic frame
 
-pgmnemo is the **single-plan multimodal memory layer** for AI agent developers
-who already run Postgres. Install in under 5 minutes; replace ad-hoc memory
-code with two SQL calls. No new service. No data egress. EXPLAIN-able ranking.
+pgmnemo is **agent memory that learns which lessons worked — ranked by outcome, not timestamp, auditable in plain SQL.** Install in under 5 minutes; replace ad-hoc memory code with two SQL calls. No new service. No data egress. EXPLAIN-able ranking.
 
-**Current moat:** Vector + BM25 + graph proximity + JSONB predicate pushdown in one
-SQL query plan — plus provenance-gated writes and token-economy navigation
-(`navigate_locate` / `navigate_expand`). No external RAG service can match this
-architecture because it requires executing inside the database's query optimizer.
+**Causal moat (6-step chain):** `ingest()` → `recall_hybrid()` → confidence-weighted ranking → agent acts → outcome observed → `reinforce()` updates confidence. Every step is a SQL call. The chain is inspectable, regression-testable, and closes the feedback loop that recency-weighted memory cannot: a lesson's rank reflects whether it *worked*, not when it was written.
+
+**Architecture moat:** Vector + BM25 + graph proximity + JSONB predicate pushdown in one SQL query plan — plus provenance-gated writes and token-economy navigation (`navigate_locate` / `navigate_expand`). No external RAG service can match this architecture because it requires executing inside the database's query optimizer.
 
 **Retrieval benchmark position (v0.9.5, bge-m3 1024d):**
 - LoCoMo session recall@10 = 0.8409 (paper-canonical, +4.15pp vs v0.3.x baseline)
@@ -49,9 +46,10 @@ architecture because it requires executing inside the database's query optimizer
 | **v0.9.3** | Base-rate-adjusted reinforce() defaults + GUC control | Success delta +0.10→+0.02, failure −0.15→−0.12; `reinforce_success_delta`/`reinforce_fail_delta` GUCs | 2026-06-19 (✅ SHIPPED) |
 | **v0.9.4** | Documentation-only | `SQL_REFERENCE.md` + `USAGE.md` coverage for 0.9.2–0.9.3 GUCs; no SQL changes | 2026-06-19 (✅ SHIPPED) |
 | **v0.9.5** | Recall-recency signals + corpus curation | `last_recalled_at`, `recall_count` columns; `mark_stale()` with dry-run + safeguards; `track_recall_recency` GUC | 2026-06-19 (✅ SHIPPED) |
-| **v0.9.6** | Community response + R11/R12/R13 plumbing | `item_kind`/`version_n`/`patch_count`; `source_dag_id` + `exclude_dag_id`; `memory_ingest_log` table | Planned |
-| **v0.10.0** | Extraction substrate | Chunk → LLM entity+relation extraction → typed `mem_edge`; `ingest_document()`; Python client SDK | Planned |
-| **v1.0** | API freeze + stability commitment | 2 consecutive non-breaking releases; stable API contract | 2026-Q4 |
+| **v0.9.6** | Community response + R11/R12/R13 plumbing | `item_kind`/`version_n`/`patch_count`; `source_dag_id` + `exclude_dag_id`; `memory_ingest_log` table | 2026-06-19 (✅ SHIPPED) |
+| **v0.9.7** | MCP params exposure + smoke-test validation | `pgmnemo.get_params` MCP tool; 7-test smoke suite; `pgmnemo_mcp` v0.9.7; no schema changes | 2026-06-20 (✅ SHIPPED) |
+| **v0.10.0** | Extraction substrate + outcome-confidence deepening | Chunk → LLM entity+relation extraction → typed `mem_edge`; `ingest_document()`; Python client SDK; `confidence_boost_weight` adoption guide | Planned |
+| **v1.0** | API freeze + stability commitment | 2 consecutive non-breaking releases; stable API contract; outcome-confidence retrieval as headline positioning | 2026-Q4 |
 
 ---
 
