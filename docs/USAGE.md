@@ -1127,8 +1127,8 @@ discriminative power and adds only noise).
 
 ```sql
 -- Default: 0.0 (off) — confidence has no effect on ranking.
--- Enable per-session for evaluation:
-SET pgmnemo.confidence_boost_weight = '0.3';
+-- Enable per-session for evaluation (recommended range: 0.001 – 0.005):
+SET pgmnemo.confidence_boost_weight = '0.003';
 
 -- Verify the effect:
 SELECT lesson_id, score, confidence, match_confidence
@@ -1141,22 +1141,25 @@ ORDER BY score DESC;
 ```
 
 The additive term is `confidence_boost_weight × (confidence − 0.5)`, zero-centred:
-- A lesson with `confidence = 0.8` gets `+0.3 × 0.3 = +0.09` added to its RRF score.
-- A lesson with `confidence = 0.2` gets `+0.3 × (−0.3) = −0.09` (penalty).
+- A lesson with `confidence = 0.8` gets `+0.003 × 0.3 = +0.0009` added to its RRF score.
+- A lesson with `confidence = 0.2` gets `+0.003 × (−0.3) = −0.0009` (penalty).
 - A lesson with `confidence = 0.5` gets exactly `0` — neutral.
 
 This means the boost only differentiates after reinforce() has moved confidence
 away from 0.5.  Safe to enable at any time — if confidence is still flat,
 the boost term is zero and behaviour is identical to `0.0`.
 
+**Recommended range:** `0.001 – 0.005`. Max supported: `0.01`.
+Values above `0.01` cause confidence to dominate over relevance signals.
+
 ### Set permanently (role or database level)
 
 ```sql
 -- For a specific agent role:
-ALTER ROLE my_agent_role SET pgmnemo.confidence_boost_weight = '0.3';
+ALTER ROLE my_agent_role SET pgmnemo.confidence_boost_weight = '0.003';
 
 -- Database-wide default:
-ALTER DATABASE mydb SET pgmnemo.confidence_boost_weight = '0.3';
+ALTER DATABASE mydb SET pgmnemo.confidence_boost_weight = '0.003';
 ```
 
 ### Before-vs-after example
@@ -1168,12 +1171,13 @@ ALTER DATABASE mydb SET pgmnemo.confidence_boost_weight = '0.3';
 --        42 | 0.0163 |       0.50 |             0.72
 --        17 | 0.0161 |       0.50 |             0.70
 
--- After 30 successful reinforce() calls on lesson 42, 5 failures on 17:
--- (with confidence_boost_weight = 0.3)
+-- After reinforcement: lesson 42 reinforced 15× success → confidence 0.80;
+-- lesson 17 reinforced 2× failure → confidence 0.26.
+-- (with confidence_boost_weight = 0.003)
 -- lesson_id | score  | confidence | match_confidence
 -- ----------+--------+------------+-----------------
---        42 | 0.0193 |       0.80 |             0.72  ← proven lesson rises
---        17 | 0.0131 |       0.35 |             0.70  ← noisy lesson falls
+--        42 | 0.0172 |       0.80 |             0.72  ← proven lesson +0.0009
+--        17 | 0.0154 |       0.26 |             0.70  ← noisy lesson −0.0007
 ```
 
 ### Python (pgmnemo-client v0.10.0)
