@@ -1,0 +1,21 @@
+{
+    "version": "v0.10.0",
+    "date": "2026-06-20",
+    "pgmnemo_version": "0.10.0",
+    "gate_status": "PASS",
+    "gate_type": "extraction_smoke",
+    "scope": "Extraction substrate backbone: pgmnemo-client Python SDK (connect/ingest/recall/reinforce/ingest_document), $0 ingest_document() path, opt-in LLM extraction, confidence_boost_weight adoption guide in docs/USAGE.md. Extension schema unchanged from v0.9.8 — extraction is Python-only per DQ-1 (trusted extension cannot call LLM APIs).",
+    "justification": "No changes to recall_hybrid(), recall_fast(), RRF formula, HNSW candidate selection, or BM25 path. Extension delta 0.9.8→0.10.0 is a version-string-only bump. All scoring/ranking behaviour identical to v0.9.8. New deliverable: pgmnemo-client Python package (pgmnemo_client/) with 39/39 unit tests passing. $0 ingest_document() path verified by test_no_llm_call_without_extraction_model. Opt-in extraction path verified by test_extraction_used_true_when_model_given. Confidence guide verified by manual review against USAGE.md.",
+    "schema_change": false,
+    "schema_change_detail": "None — extension/pgmnemo--0.9.8--0.10.0.sql is a version-string-only delta. Schema identical to v0.9.8.",
+    "scoring_impact": "none",
+    "recall_ranking_impact": "none",
+    "carry_forward_from": "v0.9.8",
+    "new_regress_tests": [],
+    "new_regress_test_count": 0,
+    "client_sdk_tests": 39,
+    "client_sdk_tests_passed": 39,
+    "r2_gate": "CLEARED — ingest_document() requires explicit extraction_model param; $0 write path preserved when extraction_model is omitted",
+    "r3_gate": "CLEARED — v0.9.8 gate-passed (benchmarks/gate/v0.9.8.json, gate_status=PASS)",
+    "verification": "cd pgmnemo_client && python -m pytest tests/test_client.py: 39/39 passed. recall() signature confirmed: role_filter, project_id_filter, exclude_dag_id, deep all present. ingest_document() confirmed: extraction_model=None → 0 LLM calls, edges_created=0. confidence_boost_weight guide appended to docs/USAGE.md."
+}

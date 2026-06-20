@@ -1052,3 +1052,138 @@ FROM pgmnemo.agent_lesson
 WHERE is_active;
 ```
 
+
+---
+
+## Outcome-learning — `reinforce()` + `confidence_boost_weight` (v0.7.0+, guide v0.10.0)
+
+pgmnemo tracks which memories actually helped an agent succeed.  Two components
+work together: `reinforce()` updates per-lesson confidence, and the
+`confidence_boost_weight` GUC makes that confidence influence ranking.
+
+### Why this matters
+
+Without feedback, all lessons start at `confidence = 0.5` and stay there.
+`recall_hybrid()` ranks by cosine similarity + BM25 + recency + provenance.
+A high-quality lesson written last year competes equally with a noisy one
+written yesterday — both have `confidence = 0.5`.
+
+After a few `reinforce()` calls, proven lessons rise above `0.5` and noise
+falls below.  Enabling `confidence_boost_weight > 0` makes those scores
+drive ranking.
+
+### Step 1 — call `reinforce()` after agent runs
+
+```sql
+-- Single lesson that contributed to a successful outcome:
+SELECT pgmnemo.reinforce(42, 'success');   -- confidence +0.02
+
+-- Batch (v0.7.1+): multiple lessons, skips missing IDs silently:
+SELECT pgmnemo.reinforce(ARRAY[10, 20, 30], 'success');
+
+-- Lesson that produced a wrong answer:
+SELECT pgmnemo.reinforce(15, 'failure');   -- confidence −0.12
+
+-- Neutral — no update (useful as a no-op placeholder):
+SELECT pgmnemo.reinforce(99, 'neutral');
+```
+
+Deltas are configurable per-session:
+
+```sql
+SET pgmnemo.reinforce_success_delta = '0.05';  -- faster convergence
+SET pgmnemo.reinforce_fail_delta    = '0.10';  -- lighter penalty
+```
+
+### Step 2 — check confidence distribution
+
+After ≥50 reinforce calls, inspect the spread:
+
+```sql
+SELECT
+    ROUND(confidence::NUMERIC, 2)  AS confidence_bucket,
+    COUNT(*)                       AS lesson_count
+FROM pgmnemo.agent_lesson
+WHERE is_active
+GROUP BY 1
+ORDER BY 1;
+```
+
+A useful confidence distribution shows lessons spread across [0.2, 0.8].
+If all lessons cluster at 0.5, more reinforce() calls are needed before
+enabling the boost.
+
+```sql
+-- Quick check via stats():
+SELECT confidence_p10, confidence_p50, confidence_p90
+FROM pgmnemo.stats();
+```
+
+**When NOT to enable the boost:** during the initial corpus build phase
+when < 20% of lessons have been reinforced (most at 0.5 → boost has no
+discriminative power and adds only noise).
+
+### Step 3 — activate `confidence_boost_weight`
+
+```sql
+-- Default: 0.0 (off) — confidence has no effect on ranking.
+-- Enable per-session for evaluation:
+SET pgmnemo.confidence_boost_weight = '0.3';
+
+-- Verify the effect:
+SELECT lesson_id, score, confidence, match_confidence
+FROM pgmnemo.recall_hybrid(
+    <your_embedding>,
+    'your query text',
+    k := 10
+)
+ORDER BY score DESC;
+```
+
+The additive term is `confidence_boost_weight × (confidence − 0.5)`, zero-centred:
+- A lesson with `confidence = 0.8` gets `+0.3 × 0.3 = +0.09` added to its RRF score.
+- A lesson with `confidence = 0.2` gets `+0.3 × (−0.3) = −0.09` (penalty).
+- A lesson with `confidence = 0.5` gets exactly `0` — neutral.
+
+This means the boost only differentiates after reinforce() has moved confidence
+away from 0.5.  Safe to enable at any time — if confidence is still flat,
+the boost term is zero and behaviour is identical to `0.0`.
+
+### Set permanently (role or database level)
+
+```sql
+-- For a specific agent role:
+ALTER ROLE my_agent_role SET pgmnemo.confidence_boost_weight = '0.3';
+
+-- Database-wide default:
+ALTER DATABASE mydb SET pgmnemo.confidence_boost_weight = '0.3';
+```
+
+### Before-vs-after example
+
+```sql
+-- Before reinforce() calls (all confidence ≈ 0.5):
+-- lesson_id | score  | confidence | match_confidence
+-- ----------+--------+------------+-----------------
+--        42 | 0.0163 |       0.50 |             0.72
+--        17 | 0.0161 |       0.50 |             0.70
+
+-- After 30 successful reinforce() calls on lesson 42, 5 failures on 17:
+-- (with confidence_boost_weight = 0.3)
+-- lesson_id | score  | confidence | match_confidence
+-- ----------+--------+------------+-----------------
+--        42 | 0.0193 |       0.80 |             0.72  ← proven lesson rises
+--        17 | 0.0131 |       0.35 |             0.70  ← noisy lesson falls
+```
+
+### Python (pgmnemo-client v0.10.0)
+
+```python
+import pgmnemo_client as pgmnemo
+
+with pgmnemo.connect("postgresql://localhost/mydb") as mem:
+    results = mem.recall("database optimization")
+    # ... agent uses results[0] and succeeds ...
+    mem.reinforce([results[0]["lesson_id"]], "success")
+    # lesson confidence updated; will rank higher next time
+```

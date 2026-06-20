@@ -48,7 +48,8 @@ pgmnemo is **agent memory that learns which lessons worked — ranked by outcome
 | **v0.9.5** | Recall-recency signals + corpus curation | `last_recalled_at`, `recall_count` columns; `mark_stale()` with dry-run + safeguards; `track_recall_recency` GUC | 2026-06-19 (✅ SHIPPED) |
 | **v0.9.6** | Community response + R11/R12/R13 plumbing | `item_kind`/`version_n`/`patch_count`; `source_dag_id` + `exclude_dag_id`; `memory_ingest_log` table | 2026-06-19 (✅ SHIPPED) |
 | **v0.9.7** | MCP params exposure + smoke-test validation | `pgmnemo.get_params` MCP tool; 7-test smoke suite; `pgmnemo_mcp` v0.9.7; no schema changes | 2026-06-20 (✅ SHIPPED) |
-| **v0.10.0** | Extraction substrate + outcome-confidence deepening | Chunk → LLM entity+relation extraction → typed `mem_edge`; `ingest_document()`; Python client SDK; `confidence_boost_weight` adoption guide | Planned |
+| **v0.9.8** | Tiered-memory dispatch + `recall_fast()` + MCP fast-by-default | `navigate_locate_dispatch`, `navigate_expand_typed`, `apply_selective_embedding_policy`, `recall_fast()`; MCP `deep` param; closes #81 | 2026-06-20 (✅ SHIPPED) |
+| **v0.10.0** | Extraction substrate + outcome-confidence deepening | `pgmnemo-client` SDK; `ingest_document()` ($0 path + opt-in LLM extraction); `confidence_boost_weight` adoption guide | 2026-06-20 (✅ SHIPPED) |
 | **v1.0** | API freeze + stability commitment | 2 consecutive non-breaking releases; stable API contract; outcome-confidence retrieval as headline positioning | 2026-Q4 |
 
 ---
@@ -333,7 +334,7 @@ CREATE TABLE pgmnemo.memory_ingest_log (
 
 ---
 
-## v0.10.0 — Extraction substrate (Planned, P1)
+## v0.10.0 — Extraction substrate (✅ SHIPPED 2026-06-20)
 
 **Theme:** first substrate feature — turn text into a queryable knowledge graph automatically. Without auto-extraction the graph layer is empty and graph-augmented retrieval is hollow.
 

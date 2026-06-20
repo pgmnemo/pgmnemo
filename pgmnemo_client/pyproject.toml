@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=42", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pgmnemo-client"
+version = "0.10.0"
+description = "Python client SDK for pgmnemo — ingest, recall, reinforce, and document extraction"
+readme = "README.md"
+license = { text = "Apache-2.0" }
+requires-python = ">=3.11"
+dependencies = [
+    "psycopg2-binary>=2.9",
+]
+
+[project.optional-dependencies]
+extract = [
+    "litellm>=1.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/pgmnemo/pgmnemo"
+Repository = "https://github.com/pgmnemo/pgmnemo"
+Issues = "https://github.com/pgmnemo/pgmnemo/issues"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["pgmnemo_client*"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]

@@ -15,6 +15,75 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.10.0] — 2026-06-20
+
+### Theme
+
+**Extraction substrate + Python client SDK.**
+Ships the `pgmnemo-client` Python package — the first native SDK for pgmnemo,
+removing the MCP-protocol requirement for agent integrations.  Adds
+`ingest_document()` for automatic document chunking + ingestion, with optional
+LLM entity+relation extraction (explicit opt-in; $0 by default).
+Documents the `confidence_boost_weight` → `reinforce()` activation path
+so adopters can actually benefit from outcome-learning ranking.
+
+### Added
+
+- **`pgmnemo-client` Python package** (`pip install pgmnemo-client`).
+  Provides `connect()` → `PgmnemoClient` with methods:
+
+  | Method | Description |
+  |---|---|
+  | `ingest(text, ...)` | Single lesson via `pgmnemo.ingest()` SP |
+  | `recall(query, top_k, ..., deep)` | Fast HNSW (default) or hybrid RRF |
+  | `reinforce(lesson_ids, outcome)` | Batch confidence update |
+  | `ingest_document(source, ...)` | Chunk → embed → ingest per chunk |
+
+  Optional dependency `pgmnemo-client[extract]` adds litellm for LLM extraction.
+
+- **`ingest_document()` extraction pipeline** — two modes:
+
+  **$0 path (default):** `mem.ingest_document("doc.md")` — chunks text, embeds
+  each chunk, calls `pgmnemo.ingest()` per chunk.  Zero LLM calls, zero
+  external API cost.  Logged to `pgmnemo.memory_ingest_log`.
+
+  **Extraction path (opt-in):** `mem.ingest_document("doc.md", extraction_model="claude-haiku-3-5")` — runs LLM entity+relation extraction per chunk via litellm.
+  Entities ingested as `content_type='entity'` lessons; relations written via
+  `pgmnemo.add_edge()`.  Caller supplies API key; pgmnemo does not hold
+  LLM credentials.  Confidence threshold (default 0.5) gates noisy extractions.
+
+- **`pgmnemo_client.extraction.chunk_text(text, max_chars, overlap)`** — paragraph-aware
+  text splitter with configurable overlap.  Available as a standalone utility.
+
+- **`confidence_boost_weight` adoption guide** in `docs/USAGE.md` (§ Outcome-learning):
+  step-by-step guide for activating `reinforce()` → `confidence_boost_weight` →
+  ranking lift.  Includes before/after SQL example, when-not-to-enable guidance,
+  and Python SDK example.
+
+### Extension
+
+Schema unchanged from v0.9.8.  Extraction logic is Python-only (trusted
+extension cannot call LLM APIs; architecture matches DQ-1 from research brief).
+Delta `pgmnemo--0.9.8--0.10.0.sql` is a version-string-only bump.
+
+### Upgrade
+
+```sql
+ALTER EXTENSION pgmnemo UPDATE TO '0.10.0';
+```
+
+Python SDK: `pip install pgmnemo-client==0.10.0`
+
+### Architecture note
+
+The extraction pipeline deliberately lives in Python, not PL/pgSQL:
+1. `pgmnemo.control` has `trusted=true` — the extension cannot make HTTP calls.
+2. Extraction cost is caller-controlled (bring your own LLM key + model).
+3. `$0 write cost` claim is preserved — `ingest()` and bare `ingest_document()`
+   make zero LLM API calls.
+
+---
+
 ## [0.9.8] — 2026-06-20
 
 ### Theme
