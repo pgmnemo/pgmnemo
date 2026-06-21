@@ -10,6 +10,7 @@
 --   T6: non-semantic embeddings are NULL post-apply
 --   T7: Idempotent — second dry_run=FALSE returns affected_count = 0
 --   T8: Lesson-type row embedding preserved (semantic type, not cleared)
+--   T9: Boundary — relation content_type cleared; NULL content_type preserved
 
 SET pgmnemo.gate_strict = 'off';
 SET pgmnemo.include_unverified = 'on';
@@ -112,3 +113,43 @@ WHERE role = 'tc_se'
 -- ============================================================================
 
 DELETE FROM pgmnemo.agent_lesson WHERE role = 'tc_se';
+
+-- ============================================================================
+-- T9: Boundary — relation content_type cleared; NULL content_type preserved
+-- New isolated role 'tc_se2'; tc_se rows already NULL after T5 (idempotency confirmed).
+-- apply_selective_embedding_policy clears 'relation'; must NOT clear NULL content_type.
+-- ============================================================================
+
+INSERT INTO pgmnemo.agent_lesson
+    (role, project_id, topic, lesson_text, content_type, embedding, commit_sha)
+VALUES
+    ('tc_se2', 9992, 'boundary_test',
+     'selective embedding relation boundary row alpha bravo xylophone',
+     'relation',
+     array_fill(1.0::float4, ARRAY[1024])::vector(1024),
+     'se-sha-relation-b'),
+    ('tc_se2', 9992, 'boundary_test',
+     'selective embedding null content type boundary row alpha bravo xylophone',
+     NULL,
+     array_fill(1.0::float4, ARRAY[1024])::vector(1024),
+     'se-sha-null-b');
+
+-- Apply policy — relation row should be cleared; NULL content_type row untouched
+SELECT (dry_run = FALSE) AS t9_applied
+FROM pgmnemo.apply_selective_embedding_policy(FALSE);
+
+-- relation row: embedding cleared by policy
+SELECT COUNT(*) = 1 AS t9_relation_embedding_cleared
+FROM pgmnemo.agent_lesson
+WHERE role = 'tc_se2'
+  AND content_type = 'relation'
+  AND embedding IS NULL;
+
+-- NULL content_type row: embedding preserved (not a non-semantic type)
+SELECT COUNT(*) = 1 AS t9_null_content_type_preserved
+FROM pgmnemo.agent_lesson
+WHERE role = 'tc_se2'
+  AND content_type IS NULL
+  AND embedding IS NOT NULL;
+
+DELETE FROM pgmnemo.agent_lesson WHERE role = 'tc_se2';
