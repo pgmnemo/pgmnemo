@@ -4679,7 +4679,7 @@ BEGIN
                NULL::TEXT[]                                     AS graph_neighbor_previews,
                er.navigation_path
         FROM expanded_rows er
-    )
+    ),
     -- Step 6: attach cumulative tokens_consumed + v0.9.5 stamp
     result_set AS MATERIALIZED (
         SELECT
