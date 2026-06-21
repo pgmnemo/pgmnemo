@@ -1,41 +1,86 @@
 {
     "version": "v0.10.0",
-    "date": "2026-06-20",
+    "date": "2026-06-21",
     "pgmnemo_version": "0.10.0",
     "gate_type": "recall_at_k_fast_vs_hybrid",
-    "gate_status": "PASS",
-    "scope": "Measure recall@K cost of dropping graph_walk + BM25 re-ranking when using recall_fast() as the MCP default path instead of recall_hybrid().",
-    "k": 10,
-    "methodology": "overlap@K = |recall_fast top-K ∩ recall_hybrid top-K| / K measured over 80 queries on MuSiQue controlled corpus (2500 rows, project_id=31337). Same corpus used for v0.9.0 empirical_recall_parity gate. Benchmark script: benchmarks/scripts/bench_recall_fast_vs_hybrid.py.",
-    "version_note": "recall_fast() SQL is functionally identical between the original v0.9.8 implementation and v0.10.0. v0.9.8 was an intermediate version in the chain 0.9.7→0.9.8→0.10.0, collapsed to a single delta 0.9.7→0.10.0 in commit e5b6340. These measurements apply directly to the v0.10.0 function definition.",
+    "k_primary": 10,
+    "ks_measured": [1, 5, 10, 20],
+    "n_queries_sampled": 30,
+    "n_queries_measured": 22,
+    "n_queries_skipped": 8,
+    "skip_reason": "statement_timeout=8s hit for BM25 path on structured/non-semantic lesson texts (delivery reports, task IDs, Russian task summaries) — these texts cause full BM25 index scan; excluded from overlap stats to avoid bias",
     "corpus": {
-        "project_id": 31337,
-        "active_rows": 2500,
-        "queries": 80,
-        "source": "MuSiQue controlled corpus, same as v0.9.0 gate"
+        "database": "prod_corpus",
+        "active_embedded_lessons": 7612,
+        "queries_sampled": 30,
+        "queries_measured": 22,
+        "source": "random sample of active lessons with embeddings, excluding '[DOC:' and '[WATCHDOG]' prefixes and texts <80 chars (live corpus)"
+    },
+    "recall_at_1": 1.0,
+    "recall_at_5": 0.8,
+    "recall_at_10": 0.8,
+    "recall_at_20": 0.9,
+    "overlap_at_10_median": 0.8,
+    "overlap_at_10_p10": 0.4,
+    "results_by_k": {
+        "k1": {
+            "n_queries": 22,
+            "overlap_median": 1.0,
+            "overlap_p10": 0.0,
+            "fast_latency_p50_ms": 46.7854,
+            "fast_latency_p95_ms": 156.9928,
+            "hybrid_latency_p50_ms": 149.234,
+            "hybrid_latency_p95_ms": 498.9291,
+            "speedup_p50": 3.19
+        },
+        "k5": {
+            "n_queries": 22,
+            "overlap_median": 0.8,
+            "overlap_p10": 0.0,
+            "fast_latency_p50_ms": 63.6429,
+            "fast_latency_p95_ms": 103.2687,
+            "hybrid_latency_p50_ms": 126.347,
+            "hybrid_latency_p95_ms": 217.7156,
+            "speedup_p50": 1.99
+        },
+        "k10": {
+            "n_queries": 22,
+            "overlap_median": 0.8,
+            "overlap_p10": 0.4,
+            "fast_latency_p50_ms": 45.8675,
+            "fast_latency_p95_ms": 99.2684,
+            "hybrid_latency_p50_ms": 91.5322,
+            "hybrid_latency_p95_ms": 163.6139,
+            "speedup_p50": 2.0
+        },
+        "k20": {
+            "n_queries": 22,
+            "overlap_median": 0.9,
+            "overlap_p10": 0.7,
+            "fast_latency_p50_ms": 35.3849,
+            "fast_latency_p95_ms": 86.7826,
+            "hybrid_latency_p50_ms": 70.7644,
+            "hybrid_latency_p95_ms": 161.3839,
+            "speedup_p50": 2.0
+        }
     },
     "results": {
-        "overlap_at_k_median": 0.90,
-        "overlap_at_k_p10": 0.70,
-        "jaccard_at_k_median": 0.82,
-        "fast_latency_p50_ms": 8,
-        "fast_latency_p95_ms": 18,
-        "hybrid_latency_p50_ms": 34,
-        "hybrid_latency_p95_ms": 72,
-        "speedup_p50": 4.25
+        "overlap_at_k_median": 0.8,
+        "overlap_at_k_p10": 0.4,
+        "fast_latency_p50_ms": 45.8675,
+        "fast_latency_p95_ms": 99.2684,
+        "hybrid_latency_p50_ms": 91.5322,
+        "hybrid_latency_p95_ms": 163.6139,
+        "speedup_p50": 2.0
     },
-    "gate_criteria": "overlap_at_k_median >= 0.70 AND fast_latency_p50_ms < 200",
-    "verdict": "PASS (overlap@10 median=90%, p10=70% — fast path finds ≥9/10 hybrid top-10 on median query; 4.25× latency win at 2500 rows scales to 10-20× at 30K+ rows where hybrid times out)",
-    "analysis": {
-        "recall_cost_vs_hybrid": "median 10% of top-10 set differs between fast and hybrid (1 lesson out of 10). The differing lesson is typically a graph-adjacent result (mem_edge hop) or BM25-dominant keyword match not in HNSW top-10.",
-        "graph_walk_contribution": "Estimated 5-10% of hybrid results come exclusively from graph BFS (not in HNSW top-100 candidates). For MCP interactive use (latency-sensitive, shallow corpus under 10K rows), this is acceptable quality tradeoff.",
-        "bm25_contribution": "BM25 overlap with HNSW at ef_search=100 is ~85-95% on this corpus — keyword-rich queries show lower overlap; semantic queries show near-100% overlap.",
-        "latency_advantage": "recall_fast p50=8ms vs recall_hybrid p50=34ms at 2500 rows. At 30K+ rows, recall_hybrid times out (MCP empty-return bug that motivated this work); recall_fast remains <50ms due to HNSW O(k log n) complexity.",
-        "mcp_default_justification": "For interactive/MCP use with latency sensitivity, 90% median overlap is acceptable. Users requiring full 6-signal fusion activate deep=True explicitly."
-    },
-    "pg_regress_tests": ["recall_fast"],
-    "pg_regress_test_count": 10,
-    "pg_regress_tests_added": "extension/sql/recall_fast.sql (T1-T10: signature, filters, score, recency stamping)",
-    "carry_forward_from": "v0.9.7 (gate/v0.9.7.json)",
-    "verification": "Analytical measurement on MuSiQue 2500-row corpus. Benchmark script: benchmarks/scripts/bench_recall_fast_vs_hybrid.py. pg_regress: make installcheck (recall_fast test T1-T10 in REGRESS list, extension/Makefile)."
+    "gate_criteria": "overlap_at_10_median >= 0.70 AND fast_latency_p50_ms < 200",
+    "gate_status": "PASS",
+    "concerns_for_release_decision": [
+        "overlap@10 p10 = 0.40 — worst 10% of queries have <40% overlap: for those queries recall_fast misses 60%+ of what recall_hybrid would find. Agent callers who depend on high recall for safety-critical lookups should use deep=True.",
+        "overlap@1 p10 = 0.00 — for some queries fast and hybrid agree on zero top-1 items: callers relying on top-1 for high-precision single-match (e.g. exact-fact retrieval) should use deep=True.",
+        "27% of sampled queries (8/30) timed out BM25 within 8s (structured/non-semantic lesson texts). overlap@K for those queries is unknown — could be lower than reported median.",
+        "Corpus sample is biased toward Russian-language task delivery summaries (majority of agent_lesson corpus in this DB). Real-world EN semantic lesson queries may show different overlap distribution."
+    ],
+    "methodology": "overlap@K = |recall_fast top-K ∩ recall_hybrid top-K| / K measured over 22 completed queries (30 sampled, 8 skipped due to BM25 timeout) on live prod_corpus corpus (7612 lessons with embeddings). Queries are random active lesson embeddings reused as query vectors; lesson_text used as BM25 query for hybrid. recall_fast: HNSW cosine ORDER BY <=> LIMIT k only. recall_hybrid: HNSW + BM25 RRF (vec_weight=0.4, bm25_weight=0.4, rrf_k=60). No role/project filter (global corpus). statement_timeout=8s cap on hybrid. Benchmark script: benchmarks/scripts/bench_recall_fast_vs_hybrid_v010.py.",
+    "note": "overlap@K = |recall_fast top-K ∩ recall_hybrid top-K| / K. Measures recall@K cost of dropping graph_walk + BM25 RRF (fast path). Threshold 0.70 = acceptable quality for interactive/MCP use-case. fast_latency < 200ms = interactive latency target for MCP default path."
 }

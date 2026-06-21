@@ -9,7 +9,7 @@
     "schema_change": true,
     "schema_change_detail": "New functions: recall_fast(vector,INT,TEXT,INT,TEXT), navigate_locate_dispatch(vector,text,integer,jsonb,integer,text), navigate_expand_typed(bigint[],integer,double precision,text[]), apply_selective_embedding_policy(boolean). New indexes: ix_pgmnemo_lesson_tsv_entity (GIN WHERE content_type=entity), ix_pgmnemo_content_type_active (btree), ix_pgmnemo_temporal_content_type (btree WHERE content_type=temporal). Single upgrade delta: pgmnemo--0.9.7--0.10.0.sql.",
     "scoring_impact": "none — recall_fast is a new function; does not modify recall_hybrid or recall_lessons",
-    "recall_ranking_impact": "none for deep=True (recall_hybrid unchanged); recall_fast is pure HNSW cosine (different function, different results by design — median overlap@10 vs recall_hybrid = 90%)",
+    "recall_ranking_impact": "none for deep=True (recall_hybrid unchanged); recall_fast is pure HNSW cosine (different function, different results by design — measured median overlap@10 vs recall_hybrid = 80%, p10 = 40%; see benchmarks/gate/v0.10.0-recall-at-k.json for full recall@1/5/10/20 breakdown). Prior claim of 90% was UNVERIFIED — corrected 2026-06-21.",
     "carry_forward_from": "v0.9.7",
     "new_regress_tests": ["recall_fast", "navigate_dispatch", "selective_embedding", "provenance_gate"],
     "new_regress_test_count": 4,

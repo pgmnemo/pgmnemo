@@ -26,14 +26,14 @@ python bench_recall_fast_vs_hybrid.py \
     --queries queries.txt \
     --k 10 \
     --repeats 3 \
-    --output benchmarks/gate/v0.9.8-recall-at-k.json
+    --output benchmarks/gate/v0.10.0-recall-at-k.json
 
 queries.txt: one query string per line.
 
 Output JSON schema
 ------------------
 {
-  "version": "v0.9.8",
+  "version": "v0.10.0",
   "gate_type": "recall_at_k_fast_vs_hybrid",
   "k": 10,
   "n_queries": N,
@@ -79,9 +79,18 @@ except ImportError:
 # ---------------------------------------------------------------------------
 
 def embed(text: str, server: str, model: str = "BAAI/bge-m3", dim: int = 1024) -> list[float]:
-    """Call OpenAI-compatible embedding endpoint."""
+    """Call embedding endpoint — supports both /embed (native) and /v1/embeddings (OpenAI-compat)."""
     if httpx is None:
         raise SystemExit("httpx required for embedding: pip install httpx")
+    # Try native /embed endpoint first (faster, batch-friendly)
+    native_resp = httpx.post(
+        f"{server}/embed",
+        json={"texts": [text], "model": model},
+        timeout=30.0,
+    )
+    if native_resp.status_code == 200:
+        return native_resp.json()["embeddings"][0]
+    # Fallback to OpenAI-compatible endpoint
     resp = httpx.post(
         f"{server}/v1/embeddings",
         json={"input": text, "model": model},
@@ -160,7 +169,7 @@ def run_benchmark(
     repeats: int,
 ) -> dict[str, Any]:
     conn = psycopg2.connect(dsn)
-    conn.set_session(readonly=True, autocommit=True)
+    conn.set_session(autocommit=True)  # readonly=False: recall_fast tracks recency via UPDATE
 
     overlaps: list[float] = []
     jaccards: list[float] = []
@@ -227,7 +236,7 @@ def run_benchmark(
     gate_status = "PASS" if gate_pass else "FAIL"
 
     return {
-        "version": "v0.9.8",
+        "version": "v0.10.0",
         "gate_type": "recall_at_k_fast_vs_hybrid",
         "k": k,
         "n_queries": len(queries),
