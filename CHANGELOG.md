@@ -19,84 +19,15 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ### Theme
 
-**Extraction substrate + Python client SDK.**
-Ships the `pgmnemo-client` Python package — the first native SDK for pgmnemo,
-removing the MCP-protocol requirement for agent integrations.  Adds
-`ingest_document()` for automatic document chunking + ingestion, with optional
-LLM entity+relation extraction (explicit opt-in; $0 by default).
-Documents the `confidence_boost_weight` → `reinforce()` activation path
-so adopters can actually benefit from outcome-learning ranking.
-
-### Added
-
-- **`pgmnemo-client` Python package** (`pip install pgmnemo-client`).
-  Provides `connect()` → `PgmnemoClient` with methods:
-
-  | Method | Description |
-  |---|---|
-  | `ingest(text, ...)` | Single lesson via `pgmnemo.ingest()` SP |
-  | `recall(query, top_k, ..., deep)` | Fast HNSW (default) or hybrid RRF |
-  | `reinforce(lesson_ids, outcome)` | Batch confidence update |
-  | `ingest_document(source, ...)` | Chunk → embed → ingest per chunk |
-
-  Optional dependency `pgmnemo-client[extract]` adds litellm for LLM extraction.
-
-- **`ingest_document()` extraction pipeline** — two modes:
-
-  **$0 path (default):** `mem.ingest_document("doc.md")` — chunks text, embeds
-  each chunk, calls `pgmnemo.ingest()` per chunk.  Zero LLM calls, zero
-  external API cost.  Logged to `pgmnemo.memory_ingest_log`.
-
-  **Extraction path (opt-in):** `mem.ingest_document("doc.md", extraction_model="claude-haiku-3-5")` — runs LLM entity+relation extraction per chunk via litellm.
-  Entities ingested as `content_type='entity'` lessons; relations written via
-  `pgmnemo.add_edge()`.  Caller supplies API key; pgmnemo does not hold
-  LLM credentials.  Confidence threshold (default 0.5) gates noisy extractions.
-
-- **`pgmnemo_client.extraction.chunk_text(text, max_chars, overlap)`** — paragraph-aware
-  text splitter with configurable overlap.  Available as a standalone utility.
-
-- **`confidence_boost_weight` adoption guide** in `docs/USAGE.md` (§ Outcome-learning):
-  step-by-step guide for activating `reinforce()` → `confidence_boost_weight` →
-  ranking lift.  Includes before/after SQL example, when-not-to-enable guidance,
-  and Python SDK example.
-
-### Extension
-
-Schema unchanged from v0.9.8.  Extraction logic is Python-only (trusted
-extension cannot call LLM APIs; architecture matches DQ-1 from research brief).
-Delta `pgmnemo--0.9.8--0.10.0.sql` is a version-string-only bump.
-
-### Upgrade
-
-```sql
-ALTER EXTENSION pgmnemo UPDATE TO '0.10.0';
-```
-
-Python SDK: `pip install pgmnemo-client==0.10.0`
-
-### Architecture note
-
-The extraction pipeline deliberately lives in Python, not PL/pgSQL:
-1. `pgmnemo.control` has `trusted=true` — the extension cannot make HTTP calls.
-2. Extraction cost is caller-controlled (bring your own LLM key + model).
-3. `$0 write cost` claim is preserved — `ingest()` and bare `ingest_document()`
-   make zero LLM API calls.
-
----
-
-## [0.9.8] — 2026-06-20
-
-### Theme
-
-**Tiered-memory dispatch + `recall_fast()` + MCP recall fast-by-default.**
+**Tiered-memory dispatch + `recall_fast()` + provenance-gate hardening + scale docs.**
 Adds per-content-type access-path routing (`navigate_locate_dispatch`), typed
 dereference (`navigate_expand_typed`), selective-embedding backfill
 (`apply_selective_embedding_policy`), and a new `recall_fast()` function for
 pure HNSW vector recall at O(k log n). MCP `pgmnemo.recall` now routes to
 `recall_fast()` by default; `deep=true` opts into `recall_hybrid()` for full
-6-signal RRF fusion. Closes #81: `role_filter` / `project_id_filter` /
-`exclude_dag_id` confirmed present in the published wheel (wired in v0.9.7 /
-cdc1524b) and covered by a new introspection test.
+6-signal RRF fusion. Closes #80 (recall_fast), #81 (MCP filter params confirmed),
+#82 (scale + SLO docs). Adds `docs/AGENT_INTEGRATION.md` (closes #79) and
+`confidence_boost_weight` adoption guide.
 
 ### Added
 
@@ -115,8 +46,8 @@ cdc1524b) and covered by a new introspection test.
   `'relation'` → `mem_edge` BFS from BM25 seed; `NULL` → existing `navigate_locate`.
   Return schema identical to `navigate_locate`.
 
-- **`pgmnemo.navigate_expand_typed(ids, expand_fields, graph_depth, weight_threshold,
-  content_type_hint)`**
+- **`pgmnemo.navigate_expand_typed(ids, graph_expand_depth, graph_expand_threshold,
+  relation_types)`**
   Content-type-aware typed dereference:
   `'entity'` → metadata JSONB (`canonical_name`, `entity_type`) + connected lessons;
   `'lesson'` / `NULL` → full `lesson_text` (same as `navigate_expand`);
@@ -132,35 +63,49 @@ cdc1524b) and covered by a new introspection test.
   `ix_pgmnemo_content_type_active` (btree on `content_type WHERE is_active`);
   `ix_pgmnemo_temporal_content_type` (btree on `t_valid_from WHERE content_type='temporal'`).
 
+- **`docs/AGENT_INTEGRATION.md`** — dispatch guide, filter usage, tool whitelist,
+  prefix convention (closes #79).
+
+- **Scale + Latency SLO section** in `docs/SQL_REFERENCE.md §6` — operational
+  targets, index sizing guidance (closes #82).
+
+- **`docs/CONFIDENCE_BOOST_GUIDE.md`** — step-by-step guide for activating
+  `reinforce()` → `confidence_boost_weight` → ranking lift. Includes before/after
+  SQL example and when-not-to-enable guidance.
+
+- **pg_regress coverage** for provenance-gate moat (T1–T8): `extension/sql/provenance_gate.sql`.
+
 ### Changed
 
-- **`pgmnemo.recall` MCP tool (pgmnemo-mcp v0.9.8):**
+- **`pgmnemo.recall` MCP tool (pgmnemo-mcp v0.10.0):**
   Default path changed from `recall_lessons()` → **`recall_fast()`**
   (pure HNSW, lower latency).
   New `deep: bool = False` parameter: when `True`, calls `recall_hybrid()`
   for full vector + BM25 + graph proximity + recency + confidence + provenance fusion.
   `role_filter`, `project_id_filter`, `exclude_dag_id` present in both paths.
 
-- **`pgmnemo.get_params` MCP tool:** version string updated to `"0.9.8"`.
+- **`pgmnemo.get_params` MCP tool:** version string updated to `"0.10.0"`.
 
 ### Extension
 
 Schema additions only — no existing function signatures changed. Upgrade is
-non-breaking for all existing callers.
+non-breaking for all existing callers. Single upgrade delta: `pgmnemo--0.9.7--0.10.0.sql`.
 
 ### Upgrade
 
 ```sql
-ALTER EXTENSION pgmnemo UPDATE TO '0.9.8';
+ALTER EXTENSION pgmnemo UPDATE TO '0.10.0';
 ```
 
-MCP server: `pip install --upgrade pgmnemo-mcp==0.9.8`.
+MCP server: `pip install --upgrade pgmnemo-mcp==0.10.0`.
 
 ### Closes
 
+- **#80** — `recall_fast()` HNSW-only fast path with pg_regress coverage.
 - **#81** — `role_filter` / `project_id_filter` / `exclude_dag_id` in published
-  MCP wheel confirmed and covered by `test_recall_exposes_filter_params` in
-  `tests/test_mcp_smoke.py`. These were wired in v0.9.7 (commit cdc1524b).
+  MCP wheel confirmed by `test_recall_exposes_filter_params` in `tests/test_mcp_smoke.py`.
+- **#82** — Scale + SLO reference in `docs/SQL_REFERENCE.md §6`.
+- **#79** — `docs/AGENT_INTEGRATION.md` dispatch guide.
 
 ---
 

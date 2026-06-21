@@ -735,7 +735,7 @@ For all changes per release see `CHANGELOG.md`.
 
 ---
 
-## 6. Scale + Latency SLO (v0.9.8+)
+## 6. Scale + Latency SLO (v0.10.0+)
 
 This section documents the supported corpus-size envelope, function-selection
 guidance, and operator-observable latency targets. All figures assume PostgreSQL
@@ -764,7 +764,7 @@ corpora > 5 M rows build with `maintenance_work_mem = '4GB'` and
 | Background analysis, cron job, batch eval | `recall_hybrid()` | BM25+graph+RRF; higher recall@10 |
 | MCP default (no `deep` param) | `recall_fast()` via MCP `deep=False` | Lowest latency for interactive agents |
 | MCP with keyword recall or graph signals needed | `recall_hybrid()` via MCP `deep=True` | Full 6-signal RRF |
-| Any recall from application code (psycopg2) | `pgmnemo-client` `recall(deep=False)` | Wraps `recall_fast` |
+| Any recall from application code (psycopg2) | `pgmnemo.recall_fast()` direct | O(k log N) HNSW, lowest latency |
 
 ```sql
 -- interactive (agent mid-task): O(k log N), no BM25, no graph

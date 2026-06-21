@@ -108,21 +108,12 @@ def post_task_hook(conn, recalled_lesson_ids: list[int], outcome: str) -> None:
     conn.commit()
 ```
 
-Or via `pgmnemo-client`:
+Or via the MCP server (`deep=False` for `recall_fast`, `deep=True` for `recall_hybrid`):
 
-```python
-import pgmnemo_client as pgm
-
-mem = pgm.connect(dsn=PGMNEMO_DSN)
-
-# At dispatch time — record which lessons were recalled
-lessons = mem.recall(task_description, top_k=5, role_filter=role)
-lesson_ids = [r["lesson_id"] for r in lessons]
-
-# ... run task ...
-
-# At completion — reinforce with outcome
-mem.reinforce(lesson_ids, "success")   # or "failure"
+```
+# MCP tool call:
+pgmnemo.recall(query="task description", top_k=5, role_filter="role", deep=False)
+pgmnemo.patch(lesson_ids=[42, 17], outcome="success")
 ```
 
 **Run Phase 1 for 50–200 task cycles before Phase 2.** The GUC has no effect until confidence diverges.
@@ -342,5 +333,5 @@ This completes the feedback loop: `reinforce()` signals quality → `confidence_
 - `confidence_boost_weight` GUC: [`docs/SQL_REFERENCE.md §3.2`](SQL_REFERENCE.md#32-write--ingest-gucs)
 - Outcome-learning GUCs: [`docs/SQL_REFERENCE.md §3.3`](SQL_REFERENCE.md#33-outcome-learning-gucs-used-by-reinforce-v093)
 - USAGE.md quick reference: [`docs/USAGE.md §Outcome-learning`](USAGE.md)
-- Python SDK (`reinforce()` method): [`pgmnemo_client/pgmnemo_client/client.py`](../pgmnemo_client/pgmnemo_client/client.py)
+- MCP server (`pgmnemo.patch` tool): [`pgmnemo_mcp/pgmnemo_mcp/server.py`](../pgmnemo_mcp/pgmnemo_mcp/server.py)
 - pg_regress tests: [`extension/sql/confidence_boost_guc.sql`](../extension/sql/confidence_boost_guc.sql), [`extension/sql/reinforce_delta_guc.sql`](../extension/sql/reinforce_delta_guc.sql)

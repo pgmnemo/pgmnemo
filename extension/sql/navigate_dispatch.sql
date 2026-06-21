@@ -1,5 +1,5 @@
 -- navigate_dispatch.sql
--- pg_regress tests for pgmnemo v0.9.8: navigate_locate_dispatch() + navigate_expand_typed()
+-- pg_regress tests for pgmnemo v0.10.0: navigate_locate_dispatch() + navigate_expand_typed()
 --
 -- Coverage:
 --   T1: navigate_locate_dispatch exists with 6-arg signature

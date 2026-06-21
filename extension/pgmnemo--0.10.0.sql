@@ -1,18 +1,10 @@
 -- pgmnemo--0.10.0.sql
 -- Flat install: pgmnemo 0.10.0
--- Generated from pgmnemo--0.9.8.sql (schema unchanged; extraction is Python-only)
+-- Generated from pgmnemo--0.9.7.sql + pgmnemo--0.9.7--0.10.0.sql
 -- SPDX-License-Identifier: Apache-2.0
 --
 -- Install: CREATE EXTENSION pgmnemo;
 -- Upgrade: ALTER EXTENSION pgmnemo UPDATE TO '0.10.0';
-
--- pgmnemo--0.9.8.sql
--- Flat install: pgmnemo 0.9.8
--- Generated from pgmnemo--0.9.7.sql + pgmnemo--0.9.7--0.9.8.sql
--- SPDX-License-Identifier: Apache-2.0
---
--- Install: CREATE EXTENSION pgmnemo;
--- Upgrade: ALTER EXTENSION pgmnemo UPDATE TO '0.9.8';
 
 -- [base: pgmnemo--0.9.7.sql]
 -- Flat install: pgmnemo v0.9.7
@@ -7257,7 +7249,7 @@ COMMENT ON FUNCTION pgmnemo.mark_stale(INT, REAL, BOOLEAN, BOOLEAN, INT) IS
     'ALWAYS review the dry_run output before running with p_dry_run=>FALSE.';
 
 
--- ====== v0.9.8 additions ======
+-- ====== v0.10.0 additions ======
 
 -- ============================================================================
 -- SUPPORTING INDEX: entity content_type GIN index (BM25 dispatch path)
@@ -7851,4 +7843,4 @@ COMMENT ON FUNCTION pgmnemo.recall_fast(vector, INT, TEXT, INT, TEXT) IS
     'score = cosine similarity (1 - distance). '
     'Respects include_unverified, ef_search, track_recall_recency GUCs. '
     'Filters: role_filter, project_id_filter, exclude_dag_id (same as recall_hybrid). '
-    'v0.9.8: default MCP recall path. Use recall_hybrid for full 6-signal fusion.';
+    'v0.10.0: default MCP recall path. Use recall_hybrid for full 6-signal fusion.';

@@ -1,5 +1,5 @@
 -- recall_fast.sql
--- pg_regress tests for pgmnemo v0.9.8: recall_fast() HNSW-only interactive recall
+-- pg_regress tests for pgmnemo v0.10.0: recall_fast() HNSW-only interactive recall
 --
 -- Coverage:
 --   T1: recall_fast() exists with correct 5-arg signature

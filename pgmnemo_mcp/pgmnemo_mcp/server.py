@@ -117,7 +117,7 @@ def recall(
     project_id_filter: restrict to lessons from this project (v0.9.6+)
     exclude_dag_id: suppress lessons whose source_dag_id matches — prevents a workflow
       from recalling its own in-flight outputs (v0.9.6+)
-    deep: when True, use recall_hybrid() for BM25 + graph fusion (v0.9.8+)
+    deep: when True, use recall_hybrid() for BM25 + graph fusion (v0.10.0+)
     """
     query_vec = to_pgvector(embed(query))
     p = get_pool()
@@ -138,7 +138,7 @@ def recall(
                     (query_vec, query, top_k, role_filter, project_id_filter, exclude_dag_id),
                 )
             else:
-                # recall_fast v0.9.8: (query_embedding, k,
+                # recall_fast v0.10.0: (query_embedding, k,
                 #   role_filter, project_id_filter, exclude_dag_id)
                 cur.execute(
                     """
@@ -211,7 +211,7 @@ def get_params() -> dict[str, Any]:
         "embedding_model": EMBEDDING_MODEL or None,
         "embedding_dim": EMBEDDING_DIM,
         "mcp_port": MCP_PORT,
-        "version": "0.9.8",
+        "version": "0.10.0",
     }
 
 

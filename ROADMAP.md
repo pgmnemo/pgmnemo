@@ -48,8 +48,7 @@ pgmnemo is **agent memory that learns which lessons worked — ranked by outcome
 | **v0.9.5** | Recall-recency signals + corpus curation | `last_recalled_at`, `recall_count` columns; `mark_stale()` with dry-run + safeguards; `track_recall_recency` GUC | 2026-06-19 (✅ SHIPPED) |
 | **v0.9.6** | Community response + R11/R12/R13 plumbing | `item_kind`/`version_n`/`patch_count`; `source_dag_id` + `exclude_dag_id`; `memory_ingest_log` table | 2026-06-19 (✅ SHIPPED) |
 | **v0.9.7** | MCP params exposure + smoke-test validation | `pgmnemo.get_params` MCP tool; 7-test smoke suite; `pgmnemo_mcp` v0.9.7; no schema changes | 2026-06-20 (✅ SHIPPED) |
-| **v0.9.8** | Tiered-memory dispatch + `recall_fast()` + MCP fast-by-default | `navigate_locate_dispatch`, `navigate_expand_typed`, `apply_selective_embedding_policy`, `recall_fast()`; MCP `deep` param; closes #81 | 2026-06-20 (✅ SHIPPED) |
-| **v0.10.0** | Extraction substrate + outcome-confidence deepening | `pgmnemo-client` SDK; `ingest_document()` ($0 path + opt-in LLM extraction); `confidence_boost_weight` adoption guide | 2026-06-20 (✅ SHIPPED) |
+| **v0.10.0** | Tiered-memory dispatch + `recall_fast()` + provenance-gate hardening + scale docs | `navigate_locate_dispatch`, `navigate_expand_typed`, `apply_selective_embedding_policy`, `recall_fast()`; MCP `deep` param; provenance-gate pg_regress (T1–T8); `AGENT_INTEGRATION.md` (#79); scale/SLO §6 (#82); `confidence_boost_weight` guide; closes #80/#81/#82/#79 | 2026-06-20 (✅ SHIPPED) |
 | **v1.0** | API freeze + stability commitment | 2 consecutive non-breaking releases; stable API contract; outcome-confidence retrieval as headline positioning | 2026-Q4 |
 
 ---
@@ -334,28 +333,22 @@ CREATE TABLE pgmnemo.memory_ingest_log (
 
 ---
 
-## v0.10.0 — Extraction substrate (✅ SHIPPED 2026-06-20)
+## v0.10.0 — Tiered-memory dispatch + recall_fast() + provenance hardening (✅ SHIPPED 2026-06-20)
 
-**Theme:** first substrate feature — turn text into a queryable knowledge graph automatically. Without auto-extraction the graph layer is empty and graph-augmented retrieval is hollow.
+**Theme:** latency-optimised recall + content-type-aware dispatch + provenance-gate test coverage + operator docs.
 
-**Priority rationale (P1):** closes S1 of the causal positioning chain (structured lesson capture); without `ingest_document()` adopters must hand-author every lesson, which blocks cold-start. `confidence_boost_weight` adoption guide also ships here — `reinforce()` is live since v0.7.0 but most adopters leave the GUC at default `0.0` and miss the ranking benefit.
+**Priority rationale (P1):** closes #80 (`recall_fast()` HNSW-only path for <20ms MCP recall), #81 (MCP filter params verified), #82 (scale/SLO reference), #79 (agent integration guide). `confidence_boost_weight` adoption guide also ships here — `reinforce()` is live since v0.7.0 but most adopters leave the GUC at default `0.0` and miss the ranking benefit.
 
-### Extraction pipeline
+### New SQL functions
 
-`ingest_document(source TEXT, source_type TEXT DEFAULT 'text')`: accepts raw text, Markdown, or a local file path. Internally: chunk → embed → ingest into `agent_lesson`, then LLM (Haiku) entity + relation extraction → typed edges via `add_edge()`. Cost ≈ Haiku $/document. Logged to `memory_ingest_log`.
+- `pgmnemo.recall_fast()` — HNSW-only vector recall, O(k log n), no BM25/graph/RRF. Default MCP recall path.
+- `pgmnemo.navigate_locate_dispatch()` — per-content-type access-path router (entity→GIN, temporal→btree, relation→graph, NULL→unified).
+- `pgmnemo.navigate_expand_typed()` — typed dereference (entity/fact/relation/lesson content materialization).
+- `pgmnemo.apply_selective_embedding_policy()` — sets `embedding=NULL` for non-semantic content types.
 
-### Python client SDK
+### MCP server v0.10.0
 
-`pip install pgmnemo-client` — thin wrapper over the SQL API. Three-line quickstart:
-
-```python
-import pgmnemo
-mem = pgmnemo.connect("postgresql://...")
-mem.ingest("Claude solved the N+1 query by adding select_related()")
-results = mem.recall("database query optimization", top_k=5)
-```
-
-Covers: `connect()`, `ingest()`, `ingest_document()`, `recall()`, `reinforce()`.
+`pgmnemo.recall` default path changed to `recall_fast()` (pure HNSW). New `deep: bool = False` param: `deep=True` activates `recall_hybrid()` for full 6-signal RRF fusion.
 
 ---
 

@@ -2,7 +2,7 @@
 
 **Version:** 0.10.0  
 **Closes:** #79  
-**Status:** Production-ready (v0.9.8+)
+**Status:** Production-ready (v0.10.0+)
 
 This guide answers one question: **how do you give a running agent access to pgmnemo memory without turning it into a write-everything firehose?**
 
@@ -242,26 +242,30 @@ The agent reads top-to-bottom; recalled context appears first, is contextually g
 ## 5. Complete dispatch example
 
 ```python
-import pgmnemo_client as pg
+import psycopg2
 
-client = pg.connect(dsn="postgresql://localhost/mydb")
+conn = psycopg2.connect("postgresql://localhost/mydb")
 
 def run_agent_task(
     task_text: str,
     role: str,
     project_id: int,
     dag_run_id: str,
+    query_embedding,        # vector(1024) from your embedding model
     base_system_prompt: str,
 ) -> str:
-    # 1. Recall at dispatch time — filtered, fast path
-    lessons = client.recall(
-        query=task_text,
-        top_k=5,
-        role_filter=role,
-        project_id_filter=project_id,
-        exclude_dag_id=dag_run_id,
-        deep=False,
-    )
+    with conn.cursor() as cur:
+        # 1. Recall at dispatch time — filtered, fast path
+        cur.execute(
+            """
+            SELECT lesson_id, topic, lesson_text, score
+            FROM pgmnemo.recall_fast(
+                %s::vector(1024), %s, %s, %s, %s
+            )
+            """,
+            (query_embedding, 5, role, project_id, dag_run_id),
+        )
+        lessons = cur.fetchall()
 
     # 2. Build system prompt — supplementary-to-prefix
     system_prompt = build_system_prompt(base_system_prompt, lessons)
@@ -273,22 +277,22 @@ def run_agent_task(
         tools=["pgmnemo.recall", "pgmnemo.patch"],
     )
 
-    # 4. Post-task: ingest outcome lesson (outside agent, with commit_sha)
-    if result.commit_sha:
-        client.ingest(
-            text=result.outcome_summary,
-            role=role,
-            topic="outcome",
-            importance=3,
-            project_id=project_id,
-            commit_sha=result.commit_sha,
-            source_dag_id=dag_run_id,
-        )
+    with conn.cursor() as cur:
+        # 4. Post-task: ingest outcome lesson (outside agent, with commit_sha)
+        if result.commit_sha:
+            cur.execute(
+                "SELECT pgmnemo.ingest(%s, %s, %s, %s, %s, %s, NULL::vector(1024), %s)",
+                (role, project_id, "outcome", result.outcome_summary,
+                 3, result.commit_sha, dag_run_id),
+            )
 
-        # 5. Reinforce lessons that contributed to a good outcome
-        if result.lesson_ids_used and result.quality_score >= 0.8:
-            client.reinforce(result.lesson_ids_used, "success")
-
+            # 5. Reinforce lessons that contributed to a good outcome
+            if result.lesson_ids_used and result.quality_score >= 0.8:
+                cur.execute(
+                    "SELECT pgmnemo.reinforce(%s::BIGINT[], %s)",
+                    (result.lesson_ids_used, "success"),
+                )
+    conn.commit()
     return result.output
 ```
 
@@ -312,13 +316,12 @@ def run_agent_task(
 
 | Concept | Source |
 |---|---|
-| `recall_fast()` SQL function | `extension/pgmnemo--0.9.7--0.9.8.sql` |
+| `recall_fast()` SQL function | `extension/pgmnemo--0.9.7--0.10.0.sql` |
 | `recall_hybrid()` SQL function | `extension/pgmnemo--0.9.6.sql` |
 | MCP `pgmnemo.recall` tool | `pgmnemo_mcp/pgmnemo_mcp/server.py` |
 | MCP `pgmnemo.patch` tool | `pgmnemo_mcp/pgmnemo_mcp/server.py` |
-| `PgmnemoClient.recall()` | `pgmnemo_client/pgmnemo_client/client.py` |
 | `role_filter` / `project_id_filter` / `exclude_dag_id` filter history | `cdc1524b` (v0.9.7) |
-| `deep` parameter (fast/hybrid dispatch) | `e21efca` (v0.9.8) |
+| `deep` parameter (fast/hybrid dispatch) | `extension/pgmnemo--0.9.7--0.10.0.sql` (v0.10.0) |
 | `confidence_boost_weight` tuning | `docs/USAGE.md` §"Outcome-learning" |
 | Provenance gate modes | `docs/USAGE.md` §"Provenance-gated writes" |
 | Token-economy navigation | `SQL_REFERENCE.md` §"navigate_locate / navigate_expand" |

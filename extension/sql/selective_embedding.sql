@@ -1,5 +1,5 @@
 -- selective_embedding.sql
--- pg_regress tests for pgmnemo v0.9.8: apply_selective_embedding_policy()
+-- pg_regress tests for pgmnemo v0.10.0: apply_selective_embedding_policy()
 --
 -- Coverage:
 --   T1: apply_selective_embedding_policy exists with 1-arg signature (boolean)

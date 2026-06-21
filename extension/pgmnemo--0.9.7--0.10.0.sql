@@ -1,8 +1,8 @@
--- pgmnemo--0.9.7--0.9.8.sql
--- Upgrade: pgmnemo 0.9.7 → 0.9.8
+-- pgmnemo--0.9.7--0.10.0.sql
+-- Upgrade: pgmnemo 0.9.7 → 0.10.0
 -- SPDX-License-Identifier: Apache-2.0
 --
--- THEME: Tiered-memory per-type dispatch + typed expand + selective-embedding policy
+-- THEME: Tiered-memory dispatch + recall_fast() + provenance-gate + scale docs + confidence guide
 --
 -- §2 TIERED_MEMORY_ACCESS_MODEL: LOCATE layer now routes each content_type to its
 --    cheapest adequate index (bm25_entity / temporal_btree / graph_relation / unified).
@@ -26,9 +26,9 @@
 --
 -- INDEX: partial GIN index for entity-type BM25 dispatch (lesson_tsv WHERE content_type='entity')
 --
--- Upgrade: ALTER EXTENSION pgmnemo UPDATE TO '0.9.8';
+-- Upgrade: ALTER EXTENSION pgmnemo UPDATE TO '0.10.0';
 
-\echo Use "ALTER EXTENSION pgmnemo UPDATE TO '0.9.8'" to load this file. \quit
+\echo Use "ALTER EXTENSION pgmnemo UPDATE TO '0.10.0'" to load this file. \quit
 
 -- ============================================================================
 -- SUPPORTING INDEX: entity content_type GIN index (BM25 dispatch path)
@@ -622,4 +622,4 @@ COMMENT ON FUNCTION pgmnemo.recall_fast(vector, INT, TEXT, INT, TEXT) IS
     'score = cosine similarity (1 - distance). '
     'Respects include_unverified, ef_search, track_recall_recency GUCs. '
     'Filters: role_filter, project_id_filter, exclude_dag_id (same as recall_hybrid). '
-    'v0.9.8: default MCP recall path. Use recall_hybrid for full 6-signal fusion.';
+    'v0.10.0: default MCP recall path. Use recall_hybrid for full 6-signal fusion.';

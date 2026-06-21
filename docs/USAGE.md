@@ -1180,14 +1180,27 @@ ALTER DATABASE mydb SET pgmnemo.confidence_boost_weight = '0.003';
 --        17 | 0.0154 |       0.26 |             0.70  ← noisy lesson −0.0007
 ```
 
-### Python (pgmnemo-client v0.10.0)
+### Python (psycopg2 direct)
 
 ```python
-import pgmnemo_client as pgmnemo
+import psycopg2
 
-with pgmnemo.connect("postgresql://localhost/mydb") as mem:
-    results = mem.recall("database optimization")
+conn = psycopg2.connect("postgresql://localhost/mydb")
+with conn.cursor() as cur:
+    # recall returns lesson_id, score, role, project_id, topic, lesson_text, ...
+    cur.execute(
+        "SELECT * FROM pgmnemo.recall_fast(%s::vector(1024), %s)",
+        (query_embedding, 5)
+    )
+    results = cur.fetchall()
+    lesson_ids = [row[0] for row in results]
+
     # ... agent uses results[0] and succeeds ...
-    mem.reinforce([results[0]["lesson_id"]], "success")
-    # lesson confidence updated; will rank higher next time
+
+    cur.execute(
+        "SELECT pgmnemo.reinforce(%s::BIGINT[], %s)",
+        (lesson_ids, "success")
+    )
+conn.commit()
+# lesson confidence updated; will rank higher next time
 ```
