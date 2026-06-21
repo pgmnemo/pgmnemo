@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, patch
 class TestImport(unittest.TestCase):
     def test_package_imports(self):
         import pgmnemo_mcp
-        assert pgmnemo_mcp.__version__ == "0.9.8"
+        assert pgmnemo_mcp.__version__ == "0.10.0"
 
     def test_server_imports(self):
         from pgmnemo_mcp import server
@@ -67,7 +67,7 @@ class TestRecallUnit(unittest.TestCase):
         return mock_pool, mock_cur
 
     def test_recall_calls_db_fast_default(self):
-        """Default recall (deep=False) calls recall_fast — v0.9.8."""
+        """Default recall (deep=False) calls recall_fast — v0.10.0."""
         from pgmnemo_mcp import server
 
         mock_pool, mock_cur = self._make_mock_pool()
@@ -81,7 +81,7 @@ class TestRecallUnit(unittest.TestCase):
         assert "recall_fast" in sql_called, f"expected recall_fast, got: {sql_called}"
 
     def test_recall_deep_calls_recall_hybrid(self):
-        """deep=True routes to recall_hybrid — v0.9.8."""
+        """deep=True routes to recall_hybrid — v0.10.0."""
         from pgmnemo_mcp import server
 
         mock_pool, mock_cur = self._make_mock_pool()
@@ -117,7 +117,7 @@ class TestGetParams(unittest.TestCase):
         result = server.get_params()
         assert "database_url" in result
         assert "version" in result
-        assert result["version"] == "0.9.8"
+        assert result["version"] == "0.10.0"
         assert "embedding_dim" in result
         assert "mcp_port" in result
 
