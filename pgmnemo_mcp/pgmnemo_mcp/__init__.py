@@ -1,6 +1,6 @@
 """pgmnemo-mcp — MCP server exposing pgmnemo ingest and recall tools."""
 
-__version__ = "0.9.8"
+__version__ = "0.10.0"
 
 from .server import mcp, ingest, recall, get_params, main
 
