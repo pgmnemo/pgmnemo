@@ -109,7 +109,7 @@ SELECT EXISTS (
 SELECT pgmnemo.ingest(
     'tc_pggate', NULL, 'gate_ingest_sha',
     'T6: ingest with commit_sha stamps verified_at.',
-    3, NULL, 'sha-t6-abc', NULL, '{}'::jsonb
+    3::smallint, NULL, 'sha-t6-abc', NULL, '{}'::jsonb
 ) IS NOT NULL AS t6_ingest_id;
 
 SELECT verified_at IS NOT NULL AS t6_verified
@@ -127,7 +127,7 @@ SET pgmnemo.gate_strict = 'off';
 SELECT pgmnemo.ingest(
     'tc_pggate', NULL, 'gate_ingest_ghost',
     'T7: ingest without provenance yields ghost lesson.',
-    3, NULL, NULL, NULL, '{}'::jsonb
+    3::smallint, NULL, NULL, NULL, '{}'::jsonb
 ) IS NOT NULL AS t7_ingest_id;
 
 SELECT verified_at IS NULL AS t7_ghost

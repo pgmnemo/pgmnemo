@@ -25,7 +25,7 @@ SELECT verified_at IS NULL AS t1_ghost
 FROM pgmnemo.agent_lesson
 WHERE role = 'tc_pggate' AND topic = 'gate_off_ghost'
 ORDER BY id DESC LIMIT 1;
- t1_ghost
+ t1_ghost 
 ----------
  t
 (1 row)
@@ -43,7 +43,7 @@ SELECT verified_at IS NULL AS t2_ghost
 FROM pgmnemo.agent_lesson
 WHERE role = 'tc_pggate' AND topic = 'gate_warn_ghost'
 ORDER BY id DESC LIMIT 1;
- t2_ghost
+ t2_ghost 
 ----------
  t
 (1 row)
@@ -73,7 +73,7 @@ NOTICE:  T3: gate blocked INSERT as expected
 SELECT COUNT(*) = 0 AS t3_blocked
 FROM pgmnemo.agent_lesson
 WHERE role = 'tc_pggate' AND topic = 'gate_enforce_blocked';
- t3_blocked
+ t3_blocked 
 ------------
  t
 (1 row)
@@ -88,7 +88,7 @@ SELECT EXISTS (
     SELECT 1 FROM pgmnemo.agent_lesson
     WHERE role = 'tc_pggate' AND topic = 'gate_enforce_sha'
 ) AS t4_sha_bypasses_gate;
- t4_sha_bypasses_gate
+ t4_sha_bypasses_gate 
 ----------------------
  t
 (1 row)
@@ -104,7 +104,7 @@ SELECT EXISTS (
     SELECT 1 FROM pgmnemo.agent_lesson
     WHERE role = 'tc_pggate' AND topic = 'gate_enforce_hash'
 ) AS t5_hash_bypasses_gate;
- t5_hash_bypasses_gate
+ t5_hash_bypasses_gate 
 -----------------------
  t
 (1 row)
@@ -117,9 +117,9 @@ SELECT EXISTS (
 SELECT pgmnemo.ingest(
     'tc_pggate', NULL, 'gate_ingest_sha',
     'T6: ingest with commit_sha stamps verified_at.',
-    3, NULL, 'sha-t6-abc', NULL, '{}'::jsonb
+    3::smallint, NULL, 'sha-t6-abc', NULL, '{}'::jsonb
 ) IS NOT NULL AS t6_ingest_id;
- t6_ingest_id
+ t6_ingest_id 
 --------------
  t
 (1 row)
@@ -128,7 +128,7 @@ SELECT verified_at IS NOT NULL AS t6_verified
 FROM pgmnemo.agent_lesson
 WHERE role = 'tc_pggate' AND topic = 'gate_ingest_sha'
 ORDER BY id DESC LIMIT 1;
- t6_verified
+ t6_verified 
 -------------
  t
 (1 row)
@@ -141,9 +141,9 @@ SET pgmnemo.gate_strict = 'off';
 SELECT pgmnemo.ingest(
     'tc_pggate', NULL, 'gate_ingest_ghost',
     'T7: ingest without provenance yields ghost lesson.',
-    3, NULL, NULL, NULL, '{}'::jsonb
+    3::smallint, NULL, NULL, NULL, '{}'::jsonb
 ) IS NOT NULL AS t7_ingest_id;
- t7_ingest_id
+ t7_ingest_id 
 --------------
  t
 (1 row)
@@ -152,9 +152,9 @@ SELECT verified_at IS NULL AS t7_ghost
 FROM pgmnemo.agent_lesson
 WHERE role = 'tc_pggate' AND topic = 'gate_ingest_ghost'
 ORDER BY id DESC LIMIT 1;
- t7_ghost
+ t7_ghost 
 ----------
- t
+ f
 (1 row)
 
 -- Expect: t + t (ID returned, verified_at IS NULL → ghost)
@@ -182,7 +182,7 @@ NOTICE:  T8: default gate blocked INSERT as expected
 SELECT COUNT(*) = 0 AS t8_default_blocked
 FROM pgmnemo.agent_lesson
 WHERE role = 'tc_pggate' AND topic = 'gate_default_blocked';
- t8_default_blocked
+ t8_default_blocked 
 --------------------
  t
 (1 row)
