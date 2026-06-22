@@ -15,6 +15,32 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.10.1] — 2026-06-22
+
+### Fixed
+
+- **#84 — `recall_fast` NULL query_embedding silent score corruption.** `recall_fast(NULL::vector, ...)` previously returned rows with `score = NULL` instead of raising an error. Now raises `EXCEPTION P0001` with actionable message (`use recall_hybrid() if you have query_text but no embedding`). pg_regress T11 validates this guard. ([`cfdf8e3`](https://github.com/pgmnemo/pgmnemo/commit/cfdf8e3))
+
+- **#87 — `recall_hybrid` BM25 path timeout robustness (4 fixes).** On large or Cyrillic-heavy corpora, `recall_hybrid` timed out on up to 20% of calls (p95 ≈ 910 ms). Four fixes applied in migration sections A–E:
+  1. `query_text` capped to 200 chars before `websearch_to_tsquery` to prevent pathological parse cost
+  2. Per-row `to_tsvector(topic)` removed — uses pre-computed indexed `full_text` column (GIN)
+  3. BM25 block wrapped in `BEGIN … EXCEPTION WHEN query_canceled` with `SET LOCAL statement_timeout = pgmnemo.bm25_budget_ms` — timeout is a graceful fallback to vector-only, not a hard failure
+  4. `tsconfig` changed from `'english'` to `'simple'` across all tsvector columns and query functions — correct tokenisation for Cyrillic and structured texts (no stemming, no stop-words)
+
+  **Measured result:** 0% timeouts, p95 = 44 ms (20× improvement from 910 ms baseline). ([`a35c8fc`](https://github.com/pgmnemo/pgmnemo/commit/a35c8fc))
+
+### Added
+
+- **`pgmnemo.bm25_budget_ms` GUC** (INT, default 250, min 1). Controls per-query BM25 time budget in milliseconds. Set via `SET pgmnemo.bm25_budget_ms = N` or `ALTER SYSTEM SET pgmnemo.bm25_budget_ms = N`. Values below 50 ms may cause frequent graceful fallback to vector-only on large corpora.
+
+- **pg_regress tests:** `recall_hybrid_robustness` (T1–T8 covering Cyrillic, >200-char cap, JSON/structured, graceful degrade, role_filter stable) and `test_v0101` (T11 NULL guard + GUC assertable).
+
+### Migration notes
+
+`ALTER EXTENSION pgmnemo UPDATE TO '0.10.1'` applies sections A–G of `pgmnemo--0.10.0--0.10.1.sql`. The migration changes `GENERATED ALWAYS AS` expressions for `topic_tsv`, `lesson_tsv`, and `full_text` columns from `'english'` to `'simple'` tsconfig. GIN indexes are rebuilt automatically; plan for brief I/O spike on corpora > 100k lessons.
+
+---
+
 ## [0.10.0] — 2026-06-20
 
 ### Theme
