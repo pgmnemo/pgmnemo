@@ -1111,3 +1111,147 @@ COMMENT ON COLUMN pgmnemo.agent_lesson.full_text IS
     'Weighted tsvector: topic (weight A) || lesson_text (weight B), tsconfig ''simple'' (v0.10.1, Fix 4). '
     'Used by recall_hybrid BM25 phase (Fix 2) and recall_lessons full_text path. '
     'GIN index: pgmnemo_agent_lesson_full_text_idx.';
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- G. recall_fast() — fix #84: NULL query_embedding raises EXCEPTION
+-- ─────────────────────────────────────────────────────────────────────────────
+--
+-- Bug: recall_fast() computes (1.0 - (embedding <=> query_embedding)) without
+-- guarding against NULL query_embedding, so the score column is silently NULL
+-- when the caller passes NULL instead of an embedding vector.
+--
+-- Fix: add an early RAISE EXCEPTION guard (matching recall_hybrid() semantics:
+-- recall_hybrid raises EXCEPTION when BOTH signals are NULL; recall_fast has
+-- NO text fallback so NULL query_embedding is always unrecoverable → EXCEPTION).
+--
+-- SQLSTATE: P0001 (raise_exception — same as recall_hybrid's guard).
+
+CREATE OR REPLACE FUNCTION pgmnemo.recall_fast(
+    query_embedding   vector(1024),
+    k                 INT     DEFAULT 10,
+    role_filter       TEXT    DEFAULT NULL,
+    project_id_filter INT     DEFAULT NULL,
+    exclude_dag_id    TEXT    DEFAULT NULL
+)
+RETURNS TABLE (
+    lesson_id     BIGINT,
+    score         DOUBLE PRECISION,
+    role          TEXT,
+    project_id    INT,
+    topic         TEXT,
+    lesson_text   TEXT,
+    importance    SMALLINT,
+    metadata      JSONB,
+    commit_sha    TEXT,
+    artifact_hash TEXT,
+    verified_at   TIMESTAMPTZ,
+    created_at    TIMESTAMPTZ
+)
+LANGUAGE plpgsql
+VOLATILE
+AS $$
+#variable_conflict use_column
+DECLARE
+    _ef_search          INT;
+    _include_unverified BOOLEAN;
+    _track_recency      BOOLEAN;
+BEGIN
+    -- Set HNSW ef_search from GUC (same pattern as recall_hybrid)
+    BEGIN
+        _ef_search := COALESCE(
+            NULLIF(current_setting('pgmnemo.ef_search', TRUE), '')::INT, 100);
+        IF _ef_search BETWEEN 10 AND 500 THEN
+            EXECUTE format('SET LOCAL pgvector.hnsw.ef_search = %s', _ef_search);
+        END IF;
+    EXCEPTION WHEN OTHERS THEN NULL;
+    END;
+
+    BEGIN
+        _include_unverified := COALESCE(
+            current_setting('pgmnemo.include_unverified', TRUE)::BOOLEAN, FALSE);
+    EXCEPTION WHEN OTHERS THEN _include_unverified := FALSE;
+    END;
+
+    BEGIN
+        _track_recency := COALESCE(
+            NULLIF(current_setting('pgmnemo.track_recall_recency', TRUE), '')::BOOLEAN, TRUE);
+    EXCEPTION WHEN OTHERS THEN _track_recency := TRUE;
+    END;
+
+    -- #84: reject NULL query_embedding early — HNSW-only path has no text fallback.
+    -- recall_hybrid() accepts NULL query_embedding when query_text is present; recall_fast
+    -- is vector-only and cannot fall back to BM25, so NULL embedding is always an error.
+    IF query_embedding IS NULL THEN
+        RAISE EXCEPTION
+            'pgmnemo.recall_fast: query_embedding IS NULL -- '
+            'a vector embedding is required for HNSW search. '
+            'recall_fast has no text-only fallback; use recall_hybrid() '
+            'if you have query_text but no embedding.';
+    END IF;
+
+    RETURN QUERY
+    WITH fast_ranked AS (
+        SELECT
+            al.id,
+            (1.0 - (al.embedding <=> query_embedding))::DOUBLE PRECISION AS vec_score,
+            al.role,
+            al.project_id,
+            al.topic,
+            al.lesson_text,
+            al.importance,
+            al.metadata,
+            al.commit_sha,
+            al.artifact_hash,
+            al.verified_at,
+            al.created_at
+        FROM pgmnemo.agent_lesson al
+        WHERE al.is_active
+          AND al.embedding IS NOT NULL
+          AND (_include_unverified OR al.verified_at IS NOT NULL)
+          AND (recall_fast.role_filter IS NULL
+               OR al.role = recall_fast.role_filter)
+          AND (recall_fast.project_id_filter IS NULL
+               OR al.project_id = recall_fast.project_id_filter)
+          AND (recall_fast.exclude_dag_id IS NULL
+               OR al.source_dag_id IS DISTINCT FROM recall_fast.exclude_dag_id)
+        ORDER BY al.embedding <=> query_embedding
+        LIMIT k
+    ),
+    stamped AS (
+        UPDATE pgmnemo.agent_lesson al2
+        SET
+            last_recalled_at = NOW(),
+            recall_count     = al2.recall_count + 1
+        FROM fast_ranked fr
+        WHERE al2.id = fr.id
+          AND _track_recency
+        RETURNING al2.id
+    )
+    SELECT
+        fr.id          AS lesson_id,
+        fr.vec_score   AS score,
+        fr.role,
+        fr.project_id,
+        fr.topic,
+        fr.lesson_text,
+        fr.importance,
+        fr.metadata,
+        fr.commit_sha,
+        fr.artifact_hash,
+        fr.verified_at,
+        fr.created_at
+    FROM fast_ranked fr
+    -- stamped CTE is a side-effect sink; reference it to prevent optimiser elision
+    LEFT JOIN stamped s ON s.id = fr.id
+    ORDER BY fr.vec_score DESC;
+END;
+$$;
+
+COMMENT ON FUNCTION pgmnemo.recall_fast(vector, INT, TEXT, INT, TEXT) IS
+    'HNSW-only vector recall — O(k log n), no BM25/graph/RRF. '
+    'Uses ORDER BY embedding <=> query LIMIT k to activate the HNSW index. '
+    'score = cosine similarity (1 - distance). '
+    'Respects include_unverified, ef_search, track_recall_recency GUCs. '
+    'Filters: role_filter, project_id_filter, exclude_dag_id (same as recall_hybrid). '
+    'v0.10.0: default MCP recall path. Use recall_hybrid for full 6-signal fusion. '
+    'v0.10.1 #84: raises EXCEPTION when query_embedding IS NULL (no text-only fallback).';

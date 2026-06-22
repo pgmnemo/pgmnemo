@@ -7755,6 +7755,17 @@ BEGIN
     EXCEPTION WHEN OTHERS THEN _track_recency := TRUE;
     END;
 
+    -- #84: reject NULL query_embedding early — HNSW-only path has no text fallback.
+    -- recall_hybrid() accepts NULL query_embedding when query_text is present; recall_fast
+    -- is vector-only and cannot fall back to BM25, so NULL embedding is always an error.
+    IF query_embedding IS NULL THEN
+        RAISE EXCEPTION
+            'pgmnemo.recall_fast: query_embedding IS NULL -- '
+            'a vector embedding is required for HNSW search. '
+            'recall_fast has no text-only fallback; use recall_hybrid() '
+            'if you have query_text but no embedding.';
+    END IF;
+
     RETURN QUERY
     WITH fast_ranked AS (
         SELECT
@@ -7819,7 +7830,8 @@ COMMENT ON FUNCTION pgmnemo.recall_fast(vector, INT, TEXT, INT, TEXT) IS
     'score = cosine similarity (1 - distance). '
     'Respects include_unverified, ef_search, track_recall_recency GUCs. '
     'Filters: role_filter, project_id_filter, exclude_dag_id (same as recall_hybrid). '
-    'v0.10.0: default MCP recall path. Use recall_hybrid for full 6-signal fusion.';
+    'v0.10.0: default MCP recall path. Use recall_hybrid for full 6-signal fusion. '
+    'v0.10.1 #84: raises EXCEPTION when query_embedding IS NULL (no text-only fallback).';
 
 
 -- ─────────────────────────────────────────────────────────────────────────────
@@ -8044,7 +8056,7 @@ BEGIN
             -- Reset to no-timeout on success (restores full time budget for RETURN QUERY).
             EXECUTE 'SET LOCAL statement_timeout = 0';
 
-        EXCEPTION WHEN query_canceled OR statement_timeout THEN
+        EXCEPTION WHEN query_canceled THEN  -- catches both query_cancel and statement_timeout (both SQLSTATE 57014)
             -- Savepoint rolled back: INSERT undone, _pgmnemo_bm25_work is empty,
             -- statement_timeout reverted to pre-block value — no manual cleanup needed.
             _bm25_timed_out := TRUE;
