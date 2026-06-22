@@ -1,0 +1,21 @@
+{
+  "version": "v0.10.0_with_graph",
+  "overall": {
+    "recall@1": {
+      "mean": 0.0,
+      "n": 12
+    },
+    "recall@5": {
+      "mean": 0.0833,
+      "n": 12
+    },
+    "recall@10": {
+      "mean": 0.0833,
+      "n": 12
+    },
+    "recall@20": {
+      "mean": 0.0833,
+      "n": 12
+    }
+  }
+}

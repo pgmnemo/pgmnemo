@@ -1,0 +1,81 @@
+{
+    "version": "v0.10.0",
+    "date": "2026-06-21",
+    "pgmnemo_version": "0.10.0",
+    "gate_type": "recall_at_k_fast_vs_hybrid",
+    "k_primary": 10,
+    "ks_measured": [
+        1,
+        5,
+        10,
+        20
+    ],
+    "n_queries": 40,
+    "corpus": {
+        "database": "prod_corpus",
+        "active_embedded_lessons": 7628,
+        "queries": 40,
+        "source": "random sample of active lessons with embeddings (live corpus)"
+    },
+    "recall_at_1": 1.0,
+    "recall_at_5": 0.8,
+    "recall_at_10": 0.85,
+    "recall_at_20": 0.9,
+    "overlap_at_10_median": 0.85,
+    "overlap_at_10_p10": 0.6,
+    "results_by_k": {
+        "k1": {
+            "n_queries": 36,
+            "overlap_median": 1.0,
+            "overlap_p10": 0.0,
+            "fast_latency_p50_ms": 25.5786,
+            "fast_latency_p95_ms": 74.7413,
+            "hybrid_latency_p50_ms": 60.1397,
+            "hybrid_latency_p95_ms": 848.5068,
+            "speedup_p50": 2.35
+        },
+        "k5": {
+            "n_queries": 36,
+            "overlap_median": 0.8,
+            "overlap_p10": 0.4,
+            "fast_latency_p50_ms": 25.5295,
+            "fast_latency_p95_ms": 41.7517,
+            "hybrid_latency_p50_ms": 57.5142,
+            "hybrid_latency_p95_ms": 814.3392,
+            "speedup_p50": 2.25
+        },
+        "k10": {
+            "n_queries": 36,
+            "overlap_median": 0.85,
+            "overlap_p10": 0.6,
+            "fast_latency_p50_ms": 25.5844,
+            "fast_latency_p95_ms": 39.2491,
+            "hybrid_latency_p50_ms": 59.3146,
+            "hybrid_latency_p95_ms": 804.5237,
+            "speedup_p50": 2.32
+        },
+        "k20": {
+            "n_queries": 36,
+            "overlap_median": 0.9,
+            "overlap_p10": 0.7,
+            "fast_latency_p50_ms": 25.5395,
+            "fast_latency_p95_ms": 43.8901,
+            "hybrid_latency_p50_ms": 57.3978,
+            "hybrid_latency_p95_ms": 849.1898,
+            "speedup_p50": 2.25
+        }
+    },
+    "results": {
+        "overlap_at_k_median": 0.85,
+        "overlap_at_k_p10": 0.6,
+        "fast_latency_p50_ms": 25.5844,
+        "fast_latency_p95_ms": 39.2491,
+        "hybrid_latency_p50_ms": 59.3146,
+        "hybrid_latency_p95_ms": 804.5237,
+        "speedup_p50": 2.32
+    },
+    "gate_criteria": "overlap_at_10_median >= 0.70 AND fast_latency_p50_ms < 200",
+    "gate_status": "PASS",
+    "methodology": "overlap@K = |recall_fast top-K \u2229 recall_hybrid top-K| / K measured over 40 queries on live prod_corpus corpus (7628 lessons with embeddings). Queries are random active lesson embeddings reused as query vectors. recall_fast: HNSW cosine only. recall_hybrid: HNSW + BM25 RRF (vec=0.4, bm25=0.4, rrf_k=60). No role/project filter (global corpus). Benchmark script: benchmarks/scripts/bench_recall_fast_vs_hybrid_v010.py.",
+    "note": "overlap@K = |recall_fast top-K \u2229 recall_hybrid top-K| / K. Measures recall@K cost of dropping graph_walk + BM25 RRF (fast path). Threshold 0.70 = acceptable quality for interactive/MCP use-case. fast_latency < 200ms = interactive latency target for MCP default path."
+}

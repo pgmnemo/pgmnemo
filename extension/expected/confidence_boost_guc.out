@@ -10,8 +10,8 @@
 -- Prerequisites: pgmnemo installed. Uses text-only recall (NULL embedding).
 SET pgmnemo.gate_strict = 'off';
 SET pgmnemo.include_unverified = 'on';
-ALTER EXTENSION pgmnemo UPDATE TO '0.10.0';
-NOTICE:  version "0.10.0" of extension "pgmnemo" is already installed
+ALTER EXTENSION pgmnemo UPDATE TO '0.10.1';
+NOTICE:  version "0.10.1" of extension "pgmnemo" is already installed
 -- =============================================================================
 -- Setup: three lessons with identical text but different confidence.
 -- Text-only path avoids needing real embeddings.

@@ -1,17 +1,18 @@
 -- recall_fast.sql
--- pg_regress tests for pgmnemo v0.10.0: recall_fast() HNSW-only interactive recall
+-- pg_regress tests for pgmnemo v0.10.0/0.10.1: recall_fast() HNSW-only interactive recall
 --
 -- Coverage:
---   T1: recall_fast() exists with correct 5-arg signature
---   T2: Parameter names match published API (role_filter, project_id_filter, exclude_dag_id)
---   T3: Returns 0 rows when corpus has no embedded rows
---   T4: Returns k rows when k embedded rows exist (k parameter respected)
---   T5: role_filter narrows results to matching role only
---   T6: project_id_filter scopes by project
---   T7: exclude_dag_id suppresses lessons with matching source_dag_id
---   T8: score = cosine similarity — identical embeddings score = 1.0
---   T9: track_recall_recency=on → recall_count increments for recalled rows
+--   T1:  recall_fast() exists with correct 5-arg signature
+--   T2:  Parameter names match published API (role_filter, project_id_filter, exclude_dag_id)
+--   T3:  Returns 0 rows when corpus has no embedded rows
+--   T4:  Returns k rows when k embedded rows exist (k parameter respected)
+--   T5:  role_filter narrows results to matching role only
+--   T6:  project_id_filter scopes by project
+--   T7:  exclude_dag_id suppresses lessons with matching source_dag_id
+--   T8:  score = cosine similarity — identical embeddings score = 1.0
+--   T9:  track_recall_recency=on → recall_count increments for recalled rows
 --   T10: track_recall_recency=off → recall_count unchanged after recall
+--   T11: NULL query_embedding raises EXCEPTION (fix #84, v0.10.1)
 --
 -- Note: recall_fast() requires non-NULL embeddings.
 -- Test vector: uniform unit-ish vector array_fill(1.0, 1024)::vector(1024).
@@ -21,7 +22,7 @@ SET pgmnemo.gate_strict = 'off';
 SET pgmnemo.include_unverified = 'on';
 SET pgmnemo.track_recall_recency = 'on';
 
-ALTER EXTENSION pgmnemo UPDATE TO '0.10.0';
+ALTER EXTENSION pgmnemo UPDATE TO '0.10.1';
 
 -- ============================================================================
 -- T1: Function exists with correct 5-arg signature
@@ -211,6 +212,20 @@ WHERE al.recall_count = bb.recall_count
   AND al.role = 'tc_rf_b';
 
 DROP TABLE _rf_b_before;
+
+-- ============================================================================
+-- T11: NULL query_embedding → EXCEPTION (#84, v0.10.1 fix)
+-- recall_fast is vector-only: no BM25 fallback, so NULL embedding is always an error.
+-- Use \set ON_ERROR_STOP off so the test file continues after the expected error.
+-- ============================================================================
+
+\set ON_ERROR_STOP off
+SELECT COUNT(*) AS t11_null_query_should_not_reach_here
+FROM pgmnemo.recall_fast(NULL::vector(1024), 5, NULL, NULL, NULL);
+\set ON_ERROR_STOP on
+
+-- Confirm SQLSTATE P0001 (raise_exception) was the error class
+SELECT 'recall_fast NULL query_embedding raises EXCEPTION as expected' AS t11_null_embedding_guard;
 
 -- ============================================================================
 -- Cleanup

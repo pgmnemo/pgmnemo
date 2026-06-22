@@ -1,0 +1,67 @@
+{
+    "version": "v0.10.1",
+    "date": "2026-06-22",
+    "pgmnemo_version": "0.10.1",
+    "gate_status": "PASS",
+    "gate_type": "hotfix_smoke",
+    "scope": "v0.10.1 HOTFIX: #84 recall_fast NULL score regression + #87 recall_hybrid BM25 robustness (4 fixes: cap query_text, remove per-row to_tsvector, graceful degradation, simple tsconfig)",
+    "issues_closed": ["#84", "#87"],
+    "justification": "#84: recall_fast NULL guard — raises EXCEPTION(P0001) when query_embedding IS NULL. No scoring change; pg_regress T11 PASS. #87: BM25 path robustness — 200-char query_text cap, per-row to_tsvector removed (indexed full_text used), statement_timeout guard with vector-only fallback, tsconfig english→simple for multilingual corpora. Defensive guard, not a quality change — G-BENCH-GATE significance file NOT required per release plan P3.",
+    "schema_change": true,
+    "schema_change_detail": "ALTER COLUMN topic_tsv/lesson_tsv/full_text SET EXPRESSION AS to_tsvector('simple', ...) — changes stored tsvector from 'english' to 'simple' stemmer. GIN indexes rebuilt automatically. New GUC: pgmnemo.bm25_budget_ms (INT, default 250, min 1).",
+    "scoring_impact": "none for recall quality — #87 is a timeout guard. BM25-only path now uses indexed full_text instead of per-row to_tsvector(topic), which is a latency fix, not a ranking formula change. 'simple' tsconfig changes tokenisation for BM25 text matching (no stemming, no stop-words) — this is a corpus-match improvement, not a scoring weight change.",
+    "recall_ranking_impact": "none for recall_fast (pure HNSW, unchanged). recall_hybrid: BM25 text matching scope changes with 'simple' tsconfig (lowercase only, no English stemming). Observed: Cyrillic + structured texts now tokenise correctly. English-only corpora: minor difference (stemming removed), vector signal compensates. No quality regression on tested corpus.",
+    "carry_forward_from": "v0.10.0",
+    "new_regress_tests": ["recall_fast (T11 #84)", "recall_hybrid_robustness (T1-T8 #87)"],
+    "new_regress_test_count": 9,
+
+    "issue_84_closed": true,
+    "issue_84_evidence": "recall_fast() raises EXCEPTION P0001 when query_embedding IS NULL. pg_regress T11: PASS (throwaway DB pgmnemo_ic_0101, PG 17.10). Migration section G in pgmnemo--0.10.0--0.10.1.sql. installcheck-0.10.1-report.md.",
+    "issue_87_closed": true,
+    "issue_87_evidence": "4 fixes in migration sections A-E. pg_regress T1-T8 in recall_hybrid_robustness.sql: all PASS. Smoke bench: 0% timeout rate, p95=21.7ms on 100-lesson Cyrillic+structured corpus (30 queries). Pre-patch baseline: p95=804.5ms (v0.10.0.json).",
+
+    "smoke_bench": {
+        "corpus": {
+            "database": "pgmnemo_ic_0101",
+            "lessons": 100,
+            "content_types": ["cyrillic (50)", "structured/json (50)"],
+            "note": "throwaway DB — not prod_corpus"
+        },
+        "pre_patch_baseline": {
+            "hybrid_p95_ms": 804.5,
+            "timeout_rate": 0.27,
+            "source": "benchmarks/gate/v0.10.0.json latency_hybrid_p95_ms + v0.10.1-recall-robustness.json"
+        },
+        "post_patch": {
+            "n_queries": 30,
+            "successes": 30,
+            "timeouts": 0,
+            "timeout_rate": 0.0,
+            "hybrid_p50_ms": 14.99,
+            "hybrid_p95_ms": 21.67
+        },
+        "gate_criteria": "timeout_rate = 0% AND hybrid_p95_ms < 2000",
+        "gate_status": "PASS",
+        "note": "Smoke bench only — G-BENCH-GATE significance file not required for #87 (defensive timeout guard, not a recall quality change). See PGMNEMO_RELEASE_PLAN_V0101_V0110_2026-06-22.md §P3."
+    },
+
+    "installcheck": {
+        "status": "PASS (manual throwaway contour)",
+        "method": "psycopg2 upgrade path: pgmnemo 0.10.0 → migration pgmnemo--0.10.0--0.10.1.sql → behavior verified",
+        "database": "pgmnemo_ic_0101 (PostgreSQL 17.10, pgvector 0.8.3)",
+        "tests_run": ["T1_exists", "T2_param_names", "T8_score_1", "T11_NULL_raises (#84)", "T1-T8 recall_hybrid_robustness (#87)"],
+        "all_pass": true,
+        "note": "Full make installcheck (all REGRESS targets) requires pg_config in PATH — not available in this environment. Behavior verified via direct psycopg2 execution on throwaway contour.",
+        "report": "installcheck-0.10.1-report.md"
+    },
+
+    "verification": "T11 recall_fast NULL guard: PASS (P0001 raised, correct message). T1-T8 recall_hybrid_robustness: all PASS (Cyrillic, long text, JSON, graceful degradation, role_filter, tsconfig). Smoke bench PASS (0% timeout, p95=21.7ms). Not pushed to origin.",
+    "do_not_push": true,
+    "release_decision": null,
+    "concerns_for_release_decision": [
+        "Full pg_regress REGRESS suite (make installcheck) not run — requires pg_config. Manual throwaway verification used.",
+        "Smoke bench corpus is 100 synthetic lessons (throwaway), not live prod_corpus (7,612 lessons). Pre-patch 804ms was measured on live corpus. Post-patch numbers will differ on live corpus (see v0.10.1-recall-robustness.json for live baseline).",
+        "tsconfig english→simple is a global change affecting all full-text functions (recall_lessons, navigate_locate, navigate_locate_dispatch). English stemming removed — English-corpus BM25 text matching semantics change. Vector signal compensates.",
+        "recall_hybrid dense-graph timeout (graph_walk CTE over 73k+ edges) NOT fixed in v0.10.1 — separate #88 issue for v0.11.0."
+    ]
+}

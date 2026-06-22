@@ -130,8 +130,10 @@ def run_benchmark(dsn: str, n_queries: int) -> dict[str, Any]:
         if INCLUDE_UNVERIFIED:
             cur.execute("SET pgmnemo.include_unverified = 'on'")
         cur.execute("SET pgmnemo.track_recall_recency = 'off'")
-        # Cap slow BM25 queries; 8s is generous for real lessons, 60s+ indicates pathological input
-        cur.execute("SET statement_timeout = '8000'")
+        # Cap slow BM25 queries. Configurable via BENCH_STMT_TIMEOUT_MS — raise it for a
+        # COMPLETE run that measures (not skips) slow-BM25 structured/non-Latin query texts.
+        _stmt_to = os.environ.get("BENCH_STMT_TIMEOUT_MS", "8000")
+        cur.execute(f"SET statement_timeout = '{_stmt_to}'")
 
         # Count corpus
         cur.execute("SELECT COUNT(*) FROM pgmnemo.agent_lesson WHERE embedding IS NOT NULL")
@@ -164,7 +166,7 @@ def run_benchmark(dsn: str, n_queries: int) -> dict[str, Any]:
                             conn.rollback()
                             cur.execute("SET pgmnemo.include_unverified = 'on'")
                             cur.execute("SET pgmnemo.track_recall_recency = 'off'")
-                            cur.execute("SET statement_timeout = '8000'")
+                            cur.execute(f"SET statement_timeout = '{_stmt_to}'")
                         except Exception:
                             pass
                     else:

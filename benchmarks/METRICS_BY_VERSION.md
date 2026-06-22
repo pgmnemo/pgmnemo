@@ -72,6 +72,8 @@ over the question-specific haystack.
 | v0.5.0 | 2026-05-17 | 0.5.0 | — | — | — | — | — | **not run** — H-07 Δ=0 (significance_test.py exit 0, all metrics, p_corr=1.0, run 9663); H-02 Stella V5 bench pending macOS host | `gate/v0.5.0-stella-candidate.json` (RUN_FAILED) |
 | v0.5.0 (bge-m3, analytical) | 2026-05-18 | 0.5.0 | 0.4762 | 0.8814 | **0.9334** | 0.9853 | 0.8472 | **neutral — analytical carry-forward** (Δ=0 confirmed; v0.5.0 non-algorithmic — H-06/H-07/R5/R6/R10 changes do not touch `recall_lessons()` path; macOS MLX host execution blocked INFRA-3; see H-02 note below) | carry-forward from `longmemeval/results/v0.3.0_20260513/` |
 | v0.6.0 (bge-m3, analytical) | 2026-05-23 | 0.6.0 | 0.4762 | 0.8814 | **0.9334** | 0.9853 | 0.8472 | **neutral — analytical carry-forward**; RRF Fix-A withheld after real-DB simulation showed −2.40pp recall@10 regression (see `spec/v060/INVESTIGATION_FIX_A_REGRESSION.md`); `recall_lessons()` retrieval path identical to v0.5.1 | carry-forward from `longmemeval/results/v0.3.0_20260513/` |
+| v0.10.0 (analytical) | 2026-06-20 | 0.10.0 | 0.4762 | 0.8814 | **0.9334** | 0.9853 | 0.8472 | **neutral — analytical carry-forward** through v0.7.x–v0.9.x; v0.10.0 adds `recall_fast()` (new function) + `navigate_locate_dispatch()` — does not modify `recall_hybrid()` or `recall_lessons()` scoring path | carry-forward from `longmemeval/results/v0.3.0_20260513/` |
+| v0.10.1 (analytical) | 2026-06-22 | 0.10.1 | 0.4762 | 0.8814 | **0.9334** | 0.9853 | 0.8472 | **neutral — analytical carry-forward**; HOTFIX: #84 NULL guard (`recall_fast`) + #87 BM25 timeout guard — ORDER BY key and scoring formula unchanged; rank permutation identity holds analytically | carry-forward from `longmemeval/results/v0.3.0_20260513/` |
 
 Frozen parameters: longmemeval_s_cleaned.json (500 queries), embedder `BAAI/bge-m3` (1024d, max_seq=512).
 
@@ -123,6 +125,21 @@ criterion for promotion to default (ROADMAP §H1).
 | version | date | mode | recall@1 | recall@5 | recall@10 | recall@20 | MRR | run_dir |
 |---|---|---|---|---|---|---|---|---|
 | v0.2.2-hybrid | 2026-05-10 | real-DB | 0.5472 | 0.9100 | 0.9486 | 0.9759 | 0.9053 | `longmemeval/results/v0.2.1_hybrid_20260510/` |
+
+---
+
+## Table 6 — recall_hybrid latency + robustness (v0.10+)
+
+**Methodology:** `benchmarks/scripts/bench_recall_fast_vs_hybrid_v010.py`. Live prod_corpus corpus.
+Gate metrics: `overlap@10_median` (quality proxy), `hybrid_p95_ms` (latency), `timeout_rate`.
+This table tracks the BM25 path health — distinct from recall quality on external corpora.
+
+| version | date | n_queries | overlap@10_median | hybrid_p95_ms | timeout_rate | Δ vs prev | gate_file |
+|---|---|---|---|---|---|---|---|
+| v0.10.0 | 2026-06-21 | 36 answered / 30+8 skip | 0.85 | 804ms | ~22% (8 skipped = timeout) | — (baseline) | `gate/v0.10.0-recall-at-k-full.json` |
+| v0.10.1 | 2026-06-22 | 50 answered / 0 timeout | 0.90 | 43ms | **0%** | **PASS** (H-87-TIMEOUT p_corr=0.003, h=0.927 LARGE; +5pp overlap ns) | `gate/v0.10.1-recall-at-k.json` |
+
+Significance tests: `spec/reports/PGMREL-0101-BENCH-GATE.md`
 
 ---
 

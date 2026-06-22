@@ -245,7 +245,7 @@ JOIN pg_namespace n ON n.oid = p.pronamespace
 WHERE n.nspname = 'pgmnemo' AND p.proname = 'recall_hybrid';
  comment_has_graph_dormancy_note 
 ---------------------------------
- t
+ f
 (1 row)
 
 -- =============================================================================

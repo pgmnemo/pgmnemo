@@ -1,0 +1,98 @@
+{
+    "version": "v0.10.1",
+    "date": "2026-06-22",
+    "pgmnemo_version": "0.10.1",
+    "gate_type": "recall_at_k_fast_vs_hybrid_robustness_87",
+    "issue": "#87 recall_hybrid robustness — cap query_text + graceful degradation",
+    "fixes_verified": [
+        "Fix 1: query_text capped at 200 chars before websearch_to_tsquery",
+        "Fix 2: full_text @@ _tsquery (indexed GIN) replaces per-row to_tsvector(topic) @@",
+        "Fix 3: BM25 isolated exception block + bm25_budget_ms=250ms graceful degradation",
+        "Fix 4: simple tsconfig for all tsvector columns (RU/EN/code mixed corpus)",
+        "Fix 5: graph_walk OPT-IN guard WHERE _graph_weight > 0 (default 0.0)"
+    ],
+    "before_v0100_measured": {
+        "hybrid_latency_p95_ms": 804,
+        "timeout_rate_pct": "20-25%",
+        "source": "issue #87 field measurement"
+    },
+    "k_primary": 10,
+    "ks_measured": [
+        1,
+        5,
+        10,
+        20
+    ],
+    "n_queries": 50,
+    "corpus": {
+        "database": "prod_corpus",
+        "active_embedded_lessons": 7664,
+        "queries": 50,
+        "source": "random sample of active lessons with embeddings (live corpus)"
+    },
+    "recall_at_1": 1.0,
+    "recall_at_5": 0.8,
+    "recall_at_10": 0.9,
+    "recall_at_20": 0.9,
+    "overlap_at_10_median": 0.9,
+    "overlap_at_10_p10": 0.7,
+    "results_by_k": {
+        "k1": {
+            "n_queries": 50,
+            "overlap_median": 1.0,
+            "overlap_p10": 0.0,
+            "fast_latency_p50_ms": 27.2221,
+            "fast_latency_p95_ms": 39.044,
+            "hybrid_latency_p50_ms": 29.0667,
+            "hybrid_latency_p95_ms": 41.4435,
+            "speedup_p50": 1.07
+        },
+        "k5": {
+            "n_queries": 50,
+            "overlap_median": 0.8,
+            "overlap_p10": 0.6,
+            "fast_latency_p50_ms": 26.7368,
+            "fast_latency_p95_ms": 33.9563,
+            "hybrid_latency_p50_ms": 28.757,
+            "hybrid_latency_p95_ms": 42.2236,
+            "speedup_p50": 1.08
+        },
+        "k10": {
+            "n_queries": 50,
+            "overlap_median": 0.9,
+            "overlap_p10": 0.7,
+            "fast_latency_p50_ms": 26.6109,
+            "fast_latency_p95_ms": 37.2271,
+            "hybrid_latency_p50_ms": 28.4762,
+            "hybrid_latency_p95_ms": 43.3477,
+            "speedup_p50": 1.07
+        },
+        "k20": {
+            "n_queries": 50,
+            "overlap_median": 0.9,
+            "overlap_p10": 0.8,
+            "fast_latency_p50_ms": 26.7771,
+            "fast_latency_p95_ms": 33.1931,
+            "hybrid_latency_p50_ms": 28.6309,
+            "hybrid_latency_p95_ms": 36.495,
+            "speedup_p50": 1.07
+        }
+    },
+    "results": {
+        "overlap_at_k_median": 0.9,
+        "overlap_at_k_p10": 0.7,
+        "fast_latency_p50_ms": 26.6109,
+        "fast_latency_p95_ms": 37.2271,
+        "hybrid_latency_p50_ms": 28.4762,
+        "hybrid_latency_p95_ms": 43.3477,
+        "speedup_p50": 1.07
+    },
+    "gate_criteria": "overlap_at_10_median >= 0.70 AND fast_latency_p50_ms < 200 AND timeout_count == 0",
+    "gate_status": "PASS",
+    "gate_timeout_count": 0,
+    "gate_p95_improvement": "804ms \u2192 43ms (18.6x improvement, ZERO timeouts)",
+    "methodology": "overlap@K = |recall_fast top-K \u2229 recall_hybrid top-K| / K measured over 50 queries on live prod_corpus corpus (7664 lessons with embeddings). Corpus includes Cyrillic (Russian), structured/JSON, and long text queries that caused timeouts in v0.10.0. recall_fast: HNSW cosine only. recall_hybrid: HNSW + BM25 RRF (vec=0.4, bm25=0.4, rrf_k=60, bm25_budget_ms=250). No role/project filter. Benchmark script: benchmarks/scripts/bench_recall_fast_vs_hybrid_v010.py.",
+    "note": "overlap@10 median = 0.90 (threshold 0.70). p95 hybrid = 43ms (was 804ms in v0.10.0). Zero timeouts in 50 queries including Cyrillic + JSON structured queries. pg_regress T1-T8 all PASS (recall_hybrid_robustness.sql).",
+    "pg_regress_coverage": "extension/sql/recall_hybrid_robustness.sql \u2014 T1-T8 all PASS",
+    "throwaway_contour": true
+}
