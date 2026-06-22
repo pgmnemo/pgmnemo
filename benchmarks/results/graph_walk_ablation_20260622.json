@@ -1,0 +1,264 @@
+{
+  "task": "pgmnemo #88 \u2014 graph_walk ablation",
+  "date": "2026-06-22",
+  "version": "v0.10.0",
+  "methodology": "Phase 1: live-corpus ranking overlap \u2014 compare recall_hybrid with graph_proximity_weight=0.2 vs 0.0 on N random queries. Phase 2: edge-aware controlled recall \u2014 anchor lessons with outgoing causal/temporal edges; measure recall@K hit rate for edge targets WITH vs WITHOUT graph_walk boost. Significance: two-proportion z-test + Holm-Bonferroni correction (\u03b1=0.05).",
+  "graph_walk_config": {
+    "with_graph": {
+      "guc": "pgmnemo.graph_proximity_weight",
+      "value": 0.2,
+      "description": "default \u2014 graph_walk active, score *= (1 + 0.2 * proximity)"
+    },
+    "without_graph_guc": {
+      "guc": "pgmnemo.graph_proximity_weight",
+      "value": 0.0,
+      "description": "GUC=0 \u2014 CTE still runs, score multiplier = 1.0 (no reranking)"
+    },
+    "without_graph_nocte": {
+      "description": "inline SQL omitting graph_walk and graph_proximity CTEs entirely",
+      "purpose": "true latency cost measurement"
+    }
+  },
+  "corpus": {
+    "database": "prod_corpus",
+    "n_active_verified_lessons": 6353,
+    "n_mem_edges_total": 73258,
+    "n_mem_edges_causal_temporal": 73258,
+    "edge_distribution": {
+      "temporal": 72339,
+      "causal": 919
+    }
+  },
+  "phase1_ranking_overlap": {
+    "phase": "live_corpus_ranking_overlap",
+    "n_queries_attempted": 35,
+    "n_queries_measured": 32,
+    "results_by_k": {
+      "k1": {
+        "n_queries": 32,
+        "overlap_median": 1.0,
+        "overlap_p10": 1.0,
+        "ranking_change_rate": 0.0,
+        "lat_with_graph_p50_ms": 70.95,
+        "lat_with_graph_p95_ms": 558.86,
+        "lat_no_graph_guc_p50_ms": 67.21,
+        "lat_no_graph_guc_p95_ms": 336.8,
+        "lat_no_cte_p50_ms": 60.89,
+        "lat_no_cte_p95_ms": 105.57,
+        "latency_delta_cte_overhead_ms": 10.06
+      },
+      "k5": {
+        "n_queries": 32,
+        "overlap_median": 1.0,
+        "overlap_p10": 0.6,
+        "ranking_change_rate": 0.0,
+        "lat_with_graph_p50_ms": 65.16,
+        "lat_with_graph_p95_ms": 209.45,
+        "lat_no_graph_guc_p50_ms": 65.55,
+        "lat_no_graph_guc_p95_ms": 270.48,
+        "lat_no_cte_p50_ms": 60.33,
+        "lat_no_cte_p95_ms": 139.47,
+        "latency_delta_cte_overhead_ms": 4.82
+      },
+      "k10": {
+        "n_queries": 32,
+        "overlap_median": 1.0,
+        "overlap_p10": 0.8,
+        "ranking_change_rate": 0.0,
+        "lat_with_graph_p50_ms": 70.15,
+        "lat_with_graph_p95_ms": 211.96,
+        "lat_no_graph_guc_p50_ms": 68.4,
+        "lat_no_graph_guc_p95_ms": 251.91,
+        "lat_no_cte_p50_ms": 60.97,
+        "lat_no_cte_p95_ms": 100.3,
+        "latency_delta_cte_overhead_ms": 9.18
+      },
+      "k20": {
+        "n_queries": 32,
+        "overlap_median": 1.0,
+        "overlap_p10": 0.85,
+        "ranking_change_rate": 0.0,
+        "lat_with_graph_p50_ms": 71.87,
+        "lat_with_graph_p95_ms": 223.78,
+        "lat_no_graph_guc_p50_ms": 70.88,
+        "lat_no_graph_guc_p95_ms": 274.44,
+        "lat_no_cte_p50_ms": 61.43,
+        "lat_no_cte_p95_ms": 77.79,
+        "latency_delta_cte_overhead_ms": 10.44
+      }
+    }
+  },
+  "phase2_edge_recall": {
+    "phase": "edge_aware_recall",
+    "n_anchors_attempted": 25,
+    "n_anchors_measured": 25,
+    "with_graph": {
+      "recall@1": 0.0,
+      "recall@5": 0.0,
+      "recall@10": 0.0,
+      "recall@20": 0.04
+    },
+    "without_graph": {
+      "recall@1": 0.0,
+      "recall@5": 0.0,
+      "recall@10": 0.0,
+      "recall@20": 0.0
+    },
+    "recall_lift": {
+      "recall@1": 0.0,
+      "n": 25,
+      "recall@5": 0.0,
+      "recall@10": 0.0,
+      "recall@20": 0.04
+    },
+    "rank_improvement": {
+      "median_rank_with_graph": 999,
+      "median_rank_without_graph": 999,
+      "rank_delta": 0,
+      "note": "negative rank_delta = with_graph ranks target HIGHER (lower rank number = better)"
+    }
+  },
+  "significance_test": {
+    "method": "two-proportion z-test + Holm-Bonferroni correction",
+    "alpha": 0.05,
+    "n_tests": 4,
+    "results": [
+      {
+        "metric": "recall@1",
+        "p_baseline": 0.0,
+        "n_baseline": 25,
+        "ci_baseline": [
+          0.0,
+          0.1332
+        ],
+        "p_candidate": 0.0,
+        "n_candidate": 25,
+        "ci_candidate": [
+          0.0,
+          0.1332
+        ],
+        "delta": 0.0,
+        "z_stat": 0.0,
+        "p_raw": 1.0,
+        "cohens_h": 0.0,
+        "p_corrected": 1.0,
+        "significant": false
+      },
+      {
+        "metric": "recall@5",
+        "p_baseline": 0.0,
+        "n_baseline": 25,
+        "ci_baseline": [
+          0.0,
+          0.1332
+        ],
+        "p_candidate": 0.0,
+        "n_candidate": 25,
+        "ci_candidate": [
+          0.0,
+          0.1332
+        ],
+        "delta": 0.0,
+        "z_stat": 0.0,
+        "p_raw": 1.0,
+        "cohens_h": 0.0,
+        "p_corrected": 1.0,
+        "significant": false
+      },
+      {
+        "metric": "recall@10",
+        "p_baseline": 0.0,
+        "n_baseline": 25,
+        "ci_baseline": [
+          0.0,
+          0.1332
+        ],
+        "p_candidate": 0.0,
+        "n_candidate": 25,
+        "ci_candidate": [
+          0.0,
+          0.1332
+        ],
+        "delta": 0.0,
+        "z_stat": 0.0,
+        "p_raw": 1.0,
+        "cohens_h": 0.0,
+        "p_corrected": 1.0,
+        "significant": false
+      },
+      {
+        "metric": "recall@20",
+        "p_baseline": 0.0,
+        "n_baseline": 25,
+        "ci_baseline": [
+          0.0,
+          0.1332
+        ],
+        "p_candidate": 0.04,
+        "n_candidate": 25,
+        "ci_candidate": [
+          0.0071,
+          0.1954
+        ],
+        "delta": 0.04,
+        "z_stat": 1.01,
+        "p_raw": 0.3124,
+        "cohens_h": 0.403,
+        "p_corrected": 1.0,
+        "significant": false
+      }
+    ],
+    "any_significant_improvement": false,
+    "any_significant_regression": false
+  },
+  "decision": {
+    "decision": "OPT-IN",
+    "rationale": "Live-corpus ranking overlap = 1.000 \u2014 graph_walk reranks ZERO queries. No measurable recall effect. graph_walk shows no statistically significant recall lift (p_corr >= 0.05). Decision rule: make graph_walk opt-in \u2014 set GUC default to 0.0 for free latency. Operators with rich mem_edge corpora can enable via SET pgmnemo.graph_proximity_weight = 0.2.",
+    "signals": {
+      "live_corpus_overlap_at_10": 1.0,
+      "ranking_change_rate_at_10": 0.0,
+      "lat_with_graph_p50_ms": 70.15,
+      "lat_no_cte_p50_ms": 60.97,
+      "lat_cte_overhead_ms": 9.18,
+      "sig_significant_lift": false,
+      "sig_significant_regression": false
+    },
+    "recommended_action": "Set GUC default pgmnemo.graph_proximity_weight = 0.0 in pgmnemo.control or document as opt-in in INSTALL.md."
+  },
+  "overall": {
+    "recall@1": {
+      "mean": 0.0,
+      "n": 25
+    },
+    "recall@5": {
+      "mean": 0.0,
+      "n": 25
+    },
+    "recall@10": {
+      "mean": 0.0,
+      "n": 25
+    },
+    "recall@20": {
+      "mean": 0.04,
+      "n": 25
+    }
+  },
+  "overall_baseline": {
+    "recall@1": {
+      "mean": 0.0,
+      "n": 25
+    },
+    "recall@5": {
+      "mean": 0.0,
+      "n": 25
+    },
+    "recall@10": {
+      "mean": 0.0,
+      "n": 25
+    },
+    "recall@20": {
+      "mean": 0.0,
+      "n": 25
+    }
+  }
+}
