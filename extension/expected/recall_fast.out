@@ -17,14 +17,10 @@
 -- Test vector: uniform unit-ish vector array_fill(1.0, 1024)::vector(1024).
 -- Two identical embeddings → cosine distance = 0 → score = 1.0.
 SET pgmnemo.gate_strict = 'off';
-SET
 SET pgmnemo.include_unverified = 'on';
-SET
 SET pgmnemo.track_recall_recency = 'on';
-SET
 ALTER EXTENSION pgmnemo UPDATE TO '0.10.0';
 NOTICE:  version "0.10.0" of extension "pgmnemo" is already installed
-ALTER EXTENSION
 -- ============================================================================
 -- T1: Function exists with correct 5-arg signature
 -- ============================================================================
@@ -34,7 +30,7 @@ JOIN pg_namespace n ON n.oid = p.pronamespace
 WHERE n.nspname = 'pgmnemo'
   AND p.proname = 'recall_fast'
   AND pronargs = 5;
- t1_recall_fast_exists
+ t1_recall_fast_exists 
 -----------------------
  t
 (1 row)
@@ -50,7 +46,7 @@ JOIN pg_namespace n ON n.oid = p.pronamespace
 WHERE n.nspname = 'pgmnemo'
   AND p.proname = 'recall_fast'
   AND pronargs = 5;
- t2_param_names_correct
+ t2_param_names_correct 
 ------------------------
  t
 (1 row)
@@ -61,20 +57,18 @@ WHERE n.nspname = 'pgmnemo'
 -- ============================================================================
 INSERT INTO pgmnemo.agent_lesson (role, topic, lesson_text, commit_sha)
 VALUES ('tc_rf_noem', 'no_embed', 'recall fast test no embedding row alpha bravo', 'rf-ne-sha-1');
-INSERT 0 1
 SELECT COUNT(*) = 0 AS t3_no_embedding_rows_return_empty
 FROM pgmnemo.recall_fast(
     array_fill(1.0::float4, ARRAY[1024])::vector(1024),
     10,
     'tc_rf_noem', NULL, NULL
 );
- t3_no_embedding_rows_return_empty
-------------------------------------
+ t3_no_embedding_rows_return_empty 
+-----------------------------------
  t
 (1 row)
 
 DELETE FROM pgmnemo.agent_lesson WHERE role = 'tc_rf_noem';
-DELETE 1
 -- ============================================================================
 -- Setup: 4 embedded rows across 2 roles and 2 projects for T4–T8
 -- Uniform embeddings → all scores = 1.0 (identical vectors, cosine distance 0)
@@ -90,7 +84,6 @@ VALUES
      array_fill(1.0::float4, ARRAY[1024])::vector(1024), 'rf-sha-b1', NULL),
     ('tc_rf_b', 2, 'fast_test', 'recall fast role B project 2 dag self omega',
      array_fill(1.0::float4, ARRAY[1024])::vector(1024), 'rf-sha-b2', 'dag-xyz');
-INSERT 0 4
 -- ============================================================================
 -- T4: k parameter limits result count
 -- With 4 total embedded rows (role_filter=NULL), k=2 should return exactly 2.
@@ -101,7 +94,7 @@ FROM pgmnemo.recall_fast(
     2,
     NULL, NULL, NULL
 );
- t4_k_limits_to_two
+ t4_k_limits_to_two 
 --------------------
  t
 (1 row)
@@ -115,7 +108,7 @@ FROM pgmnemo.recall_fast(
     10,
     'tc_rf_a', NULL, NULL
 );
- t5_role_filter_returns_two
+ t5_role_filter_returns_two 
 ----------------------------
  t
 (1 row)
@@ -126,8 +119,8 @@ FROM pgmnemo.recall_fast(
     10,
     'tc_rf_nonexistent', NULL, NULL
 );
- t5_role_filter_excludes_other
---------------------------------
+ t5_role_filter_excludes_other 
+-------------------------------
  t
 (1 row)
 
@@ -140,8 +133,8 @@ FROM pgmnemo.recall_fast(
     10,
     NULL, 2, NULL
 );
- t6_project_filter_returns_two
---------------------------------
+ t6_project_filter_returns_two 
+-------------------------------
  t
 (1 row)
 
@@ -151,8 +144,8 @@ FROM pgmnemo.recall_fast(
     10,
     NULL, 99, NULL
 );
- t6_project_filter_excludes_other
------------------------------------
+ t6_project_filter_excludes_other 
+----------------------------------
  t
 (1 row)
 
@@ -167,7 +160,7 @@ FROM pgmnemo.recall_fast(
     10,
     'tc_rf_b', NULL, 'dag-xyz'
 );
- t7_exclude_dag_suppresses_self_recall
+ t7_exclude_dag_suppresses_self_recall 
 ---------------------------------------
  t
 (1 row)
@@ -185,7 +178,7 @@ FROM pgmnemo.recall_fast(
     10,
     'tc_rf_a', NULL, NULL
 );
- t8_two_rows_returned | t8_min_score_near_one | t8_max_score_le_one
+ t8_two_rows_returned | t8_min_score_near_one | t8_max_score_le_one 
 ----------------------+-----------------------+---------------------
  t                    | t                     | t
 (1 row)
@@ -194,13 +187,11 @@ FROM pgmnemo.recall_fast(
 -- T9: track_recall_recency=on → recall_count increments for recalled rows
 -- ============================================================================
 SET pgmnemo.track_recall_recency = 'on';
-SET
 -- Capture pre-recall recall_count for role A rows
 CREATE TEMP TABLE _rf_before_counts AS
 SELECT id, recall_count
 FROM pgmnemo.agent_lesson
 WHERE role = 'tc_rf_a';
-SELECT 2
 -- Perform recall
 SELECT COUNT(*) = 2 AS t9_recall_returned_two
 FROM pgmnemo.recall_fast(
@@ -208,7 +199,7 @@ FROM pgmnemo.recall_fast(
     10,
     'tc_rf_a', NULL, NULL
 );
- t9_recall_returned_two
+ t9_recall_returned_two 
 ------------------------
  t
 (1 row)
@@ -219,30 +210,27 @@ FROM pgmnemo.agent_lesson al
 JOIN _rf_before_counts bc ON bc.id = al.id
 WHERE al.recall_count = bc.recall_count + 1
   AND al.role = 'tc_rf_a';
- t9_recall_count_incremented
-------------------------------
+ t9_recall_count_incremented 
+-----------------------------
  t
 (1 row)
 
 DROP TABLE _rf_before_counts;
-DROP TABLE
 -- ============================================================================
 -- T10: track_recall_recency=off → recall_count unchanged after recall
 -- ============================================================================
 SET pgmnemo.track_recall_recency = 'off';
-SET
 CREATE TEMP TABLE _rf_b_before AS
 SELECT id, recall_count
 FROM pgmnemo.agent_lesson
 WHERE role = 'tc_rf_b';
-SELECT 2
 SELECT COUNT(*) >= 1 AS t10_recall_returned_rows
 FROM pgmnemo.recall_fast(
     array_fill(1.0::float4, ARRAY[1024])::vector(1024),
     10,
     'tc_rf_b', NULL, NULL
 );
- t10_recall_returned_rows
+ t10_recall_returned_rows 
 --------------------------
  t
 (1 row)
@@ -252,17 +240,14 @@ FROM pgmnemo.agent_lesson al
 JOIN _rf_b_before bb ON bb.id = al.id
 WHERE al.recall_count = bb.recall_count
   AND al.role = 'tc_rf_b';
- t10_recall_count_unchanged
+ t10_recall_count_unchanged 
 ----------------------------
  t
 (1 row)
 
 DROP TABLE _rf_b_before;
-DROP TABLE
 -- ============================================================================
 -- Cleanup
 -- ============================================================================
 RESET pgmnemo.track_recall_recency;
-RESET
 DELETE FROM pgmnemo.agent_lesson WHERE role IN ('tc_rf_a', 'tc_rf_b');
-DELETE 4

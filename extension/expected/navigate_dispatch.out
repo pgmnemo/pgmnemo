@@ -15,12 +15,9 @@
 --   T11: Boundary — relation dispatch without query_text raises exception
 --   T12: Boundary — navigate_expand_typed entity typed_detail JSONB structure
 SET pgmnemo.gate_strict = 'off';
-SET
 SET pgmnemo.include_unverified = 'on';
-SET
 ALTER EXTENSION pgmnemo UPDATE TO '0.10.0';
 NOTICE:  version "0.10.0" of extension "pgmnemo" is already installed
-ALTER EXTENSION
 -- ============================================================================
 -- T1: navigate_locate_dispatch exists with 6-arg signature
 -- ============================================================================
@@ -64,7 +61,6 @@ VALUES
     ('tc_nd', 9991, 'dispatch_test',
      'navigate dispatch temporal row alpha bravo recent event',
      'temporal', 'nd-sha-temporal-1');
-INSERT 0 3
 -- Setup: mem_edge connecting entity → lesson for T10 relation dispatch test
 DO $$
 DECLARE
@@ -80,7 +76,6 @@ BEGIN
     PERFORM pgmnemo.add_edge(_entity_id, _lesson_id, 'ELABORATES', 0.9);
 END;
 $$;
-DO
 -- ============================================================================
 -- T3: entity dispatch routes to BM25 path → navigation_path = 'bm25_entity'
 -- ============================================================================
@@ -110,7 +105,6 @@ EXCEPTION WHEN OTHERS THEN
 END;
 $$;
 NOTICE:  T4 PASS: entity dispatch with NULL query_text raises exception
-DO
 -- ============================================================================
 -- T5: temporal dispatch routes to btree path → navigation_path = 'temporal_btree'
 -- ============================================================================
@@ -139,7 +133,7 @@ FROM (
     WHERE navigation_path IN ('bm25_entity', 'temporal_btree', 'graph_relation')
 ) typed_rows;
  t6_no_typed_paths_in_unified_dispatch 
-----------------------------------------
+---------------------------------------
  t
 (1 row)
 
@@ -211,7 +205,6 @@ EXCEPTION WHEN OTHERS THEN
 END;
 $$;
 NOTICE:  T11 PASS: relation dispatch with NULL query_text raises exception
-DO
 -- ============================================================================
 -- T12: Boundary — navigate_expand_typed entity typed_detail JSONB structure
 -- Entity rows must return non-null typed_detail with canonical_name + entity_type keys.
@@ -233,4 +226,3 @@ FROM pgmnemo.navigate_expand_typed(
 -- Cleanup
 -- ============================================================================
 DELETE FROM pgmnemo.agent_lesson WHERE role = 'tc_nd';
-DELETE 3

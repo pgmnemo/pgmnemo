@@ -12,12 +12,9 @@
 --   T8: Lesson-type row embedding preserved (semantic type, not cleared)
 --   T9: Boundary — relation content_type cleared; NULL content_type preserved
 SET pgmnemo.gate_strict = 'off';
-SET
 SET pgmnemo.include_unverified = 'on';
-SET
 ALTER EXTENSION pgmnemo UPDATE TO '0.10.0';
 NOTICE:  version "0.10.0" of extension "pgmnemo" is already installed
-ALTER EXTENSION
 -- ============================================================================
 -- T1: Function exists with 1-arg signature
 -- ============================================================================
@@ -48,7 +45,6 @@ FROM (VALUES
     ('selective embedding temporal row alpha bravo xylophone', 'temporal', 'se-sha-temporal-1'),
     ('selective embedding lesson row alpha bravo xylophone',   'lesson',   'se-sha-lesson-1')
 ) AS t(lesson_text, content_type, commit_sha);
-INSERT 0 4
 -- ============================================================================
 -- T2: dry_run=TRUE returns count >= 3 and dry_run flag = TRUE
 -- ============================================================================
@@ -56,8 +52,8 @@ SELECT affected_count >= 3 AS t2_dry_run_reports_candidates,
        dry_run = TRUE       AS t2_dry_run_flag_correct
 FROM pgmnemo.apply_selective_embedding_policy(TRUE);
  t2_dry_run_reports_candidates | t2_dry_run_flag_correct 
---------------------------------+-------------------------
- t                              | t
+-------------------------------+-------------------------
+ t                             | t
 (1 row)
 
 -- ============================================================================
@@ -68,8 +64,8 @@ SELECT (by_content_type ? 'entity')   AS t3_entity_key_present,
        (by_content_type ? 'temporal') AS t3_temporal_key_present
 FROM pgmnemo.apply_selective_embedding_policy(TRUE);
  t3_entity_key_present | t3_fact_key_present | t3_temporal_key_present 
-------------------------+---------------------+-------------------------
- t                      | t                   | t
+-----------------------+---------------------+-------------------------
+ t                     | t                   | t
 (1 row)
 
 -- ============================================================================
@@ -81,7 +77,7 @@ WHERE role = 'tc_se'
   AND content_type IN ('entity', 'fact', 'temporal')
   AND embedding IS NOT NULL;
  t4_embeddings_intact_after_dry_run 
--------------------------------------
+------------------------------------
  t
 (1 row)
 
@@ -105,7 +101,7 @@ WHERE role = 'tc_se'
   AND content_type IN ('entity', 'fact', 'temporal')
   AND embedding IS NULL;
  t6_non_semantic_embeddings_cleared 
--------------------------------------
+------------------------------------
  t
 (1 row)
 
@@ -115,7 +111,7 @@ WHERE role = 'tc_se'
 SELECT affected_count = 0 AS t7_idempotent_zero_on_second_run
 FROM pgmnemo.apply_selective_embedding_policy(FALSE);
  t7_idempotent_zero_on_second_run 
------------------------------------
+----------------------------------
  t
 (1 row)
 
@@ -128,7 +124,7 @@ WHERE role = 'tc_se'
   AND content_type = 'lesson'
   AND embedding IS NOT NULL;
  t8_lesson_embedding_preserved 
---------------------------------
+-------------------------------
  t
 (1 row)
 
@@ -136,7 +132,6 @@ WHERE role = 'tc_se'
 -- Cleanup
 -- ============================================================================
 DELETE FROM pgmnemo.agent_lesson WHERE role = 'tc_se';
-DELETE 4
 -- ============================================================================
 -- T9: Boundary — relation content_type cleared; NULL content_type preserved
 -- New isolated role 'tc_se2'; tc_se rows already NULL after T5 (idempotency confirmed).
@@ -155,7 +150,6 @@ VALUES
      NULL,
      array_fill(1.0::float4, ARRAY[1024])::vector(1024),
      'se-sha-null-b');
-INSERT 0 2
 -- Apply policy — relation row should be cleared; NULL content_type row untouched
 SELECT (dry_run = FALSE) AS t9_applied
 FROM pgmnemo.apply_selective_embedding_policy(FALSE);
@@ -187,4 +181,3 @@ WHERE role = 'tc_se2'
 (1 row)
 
 DELETE FROM pgmnemo.agent_lesson WHERE role = 'tc_se2';
-DELETE 2
