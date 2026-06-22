@@ -397,3 +397,368 @@ COMMENT ON FUNCTION pgmnemo.recall_hybrid(vector, TEXT, INT, TEXT, INT, DOUBLE P
     'Inherits all v0.10.1 (#87) fixes: query_text cap, indexed full_text BM25, '
     'bm25_budget_ms timeout, simple tsconfig. '
     'VOLATILE (side-effects: recency stamp, temp table _pgmnemo_bm25_work).';
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- G. Typed WRITE API — ADR-61 §3 D2 (P1.1 / MEM-ERA-P1.1)
+--    Identical to the G section in pgmnemo--0.10.0--0.11.0.sql.
+--    pgmnemo.canonical_slug  — normalizer / entity-key validator
+--    pgmnemo.remember_fact   — bitemporal write with PII gate + FOR UPDATE
+--    pgmnemo.remember_event  — append-only event write
+--    pgmnemo.remember_relation — entity-hub upsert + idempotent edge write
+-- ─────────────────────────────────────────────────────────────────────────────
+
+CREATE OR REPLACE FUNCTION pgmnemo.canonical_slug(p_raw text)
+RETURNS text
+LANGUAGE plpgsql
+IMMUTABLE STRICT
+AS $$
+DECLARE
+    _s    text;
+    _type text;
+    _id   text;
+    _sep  int;
+BEGIN
+    _s   := regexp_replace(lower(trim(p_raw)), '[^a-z0-9_:]', '_', 'g');
+    _sep := position(':' IN _s);
+    IF _sep = 0 THEN
+        RAISE EXCEPTION
+            'pgmnemo.canonical_slug: input must contain ":" separator: %', p_raw;
+    END IF;
+    _type := left(_s, _sep - 1);
+    _id   := substring(_s FROM _sep + 1);
+
+    IF _type NOT IN ('person','org','project','product','location','concept') THEN
+        RAISE EXCEPTION
+            'pgmnemo.canonical_slug: unknown type prefix "%": '
+            'valid={person,org,project,product,location,concept}', _type;
+    END IF;
+
+    _id := regexp_replace(regexp_replace(_id, '_{2,}', '_', 'g'), '^_|_$', '', 'g');
+    IF _id = '' THEN
+        RAISE EXCEPTION
+            'pgmnemo.canonical_slug: id part is empty after normalization: %', p_raw;
+    END IF;
+
+    RETURN _type || ':' || _id;
+END;
+$$;
+
+COMMENT ON FUNCTION pgmnemo.canonical_slug(text) IS
+    'P1.1 / ADR-61 D2: normalise a raw entity key to <type>:<id>. '
+    'Lowercases input, replaces non-[a-z0-9_] with underscore, '
+    'validates type prefix in {person,org,project,product,location,concept}. '
+    'IMMUTABLE STRICT — raises on NULL input or unknown type.';
+
+CREATE OR REPLACE FUNCTION pgmnemo.remember_fact(
+    p_role          text,
+    p_project_id    int,
+    p_entity_key    text,
+    p_property      text,
+    p_value         text,
+    p_confidence    real            DEFAULT 0.5,
+    p_source_type   text            DEFAULT 'auto_captured',
+    p_source_run_id text            DEFAULT NULL,
+    p_t_valid_from  timestamptz     DEFAULT now()
+) RETURNS bigint
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    _topic      text;
+    _existing   RECORD;
+    _new_id     bigint;
+    _state      text;
+    _is_pii     boolean;
+    _art_hash   text;
+BEGIN
+    IF p_entity_key !~ '^(person|org|project|product|location|concept):[a-z0-9_]+$' THEN
+        RAISE EXCEPTION
+            'pgmnemo.remember_fact: invalid entity_key "%" — '
+            'must match ^(person|org|project|product|location|concept):[a-z0-9_]+$',
+            p_entity_key;
+    END IF;
+
+    _topic := p_entity_key || ':' || p_property;
+
+    _is_pii := p_property IN ('email','phone','address','telegram','full_name')
+               AND p_entity_key LIKE 'person:%';
+
+    IF _is_pii AND p_source_type <> 'system' THEN
+        _state := 'candidate';
+    ELSE
+        _state := CASE WHEN p_confidence >= 0.8 THEN 'validated' ELSE 'candidate' END;
+    END IF;
+
+    SELECT id, lesson_text, confidence, version_n
+    INTO _existing
+    FROM pgmnemo.agent_lesson
+    WHERE role         = p_role
+      AND topic        = _topic
+      AND (p_project_id IS NULL OR project_id = p_project_id)
+      AND content_type = 'fact'
+      AND t_valid_to   = 'infinity'::timestamptz
+      AND is_active    = TRUE
+    FOR UPDATE;
+
+    IF NOT FOUND THEN
+        _art_hash := 'rf:' || p_role || ':'
+                     || COALESCE(p_project_id::text, '') || ':' || _topic;
+
+        INSERT INTO pgmnemo.agent_lesson (
+            role, project_id, topic, lesson_text,
+            content_type, state, state_changed_at,
+            confidence, source_type, source_run_id,
+            t_valid_from, t_valid_to,
+            version_n, patch_count,
+            artifact_hash, verified_at
+        ) VALUES (
+            p_role, p_project_id, _topic, p_value,
+            'fact', _state, NOW(),
+            p_confidence, p_source_type, p_source_run_id,
+            p_t_valid_from, 'infinity'::timestamptz,
+            1, 0,
+            _art_hash, NOW()
+        ) RETURNING id INTO _new_id;
+
+        RETURN _new_id;
+
+    ELSIF _existing.lesson_text = p_value THEN
+        UPDATE pgmnemo.agent_lesson
+        SET confidence  = GREATEST(confidence, p_confidence),
+            patch_count = patch_count + 1,
+            updated_at  = NOW()
+        WHERE id = _existing.id;
+
+        RETURN _existing.id;
+
+    ELSE
+        UPDATE pgmnemo.agent_lesson
+        SET t_valid_to       = NOW(),
+            state            = 'superseded',
+            state_changed_at = NOW(),
+            is_active        = FALSE,
+            updated_at       = NOW()
+        WHERE id = _existing.id;
+
+        _art_hash := 'rf:' || p_role || ':'
+                     || COALESCE(p_project_id::text, '') || ':' || _topic
+                     || ':v' || (_existing.version_n + 1)::text;
+
+        INSERT INTO pgmnemo.agent_lesson (
+            role, project_id, topic, lesson_text,
+            content_type, state, state_changed_at,
+            confidence, source_type, source_run_id,
+            t_valid_from, t_valid_to,
+            version_n, patch_count,
+            artifact_hash, verified_at
+        ) VALUES (
+            p_role, p_project_id, _topic, p_value,
+            'fact', _state, NOW(),
+            p_confidence, p_source_type, p_source_run_id,
+            p_t_valid_from, 'infinity'::timestamptz,
+            _existing.version_n + 1, 0,
+            _art_hash, NOW()
+        ) RETURNING id INTO _new_id;
+
+        RETURN _new_id;
+    END IF;
+END;
+$$;
+
+COMMENT ON FUNCTION pgmnemo.remember_fact(text, int, text, text, text, real, text, text, timestamptz) IS
+    'P1.1 / ADR-61 D2: bitemporal fact write with PII gate. '
+    'SELECT FOR UPDATE serialises concurrent writes. '
+    'Same value → GREATEST(confidence), patch_count+1. '
+    'New value → supersede prior + INSERT version_n+1. '
+    'PII gate: email/phone/address/telegram/full_name on person:* → candidate unless source_type=system.';
+
+CREATE OR REPLACE FUNCTION pgmnemo.remember_event(
+    p_role          text,
+    p_project_id    int,
+    p_entity_key    text,
+    p_event_type    text,
+    p_ts            timestamptz,
+    p_summary       text,
+    p_confidence    real        DEFAULT 0.8,
+    p_source_type   text        DEFAULT 'auto_captured',
+    p_source_run_id text        DEFAULT NULL,
+    p_source_dag_id text        DEFAULT NULL,
+    p_metadata      jsonb       DEFAULT '{}'
+) RETURNS bigint
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    _new_id   bigint;
+    _topic    text;
+    _state    text;
+    _art_hash text;
+BEGIN
+    _topic    := COALESCE(p_entity_key, '') || ':event:' || p_event_type;
+    _state    := CASE WHEN p_confidence < 0.5 THEN 'candidate' ELSE 'validated' END;
+    _art_hash := 're:' || p_role || ':'
+                 || COALESCE(p_project_id::text, '') || ':'
+                 || _topic || ':' || p_ts::text;
+
+    INSERT INTO pgmnemo.agent_lesson (
+        role, project_id, topic, lesson_text,
+        content_type, state, state_changed_at,
+        confidence, source_type, source_run_id, source_dag_id,
+        metadata,
+        t_valid_from, t_valid_to,
+        artifact_hash, verified_at
+    ) VALUES (
+        p_role, p_project_id, _topic, p_summary,
+        'event', _state, NOW(),
+        p_confidence, p_source_type, p_source_run_id, p_source_dag_id,
+        COALESCE(p_metadata, '{}'),
+        p_ts, 'infinity'::timestamptz,
+        _art_hash, NOW()
+    ) RETURNING id INTO _new_id;
+
+    RETURN _new_id;
+END;
+$$;
+
+COMMENT ON FUNCTION pgmnemo.remember_event(text, int, text, text, timestamptz, text, real, text, text, text, jsonb) IS
+    'P1.1 / ADR-61 D2: append-only event write. '
+    'Always INSERTs (events are immutable historical facts). '
+    'topic = COALESCE(entity_key,"")||":event:"||(event_type). '
+    't_valid_from = p_ts; t_valid_to = infinity. '
+    'state = validated (or candidate when confidence < 0.5).';
+
+CREATE OR REPLACE FUNCTION pgmnemo.remember_relation(
+    p_role       text,
+    p_project_id int,
+    p_from_key   text,
+    p_to_key     text,
+    p_relation   text,
+    p_confidence real   DEFAULT 0.5,
+    p_metadata   jsonb  DEFAULT '{}'
+) RETURNS bigint
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    _from_id    bigint;
+    _to_id      bigint;
+    _edge_id    bigint;
+    _old_meta   jsonb;
+    _new_meta   jsonb;
+    _art_hash   text;
+    _edge_kind  pgmnemo.edge_kind;
+    _weight     real;
+BEGIN
+    IF p_from_key !~ '^(person|org|project|product|location|concept):[a-z0-9_]+$' THEN
+        RAISE EXCEPTION
+            'pgmnemo.remember_relation: invalid from_key "%"', p_from_key;
+    END IF;
+    IF p_to_key !~ '^(person|org|project|product|location|concept):[a-z0-9_]+$' THEN
+        RAISE EXCEPTION
+            'pgmnemo.remember_relation: invalid to_key "%"', p_to_key;
+    END IF;
+
+    _edge_kind := CASE
+        WHEN p_relation IN ('CAUSED_BY','DERIVED_FROM','CONTRADICTS')
+            THEN 'causal'::pgmnemo.edge_kind
+        WHEN p_relation IN ('CO_OCCURRED','PRECEDED_BY')
+            THEN 'temporal'::pgmnemo.edge_kind
+        WHEN p_relation IN ('ENTITY_LINK','SHARED_TAG','IS_A','PART_OF','MEMBER_OF',
+                             'OWNS','MANAGES','REPORTS_TO','RELATED_TO')
+            THEN 'entity'::pgmnemo.edge_kind
+        ELSE 'semantic'::pgmnemo.edge_kind
+    END;
+
+    _weight  := GREATEST(0.0::real, LEAST(1.0::real, COALESCE(p_confidence, 0.5::real)));
+    _new_meta := COALESCE(p_metadata, '{}') ||
+                 jsonb_build_object('from_key', p_from_key, 'to_key', p_to_key);
+
+    SELECT id INTO _from_id
+    FROM pgmnemo.agent_lesson
+    WHERE content_type = 'entity'
+      AND topic        = p_from_key
+      AND (p_project_id IS NULL OR project_id = p_project_id)
+      AND is_active    = TRUE
+      AND t_valid_to   = 'infinity'::timestamptz
+    LIMIT 1;
+
+    IF NOT FOUND THEN
+        _art_hash := 'rs_ent:' || p_role || ':'
+                     || COALESCE(p_project_id::text, '') || ':' || p_from_key;
+        INSERT INTO pgmnemo.agent_lesson (
+            role, project_id, topic, lesson_text,
+            content_type, state, state_changed_at,
+            t_valid_from, t_valid_to,
+            artifact_hash, verified_at,
+            metadata
+        ) VALUES (
+            p_role, p_project_id, p_from_key, p_from_key,
+            'entity', 'candidate', NOW(),
+            NOW(), 'infinity'::timestamptz,
+            _art_hash, NOW(),
+            jsonb_build_object('canonical_name', p_from_key, 'stub', true)
+        ) RETURNING id INTO _from_id;
+    END IF;
+
+    SELECT id INTO _to_id
+    FROM pgmnemo.agent_lesson
+    WHERE content_type = 'entity'
+      AND topic        = p_to_key
+      AND (p_project_id IS NULL OR project_id = p_project_id)
+      AND is_active    = TRUE
+      AND t_valid_to   = 'infinity'::timestamptz
+    LIMIT 1;
+
+    IF NOT FOUND THEN
+        _art_hash := 'rs_ent:' || p_role || ':'
+                     || COALESCE(p_project_id::text, '') || ':' || p_to_key;
+        INSERT INTO pgmnemo.agent_lesson (
+            role, project_id, topic, lesson_text,
+            content_type, state, state_changed_at,
+            t_valid_from, t_valid_to,
+            artifact_hash, verified_at,
+            metadata
+        ) VALUES (
+            p_role, p_project_id, p_to_key, p_to_key,
+            'entity', 'candidate', NOW(),
+            NOW(), 'infinity'::timestamptz,
+            _art_hash, NOW(),
+            jsonb_build_object('canonical_name', p_to_key, 'stub', true)
+        ) RETURNING id INTO _to_id;
+    END IF;
+
+    SELECT me.id, me.metadata INTO _edge_id, _old_meta
+    FROM pgmnemo.mem_edge me
+    WHERE me.source_id     = _from_id
+      AND me.target_id     = _to_id
+      AND me.relation_type = p_relation
+      AND me.valid_until   IS NULL;
+
+    IF NOT FOUND THEN
+        INSERT INTO pgmnemo.mem_edge
+            (source_id, target_id, relation_type, edge_kind, weight, metadata, valid_from)
+        VALUES
+            (_from_id, _to_id, p_relation, _edge_kind, _weight, _new_meta, clock_timestamp())
+        RETURNING id INTO _edge_id;
+
+    ELSIF _old_meta IS DISTINCT FROM _new_meta THEN
+        UPDATE pgmnemo.mem_edge
+        SET valid_until = clock_timestamp(),
+            updated_at  = clock_timestamp()
+        WHERE id = _edge_id;
+
+        INSERT INTO pgmnemo.mem_edge
+            (source_id, target_id, relation_type, edge_kind, weight, metadata, valid_from)
+        VALUES
+            (_from_id, _to_id, p_relation, _edge_kind, _weight, _new_meta, clock_timestamp())
+        RETURNING id INTO _edge_id;
+    END IF;
+
+    RETURN _edge_id;
+END;
+$$;
+
+COMMENT ON FUNCTION pgmnemo.remember_relation(text, int, text, text, text, real, jsonb) IS
+    'P1.1 / ADR-61 D2: entity-hub relation write. '
+    'Resolves from/to by content_type=entity AND topic=key; auto-stubs missing entities. '
+    'Idempotent on triple (from_key, to_key, relation): '
+    '  same metadata → return existing edge_id; '
+    '  new metadata → close active edge + insert replacement. '
+    'Returns mem_edge.id of the current active edge.';
