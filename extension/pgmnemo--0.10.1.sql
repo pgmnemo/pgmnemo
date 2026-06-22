@@ -559,7 +559,7 @@ BEGIN
             0.2
         );
     EXCEPTION WHEN OTHERS THEN
-        _graph_weight := 0.2;
+        _graph_weight := 0.0;  -- Fix 5: OPT-IN default
     END;
     _graph_weight := GREATEST(0.0, LEAST(0.5, _graph_weight));
 
@@ -1202,8 +1202,8 @@ BEGIN
     BEGIN
         _graph_weight := GREATEST(0.0, LEAST(0.5, COALESCE(
             NULLIF(current_setting('pgmnemo.graph_proximity_weight', TRUE), '')::DOUBLE PRECISION,
-            0.2)));
-    EXCEPTION WHEN OTHERS THEN _graph_weight := 0.2;
+            0.0)));  -- Fix 5: OPT-IN default (was 0.2)
+    EXCEPTION WHEN OTHERS THEN _graph_weight := 0.0;  -- Fix 5: OPT-IN default
     END;
 
     -- I1: read confidence boost weight GUC (default 0.0 = OFF, clamped [0.0, 0.01])
@@ -1336,7 +1336,7 @@ BEGIN
         SELECT id FROM scored ORDER BY rrf_sparse DESC LIMIT 5
     ),
     graph_walk(anchor_id, depth, reached_id) AS (
-        SELECT id, 0, id FROM anchors
+        SELECT id, 0, id FROM anchors WHERE _graph_weight > 0  -- Fix 5
         UNION ALL
         SELECT gw.anchor_id, gw.depth + 1, me.target_id
         FROM graph_walk gw
@@ -1547,7 +1547,7 @@ BEGIN
             0.2
         );
     EXCEPTION WHEN OTHERS THEN
-        _graph_weight := 0.2;
+        _graph_weight := 0.0;  -- Fix 5: OPT-IN default
     END;
     _graph_weight := GREATEST(0.0, LEAST(0.5, _graph_weight));
 
@@ -1925,7 +1925,7 @@ BEGIN
             0.2
         );
     EXCEPTION WHEN OTHERS THEN
-        _graph_weight := 0.2;
+        _graph_weight := 0.0;  -- Fix 5: OPT-IN default
     END;
     _graph_weight := GREATEST(0.0, LEAST(0.5, _graph_weight));
 
@@ -2429,7 +2429,7 @@ BEGIN
             0.2
         );
     EXCEPTION WHEN OTHERS THEN
-        _graph_weight := 0.2;
+        _graph_weight := 0.0;  -- Fix 5: OPT-IN default
     END;
     _graph_weight := GREATEST(0.0, LEAST(0.5, _graph_weight));
 
@@ -3422,8 +3422,8 @@ BEGIN
     BEGIN
         _graph_weight := GREATEST(0.0, LEAST(0.5, COALESCE(
             NULLIF(current_setting('pgmnemo.graph_proximity_weight', TRUE), '')::DOUBLE PRECISION,
-            0.2)));
-    EXCEPTION WHEN OTHERS THEN _graph_weight := 0.2;
+            0.0)));  -- Fix 5: OPT-IN default (was 0.2)
+    EXCEPTION WHEN OTHERS THEN _graph_weight := 0.0;  -- Fix 5: OPT-IN default
     END;
 
     IF _has_text THEN
@@ -3513,7 +3513,7 @@ BEGIN
         SELECT id FROM scored ORDER BY rrf_sparse DESC LIMIT 5
     ),
     graph_walk(anchor_id, depth, reached_id) AS (
-        SELECT id, 0, id FROM anchors
+        SELECT id, 0, id FROM anchors WHERE _graph_weight > 0  -- Fix 5
         UNION ALL
         SELECT gw.anchor_id, gw.depth + 1, me.target_id
         FROM graph_walk gw
@@ -3714,8 +3714,8 @@ BEGIN
     BEGIN
         _graph_weight := GREATEST(0.0, LEAST(0.5, COALESCE(
             NULLIF(current_setting('pgmnemo.graph_proximity_weight', TRUE), '')::DOUBLE PRECISION,
-            0.2)));
-    EXCEPTION WHEN OTHERS THEN _graph_weight := 0.2;
+            0.0)));  -- Fix 5: OPT-IN default (was 0.2)
+    EXCEPTION WHEN OTHERS THEN _graph_weight := 0.0;  -- Fix 5: OPT-IN default
     END;
 
     _has_text := _query_text IS NOT NULL AND length(trim(_query_text)) > 0;
@@ -4234,7 +4234,7 @@ BEGIN
             0.2
         );
     EXCEPTION WHEN OTHERS THEN
-        _graph_weight := 0.2;
+        _graph_weight := 0.0;  -- Fix 5: OPT-IN default
     END;
     _graph_weight := GREATEST(0.0, LEAST(0.5, _graph_weight));
 
@@ -4341,7 +4341,7 @@ BEGIN
     -- v0.9.1 fix: traverses ALL relation_types (was edge_kind IN causal/temporal)
     -- Bidirectional: discovers both forward and backward graph neighbors
     graph_walk (anchor_id, depth, reached_id) AS (
-        SELECT id, 0, id FROM anchors
+        SELECT id, 0, id FROM anchors WHERE _graph_weight > 0  -- Fix 5
         UNION ALL
         SELECT gw.anchor_id, gw.depth + 1,
                CASE WHEN me.source_id = gw.reached_id
@@ -5079,8 +5079,8 @@ BEGIN
     BEGIN
         _graph_weight := GREATEST(0.0, LEAST(0.5, COALESCE(
             NULLIF(current_setting('pgmnemo.graph_proximity_weight', TRUE), '')::DOUBLE PRECISION,
-            0.2)));
-    EXCEPTION WHEN OTHERS THEN _graph_weight := 0.2;
+            0.0)));  -- Fix 5: OPT-IN default (was 0.2)
+    EXCEPTION WHEN OTHERS THEN _graph_weight := 0.0;  -- Fix 5: OPT-IN default
     END;
 
     IF _has_text THEN
@@ -5205,7 +5205,7 @@ BEGIN
         SELECT id FROM scored ORDER BY rrf_sparse DESC LIMIT 5
     ),
     graph_walk(anchor_id, depth, reached_id) AS (
-        SELECT id, 0, id FROM anchors
+        SELECT id, 0, id FROM anchors WHERE _graph_weight > 0  -- Fix 5
         UNION ALL
         SELECT gw.anchor_id, gw.depth + 1, me.target_id
         FROM graph_walk gw
@@ -5433,8 +5433,8 @@ BEGIN
     BEGIN
         _graph_weight := GREATEST(0.0, LEAST(0.5, COALESCE(
             NULLIF(current_setting('pgmnemo.graph_proximity_weight', TRUE), '')::DOUBLE PRECISION,
-            0.2)));
-    EXCEPTION WHEN OTHERS THEN _graph_weight := 0.2;
+            0.0)));  -- Fix 5: OPT-IN default (was 0.2)
+    EXCEPTION WHEN OTHERS THEN _graph_weight := 0.0;  -- Fix 5: OPT-IN default
     END;
 
     _has_text := _query_text IS NOT NULL AND length(trim(_query_text)) > 0;
@@ -5681,8 +5681,8 @@ BEGIN
     BEGIN
         _graph_weight := GREATEST(0.0, LEAST(0.5, COALESCE(
             NULLIF(current_setting('pgmnemo.graph_proximity_weight', TRUE), '')::DOUBLE PRECISION,
-            0.2)));
-    EXCEPTION WHEN OTHERS THEN _graph_weight := 0.2;
+            0.0)));  -- Fix 5: OPT-IN default (was 0.2)
+    EXCEPTION WHEN OTHERS THEN _graph_weight := 0.0;  -- Fix 5: OPT-IN default
     END;
 
     -- I1: read confidence boost weight GUC (default 0.0 = OFF, clamped [0.0, 0.01])
@@ -5815,7 +5815,7 @@ BEGIN
         SELECT id FROM scored ORDER BY rrf_sparse DESC LIMIT 5
     ),
     graph_walk(anchor_id, depth, reached_id) AS (
-        SELECT id, 0, id FROM anchors
+        SELECT id, 0, id FROM anchors WHERE _graph_weight > 0  -- Fix 5
         UNION ALL
         SELECT gw.anchor_id, gw.depth + 1, me.target_id
         FROM graph_walk gw
@@ -6019,8 +6019,8 @@ BEGIN
     BEGIN
         _graph_weight := GREATEST(0.0, LEAST(0.5, COALESCE(
             NULLIF(current_setting('pgmnemo.graph_proximity_weight', TRUE), '')::DOUBLE PRECISION,
-            0.2)));
-    EXCEPTION WHEN OTHERS THEN _graph_weight := 0.2;
+            0.0)));  -- Fix 5: OPT-IN default (was 0.2)
+    EXCEPTION WHEN OTHERS THEN _graph_weight := 0.0;  -- Fix 5: OPT-IN default
     END;
 
     -- I1: read confidence boost weight GUC (default 0.0 = OFF, clamped [0.0, 0.01])
@@ -6159,7 +6159,7 @@ BEGIN
         SELECT id FROM scored ORDER BY rrf_sparse DESC LIMIT 5
     ),
     graph_walk(anchor_id, depth, reached_id) AS (
-        SELECT id, 0, id FROM anchors
+        SELECT id, 0, id FROM anchors WHERE _graph_weight > 0  -- Fix 5
         UNION ALL
         SELECT gw.anchor_id, gw.depth + 1, me.target_id
         FROM graph_walk gw
@@ -6419,8 +6419,8 @@ BEGIN
     BEGIN
         _graph_weight := GREATEST(0.0, LEAST(0.5, COALESCE(
             NULLIF(current_setting('pgmnemo.graph_proximity_weight', TRUE), '')::DOUBLE PRECISION,
-            0.2)));
-    EXCEPTION WHEN OTHERS THEN _graph_weight := 0.2;
+            0.0)));  -- Fix 5: OPT-IN default (was 0.2)
+    EXCEPTION WHEN OTHERS THEN _graph_weight := 0.0;  -- Fix 5: OPT-IN default
     END;
 
     _has_text := _query_text IS NOT NULL AND length(trim(_query_text)) > 0;
@@ -6667,7 +6667,7 @@ BEGIN
             0.2
         );
     EXCEPTION WHEN OTHERS THEN
-        _graph_weight := 0.2;
+        _graph_weight := 0.0;  -- Fix 5: OPT-IN default
     END;
     _graph_weight := GREATEST(0.0, LEAST(0.5, _graph_weight));
 
@@ -6757,7 +6757,7 @@ BEGIN
         SELECT id FROM scored ORDER BY rrf_sparse DESC LIMIT 5
     ),
     graph_walk(anchor_id, depth, reached_id) AS (
-        SELECT id, 0, id FROM anchors
+        SELECT id, 0, id FROM anchors WHERE _graph_weight > 0  -- Fix 5
         UNION ALL
         SELECT
             gw.anchor_id,
@@ -7976,8 +7976,8 @@ BEGIN
     BEGIN
         _graph_weight := GREATEST(0.0, LEAST(0.5, COALESCE(
             NULLIF(current_setting('pgmnemo.graph_proximity_weight', TRUE), '')::DOUBLE PRECISION,
-            0.2)));
-    EXCEPTION WHEN OTHERS THEN _graph_weight := 0.2;
+            0.0)));  -- Fix 5: OPT-IN default (was 0.2)
+    EXCEPTION WHEN OTHERS THEN _graph_weight := 0.0;  -- Fix 5: OPT-IN default
     END;
 
     BEGIN
@@ -8155,7 +8155,7 @@ BEGIN
     ),
     -- graph_walk is inherently bounded (5 anchors × depth 5 = ≤25 edge hops)
     graph_walk(anchor_id, depth, reached_id) AS (
-        SELECT id, 0, id FROM anchors
+        SELECT id, 0, id FROM anchors WHERE _graph_weight > 0  -- Fix 5
         UNION ALL
         SELECT gw.anchor_id, gw.depth + 1, me.target_id
         FROM graph_walk gw
@@ -8406,8 +8406,8 @@ BEGIN
     BEGIN
         _graph_weight := GREATEST(0.0, LEAST(0.5, COALESCE(
             NULLIF(current_setting('pgmnemo.graph_proximity_weight', TRUE), '')::DOUBLE PRECISION,
-            0.2)));
-    EXCEPTION WHEN OTHERS THEN _graph_weight := 0.2;
+            0.0)));  -- Fix 5: OPT-IN default (was 0.2)
+    EXCEPTION WHEN OTHERS THEN _graph_weight := 0.0;  -- Fix 5: OPT-IN default
     END;
 
     _has_text := _query_text IS NOT NULL AND length(trim(_query_text)) > 0;
@@ -8462,7 +8462,7 @@ BEGIN
         SELECT id FROM candidates ORDER BY vec_score DESC LIMIT 5
     ),
     graph_walk(anchor_id, depth, reached_id) AS (
-        SELECT id, 0, id FROM anchors
+        SELECT id, 0, id FROM anchors WHERE _graph_weight > 0  -- Fix 5
         UNION ALL
         SELECT gw.anchor_id, gw.depth + 1, me.target_id
         FROM graph_walk gw
@@ -8605,7 +8605,7 @@ BEGIN
             0.2
         );
     EXCEPTION WHEN OTHERS THEN
-        _graph_weight := 0.2;
+        _graph_weight := 0.0;  -- Fix 5: OPT-IN default
     END;
     _graph_weight := GREATEST(0.0, LEAST(0.5, _graph_weight));
 
@@ -8695,7 +8695,7 @@ BEGIN
         SELECT id FROM scored ORDER BY rrf_sparse DESC LIMIT 5
     ),
     graph_walk(anchor_id, depth, reached_id) AS (
-        SELECT id, 0, id FROM anchors
+        SELECT id, 0, id FROM anchors WHERE _graph_weight > 0  -- Fix 5
         UNION ALL
         SELECT
             gw.anchor_id,

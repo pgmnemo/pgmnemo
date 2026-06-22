@@ -175,8 +175,32 @@ FROM pgmnemo.navigate_locate(
 );
 
 -- ============================================================================
+-- T11: recall_fast() with NULL query_embedding raises EXCEPTION (#84)
+-- ============================================================================
+\echo T11: recall_fast NULL query_embedding raises EXCEPTION
+DO $$
+DECLARE
+    caught BOOLEAN := FALSE;
+BEGIN
+    BEGIN
+        PERFORM * FROM pgmnemo.recall_fast(NULL::vector(1024), 5, 'tc_v0101');
+    EXCEPTION WHEN OTHERS THEN
+        IF SQLERRM LIKE '%recall_fast%IS NULL%' THEN
+            caught := TRUE;
+        ELSE
+            RAISE EXCEPTION 'Wrong exception message: %', SQLERRM;
+        END IF;
+    END;
+    IF NOT caught THEN
+        RAISE EXCEPTION 'recall_fast(NULL) did not raise an exception — #84 guard missing';
+    END IF;
+END;
+$$;
+SELECT TRUE AS recall_fast_null_raises_exception;
+
+-- ============================================================================
 -- Cleanup
 -- ============================================================================
 DELETE FROM pgmnemo.agent_lesson WHERE role = 'tc_v0101';
 
-\echo PASS: all v0.10.1 recall_robustness tests completed
+\echo PASS: all v0.10.1 recall_robustness tests completed (T1-T11)

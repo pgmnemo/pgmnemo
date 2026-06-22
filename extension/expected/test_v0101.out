@@ -27,13 +27,11 @@ VALUES
      'recall hybrid BM25 lexical query embedding semantics robustness test lesson',
      'sha-v0101-2',
      (SELECT array_fill(0.01::float4, ARRAY[1024])::vector(1024)));
-INSERT 0 2
 -- ============================================================================
 -- T1: Second call in same transaction — temp table must be re-used (TRUNCATE),
 --     NOT raise duplicate_table. Both calls must return rows.
 -- ============================================================================
 BEGIN;
-BEGIN
 SELECT COUNT(*) >= 0 AS t1a_first_call_same_tx
 FROM pgmnemo.recall_hybrid(
     (SELECT array_fill(0.01::float4, ARRAY[1024])::vector(1024)),
@@ -61,7 +59,6 @@ FROM pgmnemo.recall_hybrid(
 (1 row)
 
 COMMIT;
-COMMIT
 -- ============================================================================
 -- T2: full_text @@ websearch_to_tsquery('simple', ...) — GIN index path
 --     The 'robustness_topic' lesson_text contains "recall hybrid BM25 lexical".
@@ -89,7 +86,7 @@ FROM pgmnemo.navigate_locate(
     NULL
 );
  t3_navigate_locate_simple_tsconfig
--------------------------------------
+------------------------------------
  t
 (1 row)
 
@@ -104,7 +101,7 @@ FROM pgmnemo.agent_lesson
 WHERE role = 'tc_v0101'
   AND topic = 'кириллица_тема';
  t4_russian_word_in_lesson_tsv
---------------------------------
+-------------------------------
  t
 (1 row)
 
@@ -112,4 +109,3 @@ WHERE role = 'tc_v0101'
 -- Cleanup
 -- ============================================================================
 DELETE FROM pgmnemo.agent_lesson WHERE role = 'tc_v0101';
-DELETE 2

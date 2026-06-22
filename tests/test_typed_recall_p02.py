@@ -30,7 +30,10 @@ import psycopg2.extras
 
 # ─── connection helpers ───────────────────────────────────────────────────────
 
-DEFAULT_ADMIN_URL = "postgresql://execas:B9WCqySTSIitkB0wAqHLpfYuwsKkBLFP@postgres:5432/prod_corpus"
+DEFAULT_ADMIN_URL = os.environ.get(
+    "PGMNEMO_ADMIN_URL",
+    "postgresql://execas:CHANGE_ME@localhost:5432/pgmnemo_regression",
+)
 TEST_DB_NAME = "pgmnemo_regression"
 
 EXTENSION_DIR = os.path.join(os.path.dirname(__file__), "..", "extension")

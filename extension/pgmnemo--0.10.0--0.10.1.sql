@@ -1,7 +1,7 @@
 -- pgmnemo--0.10.0--0.10.1.sql
 -- pgmnemo issue #87: recall_hybrid robustness
 --
--- Four targeted fixes to recall_hybrid latency and reliability:
+-- Five targeted fixes to recall_hybrid latency and reliability:
 --
 --   Fix 1  Cap lexical query_text to ≤200 chars before websearch_to_tsquery.
 --           Embedding carries full semantics; BM25 only needs salient tokens.
@@ -24,6 +24,16 @@
 --           mangled by the English stemmer and stop-word removal losing tokens.
 --           Requires ALTER TABLE SET EXPRESSION on generated tsvector columns
 --           (PG 16+ feature; test env is PG 17.10).
+--
+--   Fix 5  graph_walk OPT-IN + conditional guard (#88 decision).
+--           graph_proximity_weight default changed 0.2 → 0.0 (OPT-IN).
+--           graph_walk base case gains WHERE _graph_weight > 0 guard so the
+--           recursive CTE returns 0 rows and skips the mem_edge join entirely
+--           when weight = 0. Corpus with 73 k temporal edges caused 20-25 %
+--           query timeouts (>30 s) even with Fix 3; graph_walk is the root
+--           cause on dense temporal-edge corpora (#88 ablation).
+--           Callers that want graph proximity must set:
+--               SET pgmnemo.graph_proximity_weight = 0.1;  -- or higher
 --
 -- Schema change: topic_tsv, lesson_tsv, full_text generated columns are
 -- updated to use 'simple' tsconfig. GIN indexes are rebuilt automatically.
@@ -171,11 +181,12 @@ BEGIN
     EXCEPTION WHEN OTHERS THEN _as_of_ts := NULL;
     END;
 
+    -- Fix 5: default changed 0.2 → 0.0 (OPT-IN per #88 ablation decision)
     BEGIN
         _graph_weight := GREATEST(0.0, LEAST(0.5, COALESCE(
             NULLIF(current_setting('pgmnemo.graph_proximity_weight', TRUE), '')::DOUBLE PRECISION,
-            0.2)));
-    EXCEPTION WHEN OTHERS THEN _graph_weight := 0.2;
+            0.0)));
+    EXCEPTION WHEN OTHERS THEN _graph_weight := 0.0;
     END;
 
     BEGIN
@@ -353,9 +364,11 @@ BEGIN
     anchors AS (
         SELECT id FROM scored ORDER BY rrf_sparse DESC LIMIT 5
     ),
-    -- graph_walk is inherently bounded (5 anchors × depth 5 = ≤25 edge hops)
+    -- graph_walk: Fix 5 — base case guards on _graph_weight > 0 so the recursive
+    -- CTE returns 0 rows (and skips the mem_edge join entirely) when weight = 0.
+    -- Eliminates 20-25 % of queries timing out on dense temporal-edge corpora.
     graph_walk(anchor_id, depth, reached_id) AS (
-        SELECT id, 0, id FROM anchors
+        SELECT id, 0, id FROM anchors WHERE _graph_weight > 0
         UNION ALL
         SELECT gw.anchor_id, gw.depth + 1, me.target_id
         FROM graph_walk gw
@@ -662,7 +675,7 @@ BEGIN
         SELECT id FROM candidates ORDER BY vec_score DESC LIMIT 5
     ),
     graph_walk(anchor_id, depth, reached_id) AS (
-        SELECT id, 0, id FROM anchors
+        SELECT id, 0, id FROM anchors WHERE _graph_weight > 0  -- Fix 5
         UNION ALL
         SELECT gw.anchor_id, gw.depth + 1, me.target_id
         FROM graph_walk gw
@@ -895,7 +908,7 @@ BEGIN
         SELECT id FROM scored ORDER BY rrf_sparse DESC LIMIT 5
     ),
     graph_walk(anchor_id, depth, reached_id) AS (
-        SELECT id, 0, id FROM anchors
+        SELECT id, 0, id FROM anchors WHERE _graph_weight > 0  -- Fix 5
         UNION ALL
         SELECT
             gw.anchor_id,
