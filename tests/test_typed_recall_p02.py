@@ -3,7 +3,7 @@
 test_typed_recall_p02.py — Regression test for P0.2: p_content_types in recall_hybrid.
 ADR-61 §3 D3 / pgmnemo v0.11.0
 
-Runs on TEST DB (pgmnemo_regression), NEVER on prod_corpus.
+Runs on TEST DB (pgmnemo_regression), NEVER on agency_v3.
 
 Tests:
   T1  New 10-param signature present
@@ -55,8 +55,8 @@ def _load_sql(filename: str) -> str:
 # ─── test DB lifecycle ────────────────────────────────────────────────────────
 
 def create_test_db(admin_url: str, db_name: str) -> None:
-    """Create the test database (drops if exists). NEVER touches prod_corpus."""
-    assert "prod_corpus" not in db_name, "Safety: refusing to create db with prod_corpus in name"
+    """Create the test database (drops if exists). NEVER touches agency_v3."""
+    assert "agency_v3" not in db_name, "Safety: refusing to create db with agency_v3 in name"
     conn = psycopg2.connect(admin_url)
     conn.autocommit = True
     cur = conn.cursor()
@@ -329,7 +329,7 @@ def main():
     admin_url = args.admin_url
     test_db_url = build_test_db_url(admin_url, TEST_DB_NAME)
 
-    print(f"[info] Test DB: {TEST_DB_NAME} (NOT prod_corpus)")
+    print(f"[info] Test DB: {TEST_DB_NAME} (NOT agency_v3)")
     print(f"[info] Migration: {args.from_version} → 0.11.0")
 
     try:

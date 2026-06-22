@@ -1,0 +1,56 @@
+SET
+SET
+SET
+ALTER EXTENSION
+ has_ten_params
+----------------
+ t
+(1 row)
+
+INSERT 0 7
+ old_api_row_count
+-------------------
+                 7
+(1 row)
+
+ null_param_row_count
+----------------------
+                    7
+(1 row)
+
+ procedure_count
+-----------------
+               3
+(1 row)
+
+ returned_rows | all_are_procedure
+---------------+-------------------
+             3 | t
+(1 row)
+
+ empty_array_row_count
+-----------------------
+                     0
+(1 row)
+
+ proc_and_fact_count
+---------------------
+                   5
+(1 row)
+
+ returned_rows | all_in_filter
+---------------+---------------
+             5 | t
+(1 row)
+
+ bit_identical
+---------------
+ t
+(1 row)
+
+ recall_count | direct_count | recall_subset_of_direct
+--------------+--------------+-------------------------
+            3 |            3 | t
+(1 row)
+
+DELETE 7
