@@ -13,7 +13,7 @@
 
 > **Decision: OPT-IN** — make `graph_walk` opt-in (GUC default `pgmnemo.graph_proximity_weight = 0.0`)
 
-graph_walk adds **~10 ms P50 latency overhead** (+16%) with **zero statistically significant recall lift** on this corpus. Live-corpus ranking overlap = 1.000 at k=10 — the graph BFS reranks no queries. Edge-aware controlled recall shows a +6 pp directional lift at recall@5 (p_corr = 0.31, ns). Decision rule (`feedback_complexity_must_justify`): no significant lift → opt-in.
+graph_walk adds **+3–5 ms P50 latency overhead** (+5–8%) with **zero statistically significant recall lift** on this corpus. Live-corpus ranking overlap = 1.000 across all K values — the graph BFS reranks zero queries in 43 measured runs. Edge-aware controlled recall shows +8.3 pp directional lift at recall@5/10 (p_corr = 1.0, ns, n=12). Decision rule (`feedback_complexity_must_justify`): no significant lift → opt-in.
 
 ---
 
@@ -43,58 +43,58 @@ Two-proportion z-test on Phase 2 hit rates (n = 50 anchor pairs). Holm-Bonferron
 
 ## Phase 1: Live-Corpus Ranking Overlap
 
-**n = 46** queries measured (50 attempted; 4 skipped: statement timeout 8 s)
+**n = 43** queries measured (50 attempted; 7 skipped: statement timeout 8 s)
 
 | K | Overlap (median) | Ranking change rate | lat_with P50 | lat_with P95 | lat_no_cte P50 | CTE overhead (P50) |
 |---|-----------------|---------------------|-------------|-------------|----------------|-------------------|
-| 1 | **1.000** | 0.0% | 73.8 ms | 286.6 ms | 61.2 ms | **+12.6 ms** |
-| 5 | 0.800 | 20.0% | 69.0 ms | 156.8 ms | 60.3 ms | +8.6 ms |
-| 10 | **1.000** | 0.0% | 71.6 ms | 164.7 ms | 61.9 ms | **+9.7 ms** |
-| 20 | 0.975 | 2.5% | 69.9 ms | 202.0 ms | 61.4 ms | +8.5 ms |
+| 1 | **1.000** | 0.0% | 61.9 ms | 382 ms | 57.4 ms | **+4.5 ms (+7.8%)** |
+| 5 | **1.000** | 0.0% | 60.7 ms | 332 ms | 56.2 ms | +4.5 ms (+8.0%) |
+| 10 | **1.000** | 0.0% | 60.1 ms | 342 ms | 57.0 ms | **+3.1 ms (+5.4%)** |
+| 20 | **1.000** | 0.0% | 61.1 ms | 430 ms | 57.3 ms | +3.8 ms (+6.6%) |
 
 **Key observations:**
 
-- At k=1 and k=10, graph_walk changes **zero** rankings (overlap = 1.000). The top returned lesson and the top-10 set are identical WITH vs WITHOUT graph.
-- At k=5, the median overlap is 0.800 (1 lesson in 5 differs). This occurs for ~20% of queries — graph_walk reorders within the top-5 for some queries, but usually the #5 item changes while items 1–4 are stable.
-- The CTE overhead is **+9–13 ms at P50** (15–21% relative to no-CTE baseline). At P95, overhead can reach 80–225 ms (graph BFS expanding over temporal edge chains).
-- No-CTE P50 latency is consistently ~60–62 ms regardless of K, confirming the graph_walk CTE is responsible for the overhead variance.
+- Overlap = **1.000** at ALL K values across all 43 queries — graph_walk reranks **zero** queries.
+- The CTE overhead is **+3–5 ms P50** (+5–8%) relative to the no-CTE inline SQL baseline.
+- P95 latency is dominated by outlier queries (BM25 full-text plan spill) not by the graph CTE.
+- No-CTE P50 consistently ~56–57 ms; with-graph P50 ~60–62 ms, confirming graph_walk CTE adds ~4ms overhead but never changes any result ordering on this corpus.
 
 ---
 
 ## Phase 2: Edge-Aware Controlled Recall
 
-**n = 50** anchor-target pairs, all temporal edges (causal edge qualified pairs were included in the sample but the 50 drawn were all temporal).
+**n = 12** valid anchor-target pairs (DISTINCT ON source_id, both endpoints active+verified+embedded, seed=42). All temporal edges.
 
 | K | WITH graph (hit rate) | WITHOUT graph (hit rate) | Recall lift (Δ) |
 |---|----------------------|--------------------------|----------------|
 | 1 | 0.000 | 0.000 | **+0.000 pp** |
-| 5 | 0.060 | 0.000 | **+6.0 pp** |
-| 10 | 0.060 | 0.020 | **+4.0 pp** |
-| 20 | 0.080 | 0.060 | **+2.0 pp** |
+| 5 | 0.083 | 0.000 | **+8.3 pp** |
+| 10 | 0.083 | 0.000 | **+8.3 pp** |
+| 20 | 0.083 | 0.083 | **+0.0 pp** |
 
-**Rank analysis (k=10):** Median rank WITH graph = 999 (not in top-10); median rank WITHOUT graph = 999. Rank delta = 0.0. In most cases, the edge-target lesson does not appear in top-10 under either condition.
+**Rank analysis (k=10):** Median rank WITH graph = 999 (not in top-10); median rank WITHOUT graph = 999. Rank delta = 0.0. Only anchor=7323→target=7327 (temporal) shows a hit at @5 and @10 WITH graph only; this same pair appears at @20 in both conditions.
 
-**Interpretation:** graph_walk produces a small directional recall lift (+2–6 pp), but absolute hit rates are very low (0–8%). This reflects the corpus structure: 99% of edges (72,339 / 73,258) are temporal "happened-after" edges between chronologically adjacent agent run reports. These lessons are not semantically related — they are records of different tasks. Graph traversal over temporal chains does not surface semantically relevant lessons.
+**Interpretation:** graph_walk produces a +8.3 pp directional lift at recall@5/10 (1 hit in 12 pairs), but this is not statistically significant (p_corr = 1.0, n=12 underpowered). The corpus has 99% temporal edges representing chronological adjacency between agent-run delivery notes — semantically unrelated lessons. Graph traversal over such edges does not surface topically relevant lessons.
 
 ---
 
 ## Significance Analysis
 
-### Two-proportion z-test (Phase 2 hit rates, n = 50)
+### Two-proportion z-test (Phase 2 hit rates, n = 12)
 
 ```
 Metric         Base    95% CI Base           Cand    95% CI Cand          Δ      z    p_raw  p_corr      h     |h|  Sig?
-recall@1      0.0000  [0.0000, 0.0714]   0.0000  [0.0000, 0.0714]  +0.0000  0.00  1.0000  1.0000  0.000  small    no
-recall@5      0.0000  [0.0000, 0.0714]   0.0600  [0.0206, 0.1622]  +0.0600  1.76  0.0786  0.3144  0.495 medium    no
-recall@10     0.0200  [0.0035, 0.1050]   0.0600  [0.0206, 0.1622]  +0.0400  1.02  0.3074  0.9222  0.211 medium    no
-recall@20     0.0600  [0.0206, 0.1622]   0.0800  [0.0315, 0.1884]  +0.0200  0.39  0.6951  1.0000  0.079  small    no
+recall@1      0.0000  [0.0000, 0.2425]   0.0000  [0.0000, 0.2425]  +0.0000  0.00  1.0000  1.0000  0.000  small    no
+recall@5      0.0000  [0.0000, 0.2425]   0.0833  [0.0149, 0.3539]  +0.0833  1.02  0.3071  1.0000  0.586  large    no
+recall@10     0.0000  [0.0000, 0.2425]   0.0833  [0.0149, 0.3539]  +0.0833  1.02  0.3071  1.0000  0.586  large    no
+recall@20     0.0833  [0.0149, 0.3539]   0.0833  [0.0149, 0.3539]  +0.0000  0.00  1.0000  1.0000  0.000  small    no
 
 Method: Holm-Bonferroni correction (m=4 tests, α=0.05)
 ```
 
-**VERDICT: No statistically significant improvements or regressions.** All p_corr ≥ 0.31. The best raw p-value (recall@5, p_raw = 0.079) does not survive Holm-Bonferroni correction (p_corr = 0.314).
+**VERDICT: No statistically significant improvements or regressions.** All p_corr = 1.000.
 
-Cohen's h for recall@5 = 0.495 (medium effect size), but confidence intervals are wide due to very low baseline rates. The +6 pp lift at recall@5 is within the noise envelope for n=50.
+Cohen's h for recall@5/@10 = 0.586 (large) — underpowered at n=12. Required n for 80% power at α=0.05 with h=0.586: ~29 pairs. The +8.3 pp lift is driven by 1 anchor-target hit (anchor=7323→7327) and is within the noise envelope at this sample size.
 
 ---
 
@@ -102,13 +102,13 @@ Cohen's h for recall@5 = 0.495 (medium effect size), but confidence intervals ar
 
 | Metric | Value |
 |--------|-------|
-| **Baseline (no-CTE) P50** | 60–62 ms |
-| **WITH graph P50** | 69–74 ms |
-| **CTE overhead P50** | +9–13 ms (+15–21%) |
-| **WITH graph P95** | 157–287 ms |
-| **CTE overhead P95** | estimated +70–220 ms |
+| **Baseline (no-CTE) P50** | 56–57 ms |
+| **WITH graph P50** | 60–62 ms |
+| **CTE overhead P50** | +3–5 ms (+5–8%) |
+| **GUC=0 P50** | 60–62 ms (same as GUC=0.2 — CTE still runs) |
+| **WITH graph P95** | ~380 ms |
 
-The latency overhead is meaningful at P95: the graph BFS over 73K temporal edges can trigger long chains, adding 70–220 ms on 5% of queries. This aligns with the COMPETITIVE_REALITY observation: "graph features gave zero measurable lift, no bench exercises mem_edge."
+**Key finding:** Setting GUC=0.0 does NOT eliminate CTE latency — the `graph_walk` CTE still executes, it just contributes a zero multiplier. Only removing the CTEs from the function body (or bypassing them with a conditional) eliminates the +3–5ms overhead. For the GUC-based OPT-IN approach, operators save the overhead only by permanently keeping `graph_proximity_weight = 0.0` (which prevents the CTE from computing meaningful scores but not from running). This aligns with COMPETITIVE_REALITY: "graph features gave zero measurable lift, no bench exercises mem_edge."
 
 ---
 
@@ -116,7 +116,7 @@ The latency overhead is meaningful at P95: the graph BFS over 73K temporal edges
 
 **Rule applied:** `feedback_complexity_must_justify` — significant lift → keep; no significant lift → opt-in (GUC default off).
 
-**Outcome:** No statistically significant recall lift (all p_corr ≥ 0.31). Live-corpus ranking overlap = 1.000 at k=10.
+**Outcome:** No statistically significant recall lift (all p_corr = 1.000). Live-corpus ranking overlap = 1.000 at all K (43 queries measured). CTE overhead: +3–5 ms P50.
 
 **Recommended action:**
 
