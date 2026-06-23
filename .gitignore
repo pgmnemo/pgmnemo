@@ -59,6 +59,7 @@ design/*
 !design/RFC-001-memory-organism.md
 !design/SLUG_CONVENTION.md
 !design/PROPERTY_CONVENTIONS.md
+!design/RECONCILE_0.11.0.md
 *.zip
 .embed_cache/
 
