@@ -13,7 +13,7 @@
 --   T9:  navigate_expand — valid_until='infinity' edge is traversed (sentinel compat)
 --   T10: navigate_expand — valid_until IS NULL edge is traversed (standard convention)
 --
--- Prerequisites: pgmnemo 0.9.1 installed (ALTER EXTENSION pgmnemo UPDATE TO '0.10.1').
+-- Prerequisites: pgmnemo 0.9.1 installed (ALTER EXTENSION pgmnemo UPDATE TO '0.11.0').
 -- NOTE: Run with:
 --   psql -v ON_ERROR_STOP=1 -f test_v091.sql
 -- or via pg_regress.

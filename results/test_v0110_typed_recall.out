@@ -1,0 +1,309 @@
+-- test_v0110_typed_recall.sql
+-- pg_regress tests for pgmnemo v0.11.0 — P0.2: typed recall (p_content_types)
+--
+-- Tests:
+--   A: recall_hybrid signature has p_content_types (10th param, text[] DEFAULT NULL)
+--   B: NULL p_content_types — backward-compatible (all types returned)
+--   C: Non-NULL p_content_types — boolean inclusion filter (only matching type returned)
+--   D: Empty array {} — zero rows returned (no silent fallback)
+--   E: COMMENT includes vec_score and mem_edge references (D1/D2 regression guards)
+--
+-- Prerequisites: pgmnemo installed at v0.11.0 (fresh or upgraded from 0.10.0 or 0.10.1).
+-- Inserted test rows use project_id = -1110 (non-conflicting namespace).
+-- =============================================================================
+-- =============================================================================
+-- A: recall_hybrid signature — 10-param overload with p_content_types
+-- =============================================================================
+-- A1: recall_hybrid has exactly 10 parameters
+DO $$
+DECLARE _nargs INT;
+BEGIN
+    SELECT p.pronargs INTO _nargs
+    FROM pg_proc p
+    JOIN pg_namespace n ON n.oid = p.pronamespace
+    WHERE n.nspname = 'pgmnemo' AND p.proname = 'recall_hybrid';
+
+    IF _nargs = 10 THEN
+        RAISE NOTICE 'A1 PASS: recall_hybrid has 10 parameters (p_content_types added)';
+    ELSE
+        RAISE EXCEPTION 'A1 FAIL: expected 10 params, got %', _nargs;
+    END IF;
+END;
+$$;
+NOTICE:  A1 PASS: recall_hybrid has 10 parameters (p_content_types added)
+-- A2: p_content_types is the 10th parameter and is text[]
+DO $$
+DECLARE _argtype TEXT;
+BEGIN
+    SELECT pg_catalog.format_type(p.proargtypes[9], NULL) INTO _argtype
+    FROM pg_proc p
+    JOIN pg_namespace n ON n.oid = p.pronamespace
+    WHERE n.nspname = 'pgmnemo' AND p.proname = 'recall_hybrid';
+
+    IF _argtype = 'text[]' THEN
+        RAISE NOTICE 'A2 PASS: 10th parameter is text[] (p_content_types)';
+    ELSE
+        RAISE EXCEPTION 'A2 FAIL: expected text[], got %', _argtype;
+    END IF;
+END;
+$$;
+NOTICE:  A2 PASS: 10th parameter is text[] (p_content_types)
+-- A3: Old 9-param overload is removed (no ambiguous-function risk)
+DO $$
+DECLARE _cnt INT;
+BEGIN
+    SELECT COUNT(*) INTO _cnt
+    FROM pg_proc p
+    JOIN pg_namespace n ON n.oid = p.pronamespace
+    WHERE n.nspname = 'pgmnemo' AND p.proname = 'recall_hybrid';
+
+    IF _cnt = 1 THEN
+        RAISE NOTICE 'A3 PASS: exactly 1 recall_hybrid overload (9-param overload removed)';
+    ELSE
+        RAISE EXCEPTION 'A3 FAIL: expected 1 overload, got % (old 9-param may still exist)', _cnt;
+    END IF;
+END;
+$$;
+NOTICE:  A3 PASS: exactly 1 recall_hybrid overload (9-param overload removed)
+-- =============================================================================
+-- Setup: insert test lessons with two different content_types
+-- =============================================================================
+DO $$
+DECLARE _vec vector(1024);
+BEGIN
+    _vec := ('[' || repeat('0.03125,', 1023) || '0.03125]')::vector(1024);
+
+    -- Insert two 'code' type lessons
+    INSERT INTO pgmnemo.agent_lesson
+        (role, project_id, topic, lesson_text, importance, embedding, commit_sha,
+         artifact_hash, verified_at, content_type)
+    VALUES
+        ('test_role', -1110, 'typed_recall_test_code_1',
+         'First code-type lesson for typed recall test v0.11.0.',
+         3, _vec, 'abc1234', 'deadbeef01', NOW(), 'code'),
+        ('test_role', -1110, 'typed_recall_test_code_2',
+         'Second code-type lesson for typed recall test v0.11.0.',
+         3, _vec, 'abc1235', 'deadbeef02', NOW(), 'code');
+
+    -- Insert one 'fact' type lesson
+    INSERT INTO pgmnemo.agent_lesson
+        (role, project_id, topic, lesson_text, importance, embedding, commit_sha,
+         artifact_hash, verified_at, content_type)
+    VALUES
+        ('test_role', -1110, 'typed_recall_test_fact_1',
+         'Fact-type lesson for typed recall test v0.11.0.',
+         3, _vec, 'abc1236', 'deadbeef03', NOW(), 'fact');
+
+    RAISE NOTICE 'Setup DONE: 2 code + 1 fact lessons inserted (project_id=-1110)';
+END;
+$$;
+NOTICE:  Setup DONE: 2 code + 1 fact lessons inserted (project_id=-1110)
+-- =============================================================================
+-- B: NULL p_content_types — all types returned (backward compat)
+-- =============================================================================
+-- B1: NULL p_content_types returns both code and fact lessons
+DO $$
+DECLARE
+    _cnt INT;
+    _vec vector(1024);
+BEGIN
+    _vec := ('[' || repeat('0.03125,', 1023) || '0.03125]')::vector(1024);
+
+    SELECT COUNT(*) INTO _cnt
+    FROM pgmnemo.recall_hybrid(
+        _vec,
+        'typed recall test',
+        10,             -- k
+        'test_role',    -- role_filter
+        -1110,          -- project_id_filter
+        0.4,            -- vec_weight
+        0.4,            -- bm25_weight
+        60,             -- rrf_k
+        NULL,           -- exclude_dag_id
+        NULL            -- p_content_types = NULL → all types
+    );
+
+    IF _cnt >= 3 THEN
+        RAISE NOTICE 'B1 PASS: NULL p_content_types returned % rows (all types)', _cnt;
+    ELSE
+        RAISE EXCEPTION 'B1 FAIL: expected ≥3 rows with NULL p_content_types, got %', _cnt;
+    END IF;
+END;
+$$;
+NOTICE:  B1 PASS: NULL p_content_types returned 3 rows (all types)
+-- =============================================================================
+-- C: Non-NULL p_content_types — boolean inclusion filter
+-- =============================================================================
+-- C1: ARRAY['code'] returns only code-type lessons (2 rows)
+DO $$
+DECLARE
+    _cnt INT;
+    _vec vector(1024);
+BEGIN
+    _vec := ('[' || repeat('0.03125,', 1023) || '0.03125]')::vector(1024);
+
+    SELECT COUNT(*) INTO _cnt
+    FROM pgmnemo.recall_hybrid(
+        _vec,
+        'typed recall test',
+        10,
+        'test_role',
+        -1110,
+        0.4,
+        0.4,
+        60,
+        NULL,
+        ARRAY['code']   -- p_content_types: code-only filter
+    );
+
+    IF _cnt = 2 THEN
+        RAISE NOTICE 'C1 PASS: ARRAY[''code''] returned % rows (code-type only)', _cnt;
+    ELSE
+        RAISE EXCEPTION 'C1 FAIL: expected 2 code-type rows, got %', _cnt;
+    END IF;
+END;
+$$;
+NOTICE:  C1 PASS: ARRAY['code'] returned 2 rows (code-type only)
+-- C2: ARRAY['fact'] returns only fact-type lessons (1 row)
+DO $$
+DECLARE
+    _cnt INT;
+    _vec vector(1024);
+BEGIN
+    _vec := ('[' || repeat('0.03125,', 1023) || '0.03125]')::vector(1024);
+
+    SELECT COUNT(*) INTO _cnt
+    FROM pgmnemo.recall_hybrid(
+        _vec,
+        'typed recall test',
+        10,
+        'test_role',
+        -1110,
+        0.4,
+        0.4,
+        60,
+        NULL,
+        ARRAY['fact']   -- p_content_types: fact-only filter
+    );
+
+    IF _cnt = 1 THEN
+        RAISE NOTICE 'C2 PASS: ARRAY[''fact''] returned % rows (fact-type only)', _cnt;
+    ELSE
+        RAISE EXCEPTION 'C2 FAIL: expected 1 fact-type row, got %', _cnt;
+    END IF;
+END;
+$$;
+NOTICE:  C2 PASS: ARRAY['fact'] returned 1 rows (fact-type only)
+-- C3: ARRAY['code','fact'] returns all 3 lessons (multi-type filter)
+DO $$
+DECLARE
+    _cnt INT;
+    _vec vector(1024);
+BEGIN
+    _vec := ('[' || repeat('0.03125,', 1023) || '0.03125]')::vector(1024);
+
+    SELECT COUNT(*) INTO _cnt
+    FROM pgmnemo.recall_hybrid(
+        _vec,
+        'typed recall test',
+        10,
+        'test_role',
+        -1110,
+        0.4,
+        0.4,
+        60,
+        NULL,
+        ARRAY['code','fact']   -- p_content_types: both types
+    );
+
+    IF _cnt = 3 THEN
+        RAISE NOTICE 'C3 PASS: ARRAY[''code'',''fact''] returned % rows (both types)', _cnt;
+    ELSE
+        RAISE EXCEPTION 'C3 FAIL: expected 3 rows for ARRAY[code,fact], got %', _cnt;
+    END IF;
+END;
+$$;
+NOTICE:  C3 PASS: ARRAY['code','fact'] returned 3 rows (both types)
+-- =============================================================================
+-- D: Empty array {} — zero rows (no silent fallback to all-types)
+-- =============================================================================
+-- D1: ARRAY[]::text[] returns 0 rows
+DO $$
+DECLARE
+    _cnt INT;
+    _vec vector(1024);
+BEGIN
+    _vec := ('[' || repeat('0.03125,', 1023) || '0.03125]')::vector(1024);
+
+    SELECT COUNT(*) INTO _cnt
+    FROM pgmnemo.recall_hybrid(
+        _vec,
+        'typed recall test',
+        10,
+        'test_role',
+        -1110,
+        0.4,
+        0.4,
+        60,
+        NULL,
+        ARRAY[]::text[]   -- p_content_types: explicit empty → zero rows
+    );
+
+    IF _cnt = 0 THEN
+        RAISE NOTICE 'D1 PASS: empty ARRAY[]::text[] returned 0 rows (no silent fallback)';
+    ELSE
+        RAISE EXCEPTION 'D1 FAIL: expected 0 rows for empty array, got %', _cnt;
+    END IF;
+END;
+$$;
+NOTICE:  D1 PASS: empty ARRAY[]::text[] returned 0 rows (no silent fallback)
+-- =============================================================================
+-- E: COMMENT regression guards (inherited from v0.7.1 D1/D2)
+-- =============================================================================
+-- E1: recall_hybrid COMMENT includes vec_score (match_confidence formula, BUG-1)
+DO $$
+DECLARE _comment TEXT;
+BEGIN
+    SELECT obj_description(p.oid, 'pg_proc') INTO _comment
+    FROM pg_proc p
+    JOIN pg_namespace n ON n.oid = p.pronamespace
+    WHERE n.nspname = 'pgmnemo' AND p.proname = 'recall_hybrid';
+
+    IF _comment LIKE '%vec_score%' THEN
+        RAISE NOTICE 'E1 PASS: recall_hybrid COMMENT describes vec_score formula';
+    ELSE
+        RAISE EXCEPTION 'E1 FAIL: recall_hybrid COMMENT missing vec_score reference: %',
+            left(_comment, 120);
+    END IF;
+END;
+$$;
+NOTICE:  E1 PASS: recall_hybrid COMMENT describes vec_score formula
+-- E2: recall_hybrid COMMENT includes mem_edge (graph_proximity)
+DO $$
+DECLARE _comment TEXT;
+BEGIN
+    SELECT obj_description(p.oid, 'pg_proc') INTO _comment
+    FROM pg_proc p
+    JOIN pg_namespace n ON n.oid = p.pronamespace
+    WHERE n.nspname = 'pgmnemo' AND p.proname = 'recall_hybrid';
+
+    IF _comment LIKE '%mem_edge%' THEN
+        RAISE NOTICE 'E2 PASS: recall_hybrid COMMENT includes mem_edge reference';
+    ELSE
+        RAISE EXCEPTION 'E2 FAIL: recall_hybrid COMMENT missing mem_edge reference: %',
+            left(_comment, 120);
+    END IF;
+END;
+$$;
+NOTICE:  E2 PASS: recall_hybrid COMMENT includes mem_edge reference
+-- =============================================================================
+-- Cleanup
+-- =============================================================================
+DO $$
+BEGIN
+    DELETE FROM pgmnemo.agent_lesson
+    WHERE project_id = -1110 AND role = 'test_role';
+    RAISE NOTICE 'Cleanup DONE: test rows removed (project_id=-1110)';
+END;
+$$;
+NOTICE:  Cleanup DONE: test rows removed (project_id=-1110)
