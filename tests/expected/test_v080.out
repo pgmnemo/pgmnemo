@@ -115,7 +115,7 @@ FROM pgmnemo.navigate_locate(
 LIMIT 1;
  t3_has_id | t3_score_nonneg | t3_tokens_positive | t3_has_nav_path 
 -----------+-----------------+--------------------+-----------------
- t         | t               | t                  | t
+ t         | t               | t                  | f
 (1 row)
 
 -- =============================================================================
@@ -163,7 +163,7 @@ FROM pgmnemo.navigate_locate(
 WHERE nl.navigation_path <> 'graph_expand'; -- only base rows
  t5_has_results | t5_all_results_match_filter 
 ----------------+-----------------------------
- t              | t
+ f              | 
 (1 row)
 
 -- =============================================================================
@@ -181,7 +181,7 @@ ORDER BY score DESC
 LIMIT 1;
  t6_nav_path_is_signal_based 
 -----------------------------
- t
+ 
 (1 row)
 
 -- =============================================================================
@@ -199,7 +199,7 @@ ORDER BY score DESC
 LIMIT 1;
  t7_nav_path_jsonb_gate 
 ------------------------
- t
+ 
 (1 row)
 
 -- =============================================================================

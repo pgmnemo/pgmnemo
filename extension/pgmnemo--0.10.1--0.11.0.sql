@@ -396,4 +396,6 @@ COMMENT ON FUNCTION pgmnemo.recall_hybrid(vector, TEXT, INT, TEXT, INT, DOUBLE P
     'Empty array ''{}'': zero rows returned (no silent fallback to all-types). '
     'Inherits all v0.10.1 (#87) fixes: query_text cap, indexed full_text BM25, '
     'bm25_budget_ms timeout, simple tsconfig. '
+    'match_confidence: vec_score (cosine similarity, [0,1]). '
+    'graph_proximity via mem_edge causal/temporal walk (depth ≤5). '
     'VOLATILE (side-effects: recency stamp, temp table _pgmnemo_bm25_work).';

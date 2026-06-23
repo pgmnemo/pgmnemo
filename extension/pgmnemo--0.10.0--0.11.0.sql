@@ -492,6 +492,8 @@ COMMENT ON FUNCTION pgmnemo.recall_hybrid(vector, TEXT, INT, TEXT, INT, DOUBLE P
     'Fix 4: tsconfig changed from english to simple (RU/EN/code corpus). '
     'v0.9.6 — R13: exclude_dag_id TEXT DEFAULT NULL. '
     'v0.9.5 — recall-recency stamping (last_recalled_at, recall_count). '
+    'match_confidence: vec_score (cosine similarity, [0,1]). '
+    'graph_proximity via mem_edge causal/temporal walk (depth ≤5). '
     'VOLATILE (side-effects: recency stamp, temp table _pgmnemo_bm25_work).';
 
 -- ─────────────────────────────────────────────────────────────────────────────
