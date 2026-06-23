@@ -1,0 +1,40 @@
+{
+  "version": "0.11.1",
+  "gate_type": "feature_smoke",
+  "created": "2026-06-23",
+  "task": "MEM-ERA-0111-RECALL-FAST-TYPING",
+  "description": "Typed recall pushdown (p_content_types) mirrored from recall_hybrid() to recall_fast() and recall_lessons(). Hot-path functions now accept optional 6th / 8th parameter respectively; NULL = all content types (backward compat); non-NULL = WHERE content_type = ANY(p_content_types) using ix_pgmnemo_content_type_active.",
+  "significance_required": false,
+  "installcheck": {
+    "result": "PASS",
+    "tests_passed": 36,
+    "tests_failed": 0,
+    "regress_suite": "all (including new typed_recall_fast)"
+  },
+  "upgrade_paths": {
+    "fresh_install_0.11.1_flat": "PASS",
+    "alter_0.11.0_to_0.11.1": "PASS"
+  },
+  "flat_vs_delta": {
+    "identical": true,
+    "method": "proargnames comparison for recall_fast, recall_lessons, recall_hybrid via throwaway DBs"
+  },
+  "functions_changed": [
+    {
+      "name": "pgmnemo.recall_fast",
+      "params_before": 5,
+      "params_after": 6,
+      "new_param": "p_content_types TEXT[] DEFAULT NULL"
+    },
+    {
+      "name": "pgmnemo.recall_lessons",
+      "params_before": 7,
+      "params_after": 8,
+      "new_param": "p_content_types TEXT[] DEFAULT NULL"
+    }
+  ],
+  "functions_not_changed": [
+    "pgmnemo.recall_hybrid (10 params, unchanged — source of truth for semantics)"
+  ],
+  "notes": "recall_2phase not a PostgreSQL function — does not exist in extension (only appeared in a now-removed Python research helper). Only recall_fast and recall_lessons were updated."
+}

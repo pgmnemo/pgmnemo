@@ -15,6 +15,52 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.11.1] — 2026-06-23
+
+### Theme
+
+**Typed recall on the hot path — `p_content_types` mirrored to `recall_fast()` and
+`recall_lessons()`.** v0.11.0 added typed recall (`p_content_types`) to `recall_hybrid()`
+only; Agency consumers and MCP `pgmnemo.recall` call `recall_fast()`, making the
+0.11.0 filter unreachable without going through hybrid. This patch completes typed recall
+by mirroring the identical parameter to the two hot-path functions.
+
+Backward-compatible patch: all existing callers unchanged (new param defaults to NULL).
+
+### Added
+
+- **`p_content_types TEXT[] DEFAULT NULL` on `recall_fast()`** (6th parameter, was 5).
+  When non-NULL, adds `WHERE content_type = ANY(p_content_types)` pushdown before
+  HNSW ranking. Uses `ix_pgmnemo_content_type_active` index (added in v0.11.0).
+  NULL or omitted → all content types (backward compat). `'{}'` → zero rows.
+
+- **`p_content_types TEXT[] DEFAULT NULL` on `recall_lessons()`** (8th parameter, was 7).
+  On the hybrid path (when `query_text` present): forwarded to `recall_hybrid()` as its
+  10th argument. On the vector-only path: applied as `WHERE content_type = ANY(...)`.
+  Same semantics as `recall_fast()` and `recall_hybrid()` — NULL → unchanged, `'{}'` → 0.
+
+- **Migration delta:** `pgmnemo--0.11.0--0.11.1.sql` — DROPs old 5-param `recall_fast`
+  and 7-param `recall_lessons`, CREATEs 6-param and 8-param overloads respectively.
+
+- **Flat install:** `pgmnemo--0.11.1.sql` — fresh install via
+  `CREATE EXTENSION pgmnemo VERSION '0.11.1'`.
+
+- **pg_regress test:** `typed_recall_fast` — T1–T10 covering signature checks for both
+  functions, NULL backward compat, single-type filter, empty-array guard, multi-type
+  filter, `recall_lessons` vector-only path, and backward-compat identity check.
+
+### Migration notes
+
+`ALTER EXTENSION pgmnemo UPDATE TO '0.11.1'` from 0.11.0 applies
+`pgmnemo--0.11.0--0.11.1.sql`. DROPs the old `recall_fast(5)` and
+`recall_lessons(7)` overloads; CREATEs 6-param and 8-param versions with
+`p_content_types DEFAULT NULL`. All existing call sites with ≤5 (recall_fast) or ≤7
+(recall_lessons) positional args continue to work unchanged.
+
+No schema column changes. No data migration required.
+
+---
+
 ## [0.11.0] — 2026-06-23
 
 ### Theme

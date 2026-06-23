@@ -19,8 +19,8 @@
 SET pgmnemo.gate_strict = 'off';
 SET pgmnemo.include_unverified = 'on';
 SET pgmnemo.track_recall_recency = 'off';  -- disable stamping side-effects for clean tests
-ALTER EXTENSION pgmnemo UPDATE TO '0.11.0';
-NOTICE:  version "0.11.0" of extension "pgmnemo" is already installed
+ALTER EXTENSION pgmnemo UPDATE TO '0.11.1';
+NOTICE:  version "0.11.1" of extension "pgmnemo" is already installed
 -- ─────────────────────────────────────────────────────────────────────────────
 -- T1: Function signature — 10 parameters including p_content_types
 -- ─────────────────────────────────────────────────────────────────────────────

@@ -22,7 +22,7 @@ SET pgmnemo.gate_strict = 'off';
 SET pgmnemo.include_unverified = 'on';
 SET pgmnemo.track_recall_recency = 'on';
 
-ALTER EXTENSION pgmnemo UPDATE TO '0.11.0';
+ALTER EXTENSION pgmnemo UPDATE TO '0.11.1';
 
 -- ============================================================================
 -- T1: Function exists with correct 5-arg signature
@@ -33,7 +33,7 @@ FROM pg_proc p
 JOIN pg_namespace n ON n.oid = p.pronamespace
 WHERE n.nspname = 'pgmnemo'
   AND p.proname = 'recall_fast'
-  AND pronargs = 5;
+  AND pronargs = 6;
 
 -- ============================================================================
 -- T2: Parameter names match published API
@@ -46,7 +46,7 @@ FROM pg_proc p
 JOIN pg_namespace n ON n.oid = p.pronamespace
 WHERE n.nspname = 'pgmnemo'
   AND p.proname = 'recall_fast'
-  AND pronargs = 5;
+  AND pronargs = 6;
 
 -- ============================================================================
 -- T3: Returns 0 rows when no embedded rows in corpus
