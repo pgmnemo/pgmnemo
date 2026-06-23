@@ -2,7 +2,7 @@
 -- Verifies: t_valid columns, trigger close-prior, mem_item view, as_of() function.
 
 -- Apply migration to get H-07 objects (extension loaded at v0.4.1 by default).
-ALTER EXTENSION pgmnemo UPDATE TO '0.10.1';
+ALTER EXTENSION pgmnemo UPDATE TO '0.11.0';
 
 -- ── Schema checks ────────────────────────────────────────────────────────────
 

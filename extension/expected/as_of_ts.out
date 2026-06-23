@@ -2,8 +2,8 @@
 -- Pure-SQL checks: function signature, bitemporal filter predicate, GUC propagation.
 -- No live table required — avoids embedding dependency in pg_regress.
 -- Apply the v0.6.1 migration.
-ALTER EXTENSION pgmnemo UPDATE TO '0.10.1';
-NOTICE:  version "0.10.1" of extension "pgmnemo" is already installed
+ALTER EXTENSION pgmnemo UPDATE TO '0.11.0';
+NOTICE:  version "0.11.0" of extension "pgmnemo" is already installed
 -- ── Signature checks ─────────────────────────────────────────────────────────
 -- recall_lessons() now has 6 parameters (was 5 in v0.6.0)
 SELECT pronargs AS recall_lessons_arg_count
@@ -27,7 +27,7 @@ WHERE  n.nspname = 'pgmnemo'
 LIMIT  1;
  recall_hybrid_arg_count 
 -------------------------
-                       9
+                      10
 (1 row)
 
 -- ── Bitemporal filter predicate (F2) ─────────────────────────────────────────

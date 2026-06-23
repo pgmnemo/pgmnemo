@@ -15,7 +15,7 @@
 SET pgmnemo.gate_strict = 'off';
 SET pgmnemo.include_unverified = 'on';
 
-ALTER EXTENSION pgmnemo UPDATE TO '0.10.1';
+ALTER EXTENSION pgmnemo UPDATE TO '0.11.0';
 
 -- ============================================================================
 -- T1: Function exists with 1-arg signature
