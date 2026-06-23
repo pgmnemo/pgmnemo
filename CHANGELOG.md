@@ -15,6 +15,54 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.11.0] — 2026-06-23
+
+### Theme
+
+**Typed Memory — P0.2: optional `p_content_types` filter on `recall_hybrid()`.**
+Adds per-call typed recall filtering to `recall_hybrid()` via a new 10th parameter
+`p_content_types TEXT[] DEFAULT NULL`. Backwards-compatible minor release: existing
+9-parameter callers are unaffected (NULL → all content types, same behaviour as before).
+
+> **Competitive note (2026-06-23):** Typed/categorised memory retrieval is not an
+> unclaimed lane — Zep and Memento already ship typed retrieval. This release brings
+> pgmnemo to feature parity on typed filtering; differentiation remains the
+> single-plan SQL architecture and provenance gating.
+
+### Added
+
+- **`p_content_types TEXT[] DEFAULT NULL` on `recall_hybrid()`** (10th parameter).
+  When non-NULL, restricts recall to lessons whose `content_type` column matches any
+  of the supplied values (e.g. `ARRAY['procedure','fact']`). An empty array `'{}'`
+  returns zero rows (explicit exclusion, not silent all-types fallback). NULL or
+  omitted behaves identically to the pre-v0.11.0 9-parameter API. Uses the
+  `ix_pgmnemo_content_type_active` partial index added in this migration for
+  efficient pushdown. (ADR-61 §3 D3)
+
+- **`content_type` partial index** (`ix_pgmnemo_content_type_active`) on
+  `agent_lesson (content_type)` WHERE `is_active AND t_valid_to = 'infinity'`.
+
+- **Migration deltas:** `pgmnemo--0.10.0--0.11.0.sql` and
+  `pgmnemo--0.10.1--0.11.0.sql` (both upgrade paths supported).
+
+- **pg_regress test:** `typed_recall` — T1–T8 covering signature check, backward
+  compat, NULL explicit, single-type filter, empty-array guard, multi-type filter,
+  bit-identical NULL vs old API, and index-pushdown subset check.
+
+### Migration notes
+
+`ALTER EXTENSION pgmnemo UPDATE TO '0.11.0'` from 0.10.0 or 0.10.1 applies the
+corresponding delta. The migration adds the `content_type` partial index
+(`ix_pgmnemo_content_type_active`) and replaces `recall_hybrid()` with a 10-parameter
+overload. No schema column changes; no data migration required. The old 9-parameter
+function form remains callable via positional arguments.
+
+**Packaging note:** There is no flat `pgmnemo--0.11.0.sql`. Fresh install resolves
+via `pgmnemo--0.10.1.sql` (or earlier flat base) + delta auto-chain. The
+INSTALLCHECK task owns verification of this path.
+
+---
+
 ## [0.10.1] — 2026-06-22
 
 ### Fixed
