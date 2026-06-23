@@ -2,7 +2,7 @@
     "name": "pgmnemo",
     "abstract": "Single-plan multimodal agent memory for PostgreSQL — token-budget navigation, provenance-gated writes, outcome-learning",
     "description": "pgmnemo is a PostgreSQL extension that fuses HNSW vector search (pgvector), BM25 full-text, graph-edge proximity, and JSONB metadata filtering into one SQL query plan inside your existing database. No new service, no data egress, no LLM cost per write. Features: provenance-gated writes (enforce/warn/off), token-economy navigation (navigate_locate + navigate_expand), outcome-learning (reinforce/confidence), bitemporal point-in-time recall, ACID in-place embedding updates, and multi-tenant RLS. Apache-2.0.",
-    "version": "0.10.1",
+    "version": "0.11.0",
     "maintainer": [
         "Alex Gaydabura <asistentgaidaburas@gmail.com>"
     ],
@@ -10,7 +10,7 @@
     "provides": {
         "pgmnemo": {
             "abstract": "Single-plan multimodal agent memory for PostgreSQL — token-budget navigation, provenance-gated writes, outcome-learning",
-            "version": "0.10.1",
+            "version": "0.11.0",
             "file": "extension/pgmnemo--0.10.1.sql",
             "docfile": "README.md"
         }
