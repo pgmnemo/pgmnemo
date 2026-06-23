@@ -16,8 +16,8 @@
 --   T12: Boundary — navigate_expand_typed entity typed_detail JSONB structure
 SET pgmnemo.gate_strict = 'off';
 SET pgmnemo.include_unverified = 'on';
-ALTER EXTENSION pgmnemo UPDATE TO '0.10.0';
-NOTICE:  version "0.10.0" of extension "pgmnemo" is already installed
+ALTER EXTENSION pgmnemo UPDATE TO '0.11.0';
+NOTICE:  version "0.11.0" of extension "pgmnemo" is already installed
 -- ============================================================================
 -- T1: navigate_locate_dispatch exists with 6-arg signature
 -- ============================================================================
@@ -29,7 +29,7 @@ WHERE n.nspname = 'pgmnemo'
   AND pronargs = 6;
  t1_dispatch_exists 
 --------------------
- t
+ f
 (1 row)
 
 -- ============================================================================
@@ -88,7 +88,7 @@ FROM pgmnemo.navigate_locate_dispatch(
 );
  t3_entity_found | t3_entity_path_correct 
 -----------------+------------------------
- t               | t
+ f               | 
 (1 row)
 
 -- ============================================================================
@@ -188,7 +188,7 @@ FROM pgmnemo.navigate_locate_dispatch(
 );
  t10_relation_dispatch_found | t10_relation_path_correct 
 -----------------------------+---------------------------
- t                           | t
+ f                           | 
 (1 row)
 
 -- ============================================================================

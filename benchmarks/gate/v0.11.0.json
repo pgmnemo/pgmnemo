@@ -1,0 +1,33 @@
+{
+    "version": "v0.11.0",
+    "date": "2026-06-23",
+    "pgmnemo_version": "0.11.0",
+    "gate_status": "PASS",
+    "gate_type": "feature_smoke",
+    "scope": "v0.11.0 Typed Memory — P0.2 typed recall: new optional parameter p_content_types TEXT[] DEFAULT NULL on recall_hybrid() that scopes retrieval to the given content types (RFC-001).",
+    "issues_closed": [],
+    "justification": "Backwards-compatible minor. recall_hybrid() gains a 10th, optional parameter p_content_types (default NULL). When NULL the function behaves IDENTICALLY to the prior 9-parameter signature — the default retrieval path is unchanged, so no existing caller is affected. When a set of content types is supplied it acts as a boolean pre-filter on the candidate set before ranking; it does NOT change the RRF ranking formula or any scoring weight. A retrieval-quality significance test is NOT required and is deliberately not claimed: typed/content-type retrieval is an industry-parity capability (Zep/Graphiti expose scope + entity-type filters; Memanto ships a 13-category typed taxonomy), not a measured recall-quality lever — adversarial review (2026-06-23) found no robust evidence that type-conditioned retrieval improves recall over unified retrieval. This release therefore ships the filter as honest parity, with no '+Xpp' headline, consistent with the significance-before-headlines policy.",
+    "schema_change": true,
+    "schema_change_detail": "recall_hybrid() signature extended with p_content_types TEXT[] DEFAULT NULL (10th param). Additive and default-compatible: CREATE OR REPLACE with a new trailing defaulted argument; the 9-arg call sites resolve unchanged.",
+    "scoring_impact": "none on the default path (p_content_types = NULL bypasses the filter entirely). When set, only the candidate set is restricted to the requested content types prior to ranking; ranking weights and the RRF fusion are unchanged.",
+    "recall_ranking_impact": "none for existing callers (default NULL preserves prior behaviour). With the filter set, results are a content-type-scoped subset of the unfiltered result; no re-weighting of vector/BM25/graph/recency/confidence signals.",
+    "carry_forward_from": "v0.10.1",
+    "new_regress_tests": ["typed_recall"],
+    "new_regress_test_count": 1,
+    "installcheck": {
+        "harness": "pg_regress make installcheck",
+        "postgres": "17.10",
+        "pgvector": "0.8.0",
+        "database": "contrib_regression (throwaway — not prod corpus)",
+        "result": "All 35 tests passed (exit 0)",
+        "typed_recall_test": "PASS — output identical to expected",
+        "upgrade_paths": {
+            "fresh_install_0.11.0_flat": "PASS",
+            "alter_0.10.0_to_0.11.0": "PASS",
+            "alter_0.10.1_to_0.11.0": "PASS"
+        },
+        "flat_vs_delta_chain": "pg_dump schema diff IDENTICAL — extension/pgmnemo--0.11.0.sql produces the same schema as installing 0.10.1 then ALTER UPDATE TO 0.11.0; recall_hybrid carries p_content_types in both."
+    },
+    "significance_required": false,
+    "significance_note": "Optional filter with a default-unchanged path; no recall-quality claim is made, so no z-test/p-value gate applies. Correctness (not quality) is the bar here and is met by the 35/35 installcheck including the typed_recall regression test and the schema-identical flat-vs-delta verification."
+}

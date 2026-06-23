@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, patch
 class TestImport(unittest.TestCase):
     def test_package_imports(self):
         import pgmnemo_mcp
-        assert pgmnemo_mcp.__version__ == "0.10.0"
+        assert pgmnemo_mcp.__version__ == "0.11.0"
 
     def test_server_imports(self):
         from pgmnemo_mcp import server

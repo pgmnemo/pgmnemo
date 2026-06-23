@@ -1,0 +1,38 @@
+{
+    "version": "v0.10.1",
+    "date": "2026-06-22",
+    "bench_type": "before_after_overlap",
+    "description": "overlap@10: recall_hybrid(bm25_budget_ms=30000) vs recall_hybrid(bm25_budget_ms=250) — measures that #87 BM25 timeout guard does not change top-10 result quality",
+    "corpus": {
+        "database": "pgmnemo_ic_0101",
+        "lessons": 300,
+        "source": "prod_corpus real lessons (role+topic+lesson_text+embedding), no project_id FK"
+    },
+    "bench_params": {
+        "pre_patch_budget_ms": 30000,
+        "post_patch_budget_ms": 250,
+        "k": 10,
+        "n_queries": 30,
+        "query_selection": "random sample from eligible lessons (len>80, no [DOC:, no [WATCHDOG])"
+    },
+    "results": {
+        "answered": 30,
+        "pre_timeouts": 0,
+        "post_timeouts": 0,
+        "post_timeout_rate": 0.0,
+        "post_p50_ms": 3.34,
+        "post_p95_ms": 4.79,
+        "overlap_at_10_mean": 1.0,
+        "overlap_at_10_min": 1.0
+    },
+    "gate_criteria": {
+        "overlap_at_10_min_threshold": 0.95,
+        "timeout_rate_threshold": 0.0
+    },
+    "gate_status": "PASS",
+    "gate_overlap_095": true,
+    "gate_timeout_zero": true,
+    "interpretation": "250ms BM25 budget does not change top-10 results vs 30s budget on 300-lesson real corpus. Overlap@10=1.0 across all 30 queries — BM25 path completes within budget at this corpus scale. p95=4.79ms post-patch.",
+    "pgmnemo_version": "0.10.1",
+    "do_not_push": true
+}

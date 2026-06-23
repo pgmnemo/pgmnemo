@@ -1,0 +1,101 @@
+-- test_v0101.sql
+-- pg_regress boundary tests for pgmnemo v0.10.1
+--
+-- Coverage:
+--   T1:  recall_hybrid() second call in same tx reuses temp table (no duplicate_table error)
+--   T2:  full_text @@ websearch_to_tsquery('simple', ...) GIN index match
+--   T3:  navigate_locate() works after tsconfig switch to 'simple'
+--   T4:  Russian tokens preserved in stored lesson_tsv via 'simple' config (data-level check)
+--
+-- Role prefix: tc_v0101 — isolated from other tests.
+-- These boundary tests complement recall_hybrid_robustness.sql (T1-T8).
+-- T1: temp-table re-use; T2: GIN index path; T3: navigate_locate; T4: stored tsvector data.
+
+SET pgmnemo.gate_strict = 'off';
+SET pgmnemo.include_unverified = 'on';
+ALTER EXTENSION pgmnemo UPDATE TO '0.11.0';
+
+-- ============================================================================
+-- Seed data
+-- ============================================================================
+
+INSERT INTO pgmnemo.agent_lesson (role, topic, lesson_text, commit_sha, embedding)
+VALUES
+    ('tc_v0101', 'кириллица_тема',
+     'Урок о поиске на русском языке. Конфигурация simple не удаляет стоп-слова.',
+     'sha-v0101-1',
+     (SELECT array_fill(0.02::float4, ARRAY[1024])::vector(1024))),
+    ('tc_v0101', 'robustness_topic',
+     'recall hybrid BM25 lexical query embedding semantics robustness test lesson',
+     'sha-v0101-2',
+     (SELECT array_fill(0.01::float4, ARRAY[1024])::vector(1024)));
+
+-- ============================================================================
+-- T1: Second call in same transaction — temp table must be re-used (TRUNCATE),
+--     NOT raise duplicate_table. Both calls must return rows.
+-- ============================================================================
+
+BEGIN;
+
+SELECT COUNT(*) >= 0 AS t1a_first_call_same_tx
+FROM pgmnemo.recall_hybrid(
+    (SELECT array_fill(0.01::float4, ARRAY[1024])::vector(1024)),
+    'robustness test first call',
+    5,
+    'tc_v0101',
+    NULL
+);
+
+SELECT COUNT(*) >= 0 AS t1b_second_call_same_tx
+FROM pgmnemo.recall_hybrid(
+    (SELECT array_fill(0.01::float4, ARRAY[1024])::vector(1024)),
+    'robustness test second call same transaction no duplicate table error',
+    5,
+    'tc_v0101',
+    NULL
+);
+
+COMMIT;
+
+-- ============================================================================
+-- T2: full_text @@ websearch_to_tsquery('simple', ...) — GIN index path
+--     The 'robustness_topic' lesson_text contains "recall hybrid BM25 lexical".
+--     websearch_to_tsquery('simple', 'recall_hybrid BM25') normalises to
+--     'recall_hybrid' & 'bm25' in 'simple' config.
+-- ============================================================================
+
+SELECT COUNT(*) > 0 AS t2_full_text_gin_match
+FROM pgmnemo.agent_lesson
+WHERE role = 'tc_v0101'
+  AND full_text @@ websearch_to_tsquery('simple', 'recall hybrid BM25');
+
+-- ============================================================================
+-- T3: navigate_locate() works after 'simple' tsconfig switch
+-- ============================================================================
+
+SELECT COUNT(*) >= 0 AS t3_navigate_locate_simple_tsconfig
+FROM pgmnemo.navigate_locate(
+    (SELECT array_fill(0.01::float4, ARRAY[1024])::vector(1024)),
+    'robustness recall hybrid BM25 lexical',
+    2000,
+    NULL,
+    NULL
+);
+
+-- ============================================================================
+-- T4: Russian tokens present in stored lesson_tsv (data-level 'simple' check)
+--     'simple' does NOT stem or remove stop-words — Cyrillic tokens stored as-is.
+--     'урок' (first word of lesson_text) must appear in lesson_tsv.
+-- ============================================================================
+
+SELECT
+    'урок' = ANY(tsvector_to_array(lesson_tsv)) AS t4_russian_word_in_lesson_tsv
+FROM pgmnemo.agent_lesson
+WHERE role = 'tc_v0101'
+  AND topic = 'кириллица_тема';
+
+-- ============================================================================
+-- Cleanup
+-- ============================================================================
+
+DELETE FROM pgmnemo.agent_lesson WHERE role = 'tc_v0101';
