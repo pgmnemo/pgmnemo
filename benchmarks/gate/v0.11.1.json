@@ -1,40 +1,32 @@
 {
-  "version": "0.11.1",
-  "gate_type": "feature_smoke",
-  "created": "2026-06-23",
-  "task": "MEM-ERA-0111-RECALL-FAST-TYPING",
-  "description": "Typed recall pushdown (p_content_types) mirrored from recall_hybrid() to recall_fast() and recall_lessons(). Hot-path functions now accept optional 6th / 8th parameter respectively; NULL = all content types (backward compat); non-NULL = WHERE content_type = ANY(p_content_types) using ix_pgmnemo_content_type_active.",
-  "significance_required": false,
-  "installcheck": {
-    "result": "PASS",
-    "tests_passed": 36,
-    "tests_failed": 0,
-    "regress_suite": "all (including new typed_recall_fast)"
-  },
-  "upgrade_paths": {
-    "fresh_install_0.11.1_flat": "PASS",
-    "alter_0.11.0_to_0.11.1": "PASS"
-  },
-  "flat_vs_delta": {
-    "identical": true,
-    "method": "proargnames comparison for recall_fast, recall_lessons, recall_hybrid via throwaway DBs"
-  },
-  "functions_changed": [
-    {
-      "name": "pgmnemo.recall_fast",
-      "params_before": 5,
-      "params_after": 6,
-      "new_param": "p_content_types TEXT[] DEFAULT NULL"
+    "version": "v0.11.1",
+    "date": "2026-06-23",
+    "pgmnemo_version": "0.11.1",
+    "gate_status": "PASS",
+    "gate_type": "feature_smoke",
+    "scope": "v0.11.1 Hot-path typed recall — MEM-ERA-0111: p_content_types TEXT[] DEFAULT NULL mirrored from recall_hybrid() into recall_fast() and recall_lessons(). recall_2phase does not exist as a SQL function; recall_fast and recall_lessons are the canonical hot-path targets.",
+    "issues_closed": [],
+    "justification": "Backwards-compatible PATCH. recall_fast() gains a 6th optional parameter p_content_types (default NULL); recall_lessons() gains an 8th optional parameter p_content_types (default NULL). When NULL, both functions behave IDENTICALLY to the prior signatures — no change in default retrieval path, no existing caller affected. When a set of content types is supplied, a pushdown predicate content_type = ANY(p_content_types) is applied in the WHERE clause using ix_pgmnemo_content_type_active, restricting candidates before HNSW ranking. An empty array returns zero rows (explicit exclusion). This is honest parity: typed recall is now usable on the consumer hot path (recall_fast is called by Agency MCP _search_lessons); no recall-quality lift is claimed and none is measured. significance_required=false because this is a filter-path extension, not a ranking change.",
+    "schema_change": false,
+    "schema_change_detail": "No column or index changes. recall_fast() and recall_lessons() function signatures extended with trailing defaulted parameters. CREATE OR REPLACE; old call sites resolve unchanged via DEFAULT NULL.",
+    "scoring_impact": "none on the default path (p_content_types = NULL bypasses the filter entirely). When set, only the candidate set is restricted before HNSW ranking; ranking weights are unchanged.",
+    "recall_ranking_impact": "none for existing callers. With p_content_types set, results are a content-type-scoped subset of the unfiltered result set; no re-weighting of any signal.",
+    "carry_forward_from": "v0.11.0",
+    "new_regress_tests": ["typed_recall_fast"],
+    "new_regress_test_count": 1,
+    "installcheck": {
+        "harness": "pg_regress make installcheck",
+        "postgres": "17.10",
+        "pgvector": "0.8.0",
+        "database": "contrib_regression (throwaway — not prod corpus)",
+        "result": "All 36 tests passed (exit 0)",
+        "typed_recall_fast_test": "PASS — output identical to expected (T1-T10 covering both recall_fast and recall_lessons hot-path typed recall)",
+        "upgrade_paths": {
+            "fresh_install_0.11.1_flat": "PASS — CREATE EXTENSION pgmnemo VERSION '0.11.1' → version() = '0.11.1'",
+            "alter_0.11.0_to_0.11.1": "PASS — ALTER EXTENSION pgmnemo UPDATE TO '0.11.1' from 0.11.0 → version() = '0.11.1'"
+        },
+        "flat_vs_delta_chain": "pg_dump schema diff IDENTICAL (excluding pg_dump randomized session tokens) — extension/pgmnemo--0.11.1.sql produces the same schema as installing 0.11.0 then ALTER UPDATE TO 0.11.1; recall_fast carries p_content_types in both."
     },
-    {
-      "name": "pgmnemo.recall_lessons",
-      "params_before": 7,
-      "params_after": 8,
-      "new_param": "p_content_types TEXT[] DEFAULT NULL"
-    }
-  ],
-  "functions_not_changed": [
-    "pgmnemo.recall_hybrid (10 params, unchanged — source of truth for semantics)"
-  ],
-  "notes": "recall_2phase not a PostgreSQL function — does not exist in extension (only appeared in a now-removed Python research helper). Only recall_fast and recall_lessons were updated."
+    "significance_required": false,
+    "significance_note": "Optional filter with a default-unchanged path; no recall-quality claim is made, so no z-test/p-value gate applies. Correctness (not quality) is the bar and is met by 36/36 installcheck including typed_recall_fast regression test and schema-identical flat-vs-delta verification."
 }
