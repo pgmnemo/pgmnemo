@@ -1,67 +1,33 @@
 {
-    "version": "v0.10.1",
-    "date": "2026-06-22",
-    "pgmnemo_version": "0.10.1",
+    "version": "v0.11.0",
+    "date": "2026-06-23",
+    "pgmnemo_version": "0.11.0",
     "gate_status": "PASS",
-    "gate_type": "hotfix_smoke",
-    "scope": "v0.10.1 HOTFIX: #84 recall_fast NULL score regression + #87 recall_hybrid BM25 robustness (4 fixes: cap query_text, remove per-row to_tsvector, graceful degradation, simple tsconfig)",
-    "issues_closed": ["#84", "#87"],
-    "justification": "#84: recall_fast NULL guard — raises EXCEPTION(P0001) when query_embedding IS NULL. No scoring change; pg_regress T11 PASS. #87: BM25 path robustness — 200-char query_text cap, per-row to_tsvector removed (indexed full_text used), statement_timeout guard with vector-only fallback, tsconfig english→simple for multilingual corpora. Defensive guard, not a quality change — G-BENCH-GATE significance file NOT required per release plan P3.",
+    "gate_type": "feature_smoke",
+    "scope": "v0.11.0 Typed Memory — P0.2 typed recall: new optional parameter p_content_types TEXT[] DEFAULT NULL on recall_hybrid() that scopes retrieval to the given content types (RFC-001).",
+    "issues_closed": [],
+    "justification": "Backwards-compatible minor. recall_hybrid() gains a 10th, optional parameter p_content_types (default NULL). When NULL the function behaves IDENTICALLY to the prior 9-parameter signature — the default retrieval path is unchanged, so no existing caller is affected. When a set of content types is supplied it acts as a boolean pre-filter on the candidate set before ranking; it does NOT change the RRF ranking formula or any scoring weight. A retrieval-quality significance test is NOT required and is deliberately not claimed: typed/content-type retrieval is an industry-parity capability (Zep/Graphiti expose scope + entity-type filters; Memanto ships a 13-category typed taxonomy), not a measured recall-quality lever — adversarial review (2026-06-23) found no robust evidence that type-conditioned retrieval improves recall over unified retrieval. This release therefore ships the filter as honest parity, with no '+Xpp' headline, consistent with the significance-before-headlines policy.",
     "schema_change": true,
-    "schema_change_detail": "ALTER COLUMN topic_tsv/lesson_tsv/full_text SET EXPRESSION AS to_tsvector('simple', ...) — changes stored tsvector from 'english' to 'simple' stemmer. GIN indexes rebuilt automatically. New GUC: pgmnemo.bm25_budget_ms (INT, default 250, min 1).",
-    "scoring_impact": "none for recall quality — #87 is a timeout guard. BM25-only path now uses indexed full_text instead of per-row to_tsvector(topic), which is a latency fix, not a ranking formula change. 'simple' tsconfig changes tokenisation for BM25 text matching (no stemming, no stop-words) — this is a corpus-match improvement, not a scoring weight change.",
-    "recall_ranking_impact": "none for recall_fast (pure HNSW, unchanged). recall_hybrid: BM25 text matching scope changes with 'simple' tsconfig (lowercase only, no English stemming). Observed: Cyrillic + structured texts now tokenise correctly. English-only corpora: minor difference (stemming removed), vector signal compensates. No quality regression on tested corpus.",
-    "carry_forward_from": "v0.10.0",
-    "new_regress_tests": ["recall_fast (T11 #84)", "recall_hybrid_robustness (T1-T8 #87)"],
-    "new_regress_test_count": 9,
-
-    "issue_84_closed": true,
-    "issue_84_evidence": "recall_fast() raises EXCEPTION P0001 when query_embedding IS NULL. pg_regress T11: PASS (throwaway DB pgmnemo_ic_0101, PG 17.10). Migration section G in pgmnemo--0.10.0--0.10.1.sql. installcheck-0.10.1-report.md.",
-    "issue_87_closed": true,
-    "issue_87_evidence": "4 fixes in migration sections A-E. pg_regress T1-T8 in recall_hybrid_robustness.sql: all PASS. Smoke bench: 0% timeout rate, p95=21.7ms on 100-lesson Cyrillic+structured corpus (30 queries). Pre-patch baseline: p95=804.5ms (v0.10.0.json).",
-
-    "smoke_bench": {
-        "corpus": {
-            "database": "pgmnemo_ic_0101",
-            "lessons": 100,
-            "content_types": ["cyrillic (50)", "structured/json (50)"],
-            "note": "throwaway DB — not prod_corpus"
-        },
-        "pre_patch_baseline": {
-            "hybrid_p95_ms": 804.5,
-            "timeout_rate": 0.27,
-            "source": "benchmarks/gate/v0.10.0.json latency_hybrid_p95_ms + v0.10.1-recall-robustness.json"
-        },
-        "post_patch": {
-            "n_queries": 30,
-            "successes": 30,
-            "timeouts": 0,
-            "timeout_rate": 0.0,
-            "hybrid_p50_ms": 14.99,
-            "hybrid_p95_ms": 21.67
-        },
-        "gate_criteria": "timeout_rate = 0% AND hybrid_p95_ms < 2000",
-        "gate_status": "PASS",
-        "note": "Smoke bench only — G-BENCH-GATE significance file not required for #87 (defensive timeout guard, not a recall quality change). See PGMNEMO_RELEASE_PLAN_V0101_V0110_2026-06-22.md §P3."
-    },
-
+    "schema_change_detail": "recall_hybrid() signature extended with p_content_types TEXT[] DEFAULT NULL (10th param). Additive and default-compatible: CREATE OR REPLACE with a new trailing defaulted argument; the 9-arg call sites resolve unchanged.",
+    "scoring_impact": "none on the default path (p_content_types = NULL bypasses the filter entirely). When set, only the candidate set is restricted to the requested content types prior to ranking; ranking weights and the RRF fusion are unchanged.",
+    "recall_ranking_impact": "none for existing callers (default NULL preserves prior behaviour). With the filter set, results are a content-type-scoped subset of the unfiltered result; no re-weighting of vector/BM25/graph/recency/confidence signals.",
+    "carry_forward_from": "v0.10.1",
+    "new_regress_tests": ["typed_recall"],
+    "new_regress_test_count": 1,
     "installcheck": {
-        "status": "PASS (manual throwaway contour)",
-        "method": "psycopg2 upgrade path: pgmnemo 0.10.0 → migration pgmnemo--0.10.0--0.10.1.sql → behavior verified",
-        "database": "pgmnemo_ic_0101 (PostgreSQL 17.10, pgvector 0.8.3)",
-        "tests_run": ["T1_exists", "T2_param_names", "T8_score_1", "T11_NULL_raises (#84)", "T1-T8 recall_hybrid_robustness (#87)"],
-        "all_pass": true,
-        "note": "Full make installcheck (all REGRESS targets) requires pg_config in PATH — not available in this environment. Behavior verified via direct psycopg2 execution on throwaway contour.",
-        "report": "installcheck-0.10.1-report.md"
+        "harness": "pg_regress make installcheck",
+        "postgres": "17.10",
+        "pgvector": "0.8.0",
+        "database": "contrib_regression (throwaway — not prod corpus)",
+        "result": "All 35 tests passed (exit 0)",
+        "typed_recall_test": "PASS — output identical to expected",
+        "upgrade_paths": {
+            "fresh_install_0.11.0_flat": "PASS",
+            "alter_0.10.0_to_0.11.0": "PASS",
+            "alter_0.10.1_to_0.11.0": "PASS"
+        },
+        "flat_vs_delta_chain": "pg_dump schema diff IDENTICAL — extension/pgmnemo--0.11.0.sql produces the same schema as installing 0.10.1 then ALTER UPDATE TO 0.11.0; recall_hybrid carries p_content_types in both."
     },
-
-    "verification": "T11 recall_fast NULL guard: PASS (P0001 raised, correct message). T1-T8 recall_hybrid_robustness: all PASS (Cyrillic, long text, JSON, graceful degradation, role_filter, tsconfig). Smoke bench PASS (0% timeout, p95=21.7ms). Not pushed to origin.",
-    "do_not_push": true,
-    "release_decision": null,
-    "concerns_for_release_decision": [
-        "Full pg_regress REGRESS suite (make installcheck) not run — requires pg_config. Manual throwaway verification used.",
-        "Smoke bench corpus is 100 synthetic lessons (throwaway), not live prod_corpus (7,612 lessons). Pre-patch 804ms was measured on live corpus. Post-patch numbers will differ on live corpus (see v0.10.1-recall-robustness.json for live baseline).",
-        "tsconfig english→simple is a global change affecting all full-text functions (recall_lessons, navigate_locate, navigate_locate_dispatch). English stemming removed — English-corpus BM25 text matching semantics change. Vector signal compensates.",
-        "recall_hybrid dense-graph timeout (graph_walk CTE over 73k+ edges) NOT fixed in v0.10.1 — separate #88 issue for v0.11.0."
-    ]
+    "significance_required": false,
+    "significance_note": "Optional filter with a default-unchanged path; no recall-quality claim is made, so no z-test/p-value gate applies. Correctness (not quality) is the bar here and is met by the 35/35 installcheck including the typed_recall regression test and the schema-identical flat-vs-delta verification."
 }
