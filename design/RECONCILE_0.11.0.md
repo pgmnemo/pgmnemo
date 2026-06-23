@@ -79,6 +79,12 @@ The `extension/sql/typed_write_api.sql` draft was described as an untracked (unc
 
 **Action required for W2:** The write-API draft must be recreated from scratch. The typed recall feature (P0.2) that IS merged provides the pattern for `p_content_types` filtering in `recall_hybrid`. The write-API (W2) would add a `mem_write()` function with typed content-type tagging on ingest.
 
+**MEM-ERA-W1 addendum (salvage):** Draft reconstructed and committed to `integration/0.12.0` at `94c1ba2`. File: `extension/sql/typed_write_api.sql`. Implements:
+- `pgmnemo.ingest()` 10-param typed overload (`p_content_type TEXT DEFAULT NULL`)
+- `pgmnemo.mem_write()` ergonomic facade with content_type first-class
+- Inline regression smoke tests (W2-T1/T2/T3)
+Status: DRAFT — requires W2 iteration (migration file, full regress suite, CHANGELOG).
+
 ---
 
 ## 5. Clean Base for 0.12.0
@@ -102,7 +108,7 @@ This branch is ready for:
 | Migration files present | ✅ |
 | Leak check | ✅ PASS |
 | Untracked junk removed | N/A (already clean) |
-| typed_write_api.sql draft saved | ❌ LOST — must recreate for W2 |
+| typed_write_api.sql draft saved | ✅ SALVAGED — reconstructed at `94c1ba2` on integration/0.12.0 |
 | feat branch contamination cleaned | ⚠️ human decision required (local-only branch) |
 | integration/0.12.0 created | ✅ from `0b22e5f` |
 
