@@ -22,14 +22,23 @@ jobs:
         run: cd extension && make PG_CONFIG=/usr/lib/postgresql/17/bin/pg_config
       - name: Install extension
         run: cd extension && sudo make install PG_CONFIG=/usr/lib/postgresql/17/bin/pg_config
-      - name: Verify extension loads
+      - name: Verify extension loads and matches control default_version
         env:
           PGUSER: runner
           PGPASSWORD: runner
           PGHOST: localhost
           PGPORT: 5433
           PGDATABASE: pgmnemo_test
-        run: /usr/lib/postgresql/17/bin/psql -c "CREATE EXTENSION pgmnemo CASCADE;"
+        run: |
+          PSQL=/usr/lib/postgresql/17/bin/psql
+          $PSQL -c "CREATE EXTENSION pgmnemo CASCADE;"
+          WANT=$(grep '^default_version' extension/pgmnemo.control | sed "s/.*= *'//;s/'.*//")
+          GOT=$($PSQL -tAc "SELECT extversion FROM pg_extension WHERE extname='pgmnemo'")
+          echo "installed extversion: $GOT (control default_version: $WANT)"
+          test "$GOT" = "$WANT" || {
+            echo "::error::installed pgmnemo $GOT != control default_version $WANT — installcheck would validate the wrong code."
+            exit 1
+          }
       - name: Run installcheck
         id: installcheck
         continue-on-error: true
@@ -41,7 +50,14 @@ jobs:
           PGDATABASE: pgmnemo_test
         run: cd extension && make installcheck PG_CONFIG=/usr/lib/postgresql/17/bin/pg_config
       - name: Update expected files from PG 17 output (baseline reset)
-        if: steps.installcheck.outcome == 'failure' && github.event_name == 'push' && github.ref == 'refs/heads/main'
+        # OPT-IN ONLY (hardened 2026-06-23). Previously this auto-committed new
+        # expected output on ANY non-ERROR installcheck failure on main — which
+        # silently laundered behavioral/ranking changes into the baseline (a
+        # non-ERROR diff = "test now passes" forever after). It now requires an
+        # explicit [baseline-reset-ok] token in the commit message, so a human
+        # has affirmed the diff is a cosmetic PG-version formatting change, not a
+        # real regression. Without the token, installcheck failure just fails.
+        if: steps.installcheck.outcome == 'failure' && github.event_name == 'push' && github.ref == 'refs/heads/main' && contains(github.event.head_commit.message, '[baseline-reset-ok]')
         run: |
           if ls extension/results/*.out 2>/dev/null; then
             # Safety guard: never auto-commit expected files that contain ERROR lines
