@@ -165,10 +165,12 @@ jobs:
 
   compat-matrix:
     # Multi-PG-version compatibility check. PG 17 is the gate (covered by
-    # installcheck above); PG 14/15/16 are continue-on-error to give visibility
-    # without blocking ship while we verify older-version compatibility claims
-    # in META.json + README. As of v0.4.1 the compatibility matrix is
-    # aspirational — file an issue if any non-17 version fails.
+    # installcheck above); PG 14/15/16 are continue-on-error for visibility.
+    # As of v0.10.1 the extension uses PG17-only `SET EXPRESSION` syntax, so
+    # CREATE EXTENSION genuinely fails on 14/15/16 and META.json now declares
+    # `PostgreSQL: 17.0.0` to match. This matrix is therefore EXPECTED-RED and
+    # tracks the effort to restore pre-17 support (see issue); flip it back to
+    # a hard gate once <17 install succeeds again.
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
