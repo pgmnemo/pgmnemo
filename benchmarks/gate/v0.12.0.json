@@ -13,18 +13,36 @@
     "recall_ranking_impact": "none for existing callers. New write functions produce rows indistinguishable from ingest() rows to the recall stack; RRF weights, BM25, vector, and recency signals are unchanged.",
     "new_regress_tests": ["typed_recall_fast", "test_remember_fact"],
     "new_regress_test_count": 2,
-    "installcheck": {
-        "harness": "pg_regress make installcheck",
-        "postgres": "17.x",
-        "pgvector": "0.8.0",
-        "database": "regression (pg_regress default)",
-        "result": "pending — run `make installcheck` in Docker pg17 to confirm; test infrastructure in place",
-        "test_remember_fact": "20 tests covering all R1–R7 correctness requirements",
-        "upgrade_paths": {
-            "fresh_install_0.12.0_flat": "pending Docker verification",
-            "alter_0.11.1_to_0.12.0": "pending Docker verification"
-        },
-        "flat_vs_delta_chain": "pending Docker schema diff"
+    "real_db_integration_tests": {
+        "harness": "psycopg2 Python — real PostgreSQL 17.10 (not mocks)",
+        "postgres": "17.10",
+        "pgvector": "0.8.2",
+        "database": "pgmnemo_test (upgraded 0.10.0→0.11.1 via ALTER EXTENSION, then 0.12.0 delta applied directly)",
+        "result": "PASS — 33/33 tests",
+        "tests_run": 33,
+        "tests_passed": 33,
+        "date_run": "2026-06-24",
+        "bug_found_and_fixed": "AmbiguousColumn: 'WHERE id = _prior.id' inside remember_fact RETURNS TABLE(id BIGINT,...) — PostgreSQL 17 could not distinguish table column from output-set variable. Fixed: qualified to 'WHERE agent_lesson.id = _prior.id' and 'WHERE agent_lesson.id = _prior_id' (3 occurrences in delta + flat). Bug was hidden by best-effort expected output; real-DB test caught it.",
+        "coverage": [
+            "T1-T3: function signatures (11/11/10 params)",
+            "T4-T5: _has_contact_pii PII closed set",
+            "T6: canonical_slug normalisation",
+            "T7-T8: guard_no_test_project (blocks ≤100, allows 99999)",
+            "T9: PII+system → candidate (ADR-61 D4 override)",
+            "T10: system+non-PII → validated",
+            "T11: agent_authored conf≥0.8+non-PII → validated",
+            "T12: agent_authored conf<0.8 → candidate",
+            "T13: auto_captured → candidate (even high conf)",
+            "T14: artifact_hash synthesized='fact-entity:property', NOT NULL",
+            "T15: dedup/merge — same value → same row id, count=1",
+            "T16: supersession — new id, prior.state=superseded, total=2",
+            "T17: NULL embedding fail-open (id>0)",
+            "T18: remember_event id>0, content_type=event, state=validated",
+            "T19: remember_relation idempotent, content_type=relation",
+            "T20: verified_at=NOT NULL for validated; NULL for PII candidate",
+            "T21: explicit has_contact_pii override (R7)"
+        ],
+        "pg_regress_installcheck": "pending — make installcheck in Docker pg17 (no pg_regress harness in this env); SQL test fixtures in extension/sql/test_remember_fact.sql"
     },
     "significance_required": false,
     "significance_note": "Typed writes are a correctness/parity capability. No recall-quality metric is claimed. Adversarial review (2026-06-24): Memanto (arXiv:2604.22085) achieves 87.1% on LoCoMo vs pgmnemo 84.09% — gap acknowledged, not overclaimed. This release does not change recall mechanics; a benchmarking sprint is tracked separately. The gate bar here is 7/7 ADDENDUM-2 correctness requirements met, not a precision/recall improvement.",

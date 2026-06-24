@@ -180,7 +180,7 @@ BEGIN
                                  THEN 'validated'
                                  ELSE state
                              END
-            WHERE id = _prior.id
+            WHERE agent_lesson.id = _prior.id
             RETURNING agent_lesson.state INTO _merge_state;
             RETURN QUERY SELECT _prior.id, _merge_state;
             RETURN;
@@ -191,7 +191,7 @@ BEGIN
                 state      = 'superseded',
                 is_active  = FALSE,
                 updated_at = NOW()
-            WHERE id = _prior.id;
+            WHERE agent_lesson.id = _prior.id;
             _version_n := COALESCE(_prior.version_n, 0) + 1;
         END IF;
     ELSE
@@ -331,7 +331,7 @@ BEGIN
       AND is_active AND t_valid_to = 'infinity'::TIMESTAMPTZ
     LIMIT 1 FOR UPDATE;
     IF FOUND THEN
-        UPDATE pgmnemo.agent_lesson SET confidence = GREATEST(confidence, COALESCE(p_confidence, 0.7)), updated_at = NOW() WHERE id = _prior_id;
+        UPDATE pgmnemo.agent_lesson SET confidence = GREATEST(confidence, COALESCE(p_confidence, 0.7)), updated_at = NOW() WHERE agent_lesson.id = _prior_id;
         RETURN _prior_id;
     END IF;
     INSERT INTO pgmnemo.agent_lesson (
