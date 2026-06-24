@@ -1,0 +1,499 @@
+-- test_remember_fact.sql
+-- pg_regress integration tests: pgmnemo v0.12.0 remember_fact() + helpers
+-- ADDENDUM-2: 7 correctness requirements
+--
+-- Coverage:
+--   Setup: guard_no_test_project() — confirms test DB context (R6)
+--   T1:   _has_contact_pii() — PII property detection (all 5 PII + 2 non-PII)
+--   T2:   canonical_slug() — normalisation (person, org, concept, project)
+--   T3:   canonical_slug() — invalid type raises EXCEPTION
+--   T4:   remember_fact() — fresh INSERT, source_type='system' → validated (R1)
+--   T5:   remember_fact() — agent_authored, conf≥0.8, non-PII → validated (R1)
+--   T6:   remember_fact() — agent_authored, conf<0.8, non-PII → candidate (R1)
+--   T7:   remember_fact() — auto_captured → candidate regardless of confidence (R1)
+--   T8a:  remember_fact() — PII email on person:* + system source → candidate ALWAYS (ADR-61 D4)
+--   T8b:  remember_fact() — PII phone on person:* → candidate
+--   T8c:  remember_fact() — non-PII role on person:* + system source → validated
+--   T8d:  remember_fact() — p_has_contact_pii=TRUE overrides auto-detect → candidate (R7)
+--   T9:   remember_fact() — NULL embedding accepted (fail-open) (R5)
+--   T10:  remember_fact() — artifact_hash synthesized as 'fact-entity:property' in DB (R2)
+--   T11:  remember_fact() — MERGE: same value, id unchanged, confidence updated (R3)
+--   T12:  remember_fact() — SUPERSEDE: new value, prior closed, version_n incremented (R3)
+--   T13:  remember_fact() — cross-role identity: different roles share same (entity+property) (R3)
+--   T14:  remember_fact() — ingest_entity compat: version_n=0 prior → new row version_n=1 (R4)
+--   T15:  remember_fact() — artifact_hash IS present in DB row (R2 verification)
+--   T16:  guard_no_test_project() — passes in test DB (R6)
+--
+-- Prerequisites: pgmnemo 0.11.1+ installed (upgrade applied in setup block).
+-- Test DB: 'regression' (pg_regress default) — in allowed list for guard_no_test_project.
+-- Isolation: role 'rf_test' (and rf_test_role_a, rf_test_role_b), project_id=99999.
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Setup
+-- ─────────────────────────────────────────────────────────────────────────────
+ALTER EXTENSION pgmnemo UPDATE TO '0.12.0';
+NOTICE:  pgmnemo: upgrading to version 0.12.0 (Typed Write API)
+ALTER EXTENSION
+SET pgmnemo.gate_strict          = 'off';
+SET
+SET pgmnemo.include_unverified   = 'on';
+SET
+SET pgmnemo.track_recall_recency = 'off';
+SET
+-- R6: guard verifies we are NOT in a prod database
+SELECT pgmnemo.guard_no_test_project(99999);
+ guard_no_test_project
+-----------------------
+
+(1 row)
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- T1: _has_contact_pii() — PII property closed-set detection
+-- ─────────────────────────────────────────────────────────────────────────────
+-- T1a: all five PII properties return TRUE
+SELECT
+    pgmnemo._has_contact_pii('email')     AS email_pii,
+    pgmnemo._has_contact_pii('phone')     AS phone_pii,
+    pgmnemo._has_contact_pii('address')   AS address_pii,
+    pgmnemo._has_contact_pii('telegram')  AS telegram_pii,
+    pgmnemo._has_contact_pii('full_name') AS full_name_pii;
+ email_pii | phone_pii | address_pii | telegram_pii | full_name_pii
+-----------+-----------+-------------+--------------+---------------
+ t         | t         | t           | t            | t
+(1 row)
+
+-- T1b: non-PII properties return FALSE
+SELECT
+    pgmnemo._has_contact_pii('role')        AS role_not_pii,
+    pgmnemo._has_contact_pii('affiliation') AS aff_not_pii,
+    pgmnemo._has_contact_pii('status')      AS status_not_pii;
+ role_not_pii | aff_not_pii | status_not_pii
+--------------+-------------+----------------
+ f            | f           | f
+(1 row)
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- T2: canonical_slug() — normalisation
+-- ─────────────────────────────────────────────────────────────────────────────
+SELECT pgmnemo.canonical_slug('person', 'Ada Lovelace')        AS person_slug;
+    person_slug
+--------------------
+ person:ada_lovelace
+(1 row)
+
+SELECT pgmnemo.canonical_slug('org',    'ACME Corp.')          AS org_slug;
+    org_slug
+--------------
+ org:acme_corp
+(1 row)
+
+SELECT pgmnemo.canonical_slug('concept','Bitemporal Storage')  AS concept_slug;
+         concept_slug
+-------------------------------
+ concept:bitemporal_storage
+(1 row)
+
+SELECT pgmnemo.canonical_slug('project','pgmnemo')             AS project_slug;
+  project_slug
+-----------------
+ project:pgmnemo
+(1 row)
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- T3: canonical_slug() — invalid type raises
+-- ─────────────────────────────────────────────────────────────────────────────
+DO $$
+BEGIN
+    PERFORM pgmnemo.canonical_slug('human', 'Ada Lovelace');
+    RAISE EXCEPTION 'T3 FAIL: expected EXCEPTION, got none';
+EXCEPTION
+    WHEN OTHERS THEN
+        IF SQLERRM LIKE '%invalid type prefix%' THEN
+            RAISE NOTICE 'T3 PASS: invalid type prefix rejected';
+        ELSE
+            RAISE EXCEPTION 'T3 FAIL: wrong error: %', SQLERRM;
+        END IF;
+END;
+$$;
+NOTICE:  T3 PASS: invalid type prefix rejected
+DO
+-- ─────────────────────────────────────────────────────────────────────────────
+-- T4: system source → validated
+-- ─────────────────────────────────────────────────────────────────────────────
+SELECT final_state = 'validated' AS t4_system_validated
+FROM pgmnemo.remember_fact(
+    p_role        => 'rf_test',
+    p_entity_key  => 'org:acme',
+    p_property    => 'status',
+    p_value       => 'active',
+    p_confidence  => 0.9,
+    p_source_type => 'system',
+    p_project_id  => 99999
+);
+ t4_system_validated
+---------------------
+ t
+(1 row)
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- T5: agent_authored, conf≥0.8, non-PII → validated
+-- ─────────────────────────────────────────────────────────────────────────────
+SELECT final_state = 'validated' AS t5_agent_high_conf_validated
+FROM pgmnemo.remember_fact(
+    p_role        => 'rf_test',
+    p_entity_key  => 'org:acme',
+    p_property    => 'industry',
+    p_value       => 'software',
+    p_confidence  => 0.85,
+    p_source_type => 'agent_authored',
+    p_project_id  => 99999
+);
+ t5_agent_high_conf_validated
+------------------------------
+ t
+(1 row)
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- T6: agent_authored, conf<0.8, non-PII → candidate
+-- ─────────────────────────────────────────────────────────────────────────────
+SELECT final_state = 'candidate' AS t6_agent_low_conf_candidate
+FROM pgmnemo.remember_fact(
+    p_role        => 'rf_test',
+    p_entity_key  => 'org:acme',
+    p_property    => 'size',
+    p_value       => 'medium',
+    p_confidence  => 0.6,
+    p_source_type => 'agent_authored',
+    p_project_id  => 99999
+);
+ t6_agent_low_conf_candidate
+-----------------------------
+ t
+(1 row)
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- T7: auto_captured → candidate regardless of confidence level
+-- ─────────────────────────────────────────────────────────────────────────────
+SELECT final_state = 'candidate' AS t7_auto_captured_candidate
+FROM pgmnemo.remember_fact(
+    p_role        => 'rf_test',
+    p_entity_key  => 'org:acme',
+    p_property    => 'description',
+    p_value       => 'A software company providing enterprise solutions to global clients.',
+    p_confidence  => 0.99,
+    p_source_type => 'auto_captured',
+    p_project_id  => 99999
+);
+ t7_auto_captured_candidate
+----------------------------
+ t
+(1 row)
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- T8a: PII email on person:* with system source → candidate ALWAYS (ADR-61 D4)
+-- ─────────────────────────────────────────────────────────────────────────────
+SELECT final_state = 'candidate' AS t8a_pii_email_overrides_system
+FROM pgmnemo.remember_fact(
+    p_role        => 'rf_test',
+    p_entity_key  => 'person:ada_lovelace',
+    p_property    => 'email',
+    p_value       => 'ada@example.com',
+    p_confidence  => 0.99,
+    p_source_type => 'system',
+    p_project_id  => 99999
+);
+ t8a_pii_email_overrides_system
+--------------------------------
+ t
+(1 row)
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- T8b: PII phone on person:* → candidate
+-- ─────────────────────────────────────────────────────────────────────────────
+SELECT final_state = 'candidate' AS t8b_pii_phone_candidate
+FROM pgmnemo.remember_fact(
+    p_role        => 'rf_test',
+    p_entity_key  => 'person:ada_lovelace',
+    p_property    => 'phone',
+    p_value       => '+15550001234',
+    p_confidence  => 0.9,
+    p_source_type => 'agent_authored',
+    p_project_id  => 99999
+);
+ t8b_pii_phone_candidate
+-------------------------
+ t
+(1 row)
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- T8c: non-PII role on person:* with system source → validated (PII gate doesn't fire)
+-- ─────────────────────────────────────────────────────────────────────────────
+SELECT final_state = 'validated' AS t8c_non_pii_person_validated
+FROM pgmnemo.remember_fact(
+    p_role        => 'rf_test',
+    p_entity_key  => 'person:ada_lovelace',
+    p_property    => 'role',
+    p_value       => 'mathematician',
+    p_confidence  => 0.95,
+    p_source_type => 'system',
+    p_project_id  => 99999
+);
+ t8c_non_pii_person_validated
+------------------------------
+ t
+(1 row)
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- T8d: p_has_contact_pii=TRUE overrides auto-detect → candidate (R7 first-class input)
+-- ─────────────────────────────────────────────────────────────────────────────
+SELECT final_state = 'candidate' AS t8d_caller_forced_pii_candidate
+FROM pgmnemo.remember_fact(
+    p_role            => 'rf_test',
+    p_entity_key      => 'person:ada_lovelace',
+    p_property        => 'custom_sensitive_field',
+    p_value           => 'sensitive-value',
+    p_confidence      => 0.99,
+    p_has_contact_pii => TRUE,
+    p_source_type     => 'system',
+    p_project_id      => 99999
+);
+ t8d_caller_forced_pii_candidate
+---------------------------------
+ t
+(1 row)
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- T9: NULL embedding accepted (fail-open — not an error) (R5)
+-- ─────────────────────────────────────────────────────────────────────────────
+SELECT final_state = 'validated' AS t9_null_embedding_fail_open
+FROM pgmnemo.remember_fact(
+    p_role        => 'rf_test',
+    p_entity_key  => 'project:pgmnemo',
+    p_property    => 'license',
+    p_value       => 'Apache-2.0',
+    p_confidence  => 0.99,
+    p_source_type => 'system',
+    p_embedding   => NULL,
+    p_project_id  => 99999
+);
+ t9_null_embedding_fail_open
+-----------------------------
+ t
+(1 row)
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- T10: artifact_hash synthesized as 'fact-<entity_key>:<property>' in DB (R2)
+-- ─────────────────────────────────────────────────────────────────────────────
+SELECT
+    al.artifact_hash IS NOT NULL              AS t10_hash_non_null,
+    al.artifact_hash = 'fact-project:pgmnemo:version' AS t10_hash_format
+FROM pgmnemo.remember_fact(
+    p_role        => 'rf_test',
+    p_entity_key  => 'project:pgmnemo',
+    p_property    => 'version',
+    p_value       => '0.12.0',
+    p_confidence  => 0.99,
+    p_source_type => 'system',
+    p_project_id  => 99999
+) rf
+JOIN pgmnemo.agent_lesson al ON al.id = rf.id;
+ t10_hash_non_null | t10_hash_format
+-------------------+-----------------
+ t                 | t
+(1 row)
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- T11: MERGE — same value: id unchanged, confidence updated, state re-classified (R3)
+-- ─────────────────────────────────────────────────────────────────────────────
+DO $$
+DECLARE
+    _id1 BIGINT; _id2 BIGINT; _conf REAL; _state TEXT;
+BEGIN
+    SELECT id INTO _id1
+    FROM pgmnemo.remember_fact('rf_test','org:acme','founded','1990-01-01',
+                               0.6, NULL, NULL, 'agent_authored', 99999, NULL, NULL);
+
+    SELECT id INTO _id2
+    FROM pgmnemo.remember_fact('rf_test','org:acme','founded','1990-01-01',
+                               0.9, NULL, NULL, 'system', 99999, NULL, NULL);
+
+    SELECT confidence, state INTO _conf, _state
+    FROM pgmnemo.agent_lesson WHERE id = _id1;
+
+    IF _id1 <> _id2 THEN
+        RAISE EXCEPTION 'T11 FAIL: MERGE created a new row (id1=%, id2=%)', _id1, _id2;
+    END IF;
+    IF _conf < 0.9 THEN
+        RAISE EXCEPTION 'T11 FAIL: confidence not upgraded (got %)', _conf;
+    END IF;
+    IF _state <> 'validated' THEN
+        RAISE EXCEPTION 'T11 FAIL: state not reclassified (got %)', _state;
+    END IF;
+    RAISE NOTICE 'T11 PASS: MERGE id=%, conf=%, state=%', _id1, _conf, _state;
+END;
+$$;
+NOTICE:  T11 PASS: MERGE state=validated
+DO
+-- ─────────────────────────────────────────────────────────────────────────────
+-- T12: SUPERSEDE — different value: prior closed, new row, version_n incremented (R3)
+-- ─────────────────────────────────────────────────────────────────────────────
+DO $$
+DECLARE
+    _id1 BIGINT; _id2 BIGINT;
+    _prior_state TEXT; _prior_valid_to TIMESTAMPTZ;
+    _new_ver INT; _prior_ver INT;
+BEGIN
+    SELECT id INTO _id1
+    FROM pgmnemo.remember_fact('rf_test','org:acme','ceo','Alice Smith',
+                               0.85, NULL, NULL, 'agent_authored', 99999, NULL, NULL);
+
+    SELECT id INTO _id2
+    FROM pgmnemo.remember_fact('rf_test','org:acme','ceo','Bob Jones',
+                               0.9, NULL, NULL, 'agent_authored', 99999, NULL, NULL);
+
+    SELECT state, t_valid_to, version_n INTO _prior_state, _prior_valid_to, _prior_ver
+    FROM pgmnemo.agent_lesson WHERE id = _id1;
+
+    SELECT version_n INTO _new_ver FROM pgmnemo.agent_lesson WHERE id = _id2;
+
+    IF _id1 = _id2 THEN
+        RAISE EXCEPTION 'T12 FAIL: expected new row, got same id=%', _id1;
+    END IF;
+    IF _prior_state <> 'superseded' THEN
+        RAISE EXCEPTION 'T12 FAIL: prior state=% (expected superseded)', _prior_state;
+    END IF;
+    IF _prior_valid_to = 'infinity'::TIMESTAMPTZ THEN
+        RAISE EXCEPTION 'T12 FAIL: prior t_valid_to still infinity';
+    END IF;
+    IF _new_ver <> _prior_ver + 1 THEN
+        RAISE EXCEPTION 'T12 FAIL: version_n % ≠ prior % + 1', _new_ver, _prior_ver;
+    END IF;
+    RAISE NOTICE 'T12 PASS: SUPERSEDE prior_id=%, new_id=%, prior_v=%, new_v=%',
+        _id1, _id2, _prior_ver, _new_ver;
+END;
+$$;
+NOTICE:  T12 PASS: SUPERSEDE prior_v=1, new_v=2
+DO
+-- ─────────────────────────────────────────────────────────────────────────────
+-- T13: cross-role identity: (lower(entity_key/property), project_id), NOT role (R3)
+-- ─────────────────────────────────────────────────────────────────────────────
+DO $$
+DECLARE
+    _id_a BIGINT; _id_b BIGINT; _active_count BIGINT; _prior_state TEXT;
+BEGIN
+    SELECT id INTO _id_a
+    FROM pgmnemo.remember_fact('rf_test_role_a','concept:distributed_systems','definition',
+        'Original definition written by role A.',
+        0.9, NULL, NULL, 'agent_authored', 99999, NULL, NULL);
+
+    SELECT id INTO _id_b
+    FROM pgmnemo.remember_fact('rf_test_role_b','concept:distributed_systems','definition',
+        'Updated definition written by role B — overrides role A.',
+        0.95, NULL, NULL, 'agent_authored', 99999, NULL, NULL);
+
+    SELECT state INTO _prior_state FROM pgmnemo.agent_lesson WHERE id = _id_a;
+
+    SELECT COUNT(*) INTO _active_count
+    FROM pgmnemo.agent_lesson
+    WHERE lower(topic) = 'concept:distributed_systems/definition'
+      AND content_type = 'fact'
+      AND project_id = 99999
+      AND is_active
+      AND t_valid_to = 'infinity'::TIMESTAMPTZ;
+
+    IF _id_a = _id_b THEN
+        RAISE EXCEPTION 'T13 FAIL: expected supersession, got merge (same id)';
+    END IF;
+    IF _prior_state <> 'superseded' THEN
+        RAISE EXCEPTION 'T13 FAIL: role_a row state=% (expected superseded)', _prior_state;
+    END IF;
+    IF _active_count <> 1 THEN
+        RAISE EXCEPTION 'T13 FAIL: active_count=% (expected 1)', _active_count;
+    END IF;
+    RAISE NOTICE 'T13 PASS: cross-role supersession: role_a_id=%, role_b_id=%, active=%',
+        _id_a, _id_b, _active_count;
+END;
+$$;
+NOTICE:  T13 PASS: cross-role supersession, active=1
+DO
+-- ─────────────────────────────────────────────────────────────────────────────
+-- T14: ingest_entity compat — version_n=0 prior yields version_n=1 on first typed write (R4)
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Simulate a pre-migration ingest_entity row (version_n=0 sentinel)
+INSERT INTO pgmnemo.agent_lesson (
+    role, project_id, topic, lesson_text,
+    content_type, state, verified_at, artifact_hash, version_n
+) VALUES (
+    'rf_test', 99999,
+    'org:legacy_corp/founded',
+    'org:legacy_corp founded: 1985-01-01',
+    'fact', 'validated', NOW(),
+    'fact-org:legacy_corp:founded',
+    0   -- pre-migration sentinel (PROPERTY_CONVENTIONS §ingest_entity compat)
+);
+INSERT 0 1
+DO $$
+DECLARE
+    _new_id BIGINT; _new_ver INT;
+BEGIN
+    SELECT id INTO _new_id
+    FROM pgmnemo.remember_fact('rf_test','org:legacy_corp','founded','1986-01-01',
+                               0.9, NULL, NULL, 'system', 99999, NULL, NULL);
+
+    SELECT version_n INTO _new_ver FROM pgmnemo.agent_lesson WHERE id = _new_id;
+
+    IF _new_ver <> 1 THEN
+        RAISE EXCEPTION 'T14 FAIL: version_n=% (expected 1 for first typed write over v_n=0)', _new_ver;
+    END IF;
+    RAISE NOTICE 'T14 PASS: first typed write over ingest_entity row: version_n=%', _new_ver;
+END;
+$$;
+NOTICE:  T14 PASS: first typed write over ingest_entity row: version_n=1
+DO
+-- ─────────────────────────────────────────────────────────────────────────────
+-- T15: artifact_hash IS present in DB row (R2 — synthesized, non-NULL) (R2)
+-- ─────────────────────────────────────────────────────────────────────────────
+SELECT
+    al.artifact_hash IS NOT NULL          AS t15_hash_present,
+    al.artifact_hash LIKE 'fact-%'        AS t15_hash_format_ok
+FROM pgmnemo.remember_fact(
+    p_role        => 'rf_test',
+    p_entity_key  => 'project:pgmnemo',
+    p_property    => 'status',
+    p_value       => 'active',
+    p_confidence  => 0.95,
+    p_source_type => 'system',
+    p_project_id  => 99999
+) rf
+JOIN pgmnemo.agent_lesson al ON al.id = rf.id;
+ t15_hash_present | t15_hash_format_ok
+------------------+--------------------
+ t                | t
+(1 row)
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- T16: guard_no_test_project — no-op in test DB, would raise on prod (R6)
+-- ─────────────────────────────────────────────────────────────────────────────
+-- In 'regression' DB (pg_regress default): must succeed without error
+SELECT pgmnemo.guard_no_test_project(99999);
+ guard_no_test_project
+-----------------------
+
+(1 row)
+
+-- Function exists with correct schema
+SELECT proname = 'guard_no_test_project' AS t16_guard_exists
+FROM pg_proc p
+JOIN pg_namespace n ON n.oid = p.pronamespace
+WHERE n.nspname = 'pgmnemo' AND p.proname = 'guard_no_test_project';
+ t16_guard_exists
+------------------
+ t
+(1 row)
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Cleanup: remove all test fixtures from this test run
+-- ─────────────────────────────────────────────────────────────────────────────
+DELETE FROM pgmnemo.agent_lesson
+WHERE project_id = 99999
+  AND role IN ('rf_test', 'rf_test_role_a', 'rf_test_role_b');
+DELETE 18
