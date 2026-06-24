@@ -15,6 +15,31 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [Unreleased]
+
+### Fixed
+
+- **Declared PostgreSQL requirement corrected to 17.0.0 (was 14.0.0).** Since
+  v0.10.1 the extension uses `ALTER COLUMN … SET EXPRESSION AS …`, which is
+  PostgreSQL 17+ syntax, so `CREATE EXTENSION pgmnemo` has in fact failed on PG
+  14/15/16 (`syntax error at or near "EXPRESSION"`). `META.json` still advertised
+  `PostgreSQL: 14.0.0`, a false compatibility claim. The PGXN `requires` field now
+  matches reality. The CI `compat-matrix` (PG 14/15/16, `continue-on-error`) stays
+  as a tracker for restoring pre-17 support — see the open issue.
+
+### CI
+
+- `bench-gate` now validates the gate artifact (version stamp == tag, `gate_status`
+  PASS, rejects `do_not_push`/`release_decision: null` drafts, quality gates must be
+  measured against the release version) instead of only checking the file exists.
+- `installcheck` asserts the installed `extversion` equals the version under test.
+- `ci.yml` pg_regress baseline auto-reset is now opt-in via a `[baseline-reset-ok]`
+  commit token instead of firing silently on any non-`ERROR` diff.
+- `upgrade-path-test` derives its FROM versions from the upgrade scripts actually
+  present in-tree instead of a hardcoded list that drifted behind releases.
+
+---
+
 ## [0.11.0] — 2026-06-23
 
 ### Theme

@@ -38,17 +38,17 @@ jobs:
             echo "VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Check bench-gate file present
+      - name: Validate bench-gate file (version stamp + not-a-draft + corpus version)
         run: |
           V=${{ steps.version.outputs.VERSION }}
           OVERRIDE="${{ github.event.inputs.bench_override }}"
-          if [ -f "benchmarks/gate/v${V}.json" ]; then
-            echo "✓ benchmarks/gate/v${V}.json present"
-          elif [ "$OVERRIDE" = "true" ] || echo "${{ github.event.head_commit.message }}" | grep -q '\[bench-gate-override\]'; then
+          if [ "$OVERRIDE" = "true" ] || echo "${{ github.event.head_commit.message }}" | grep -q '\[bench-gate-override\]'; then
             echo "⚠ bench-gate bypassed via override"
           else
-            echo "::error::benchmarks/gate/v${V}.json missing. Create with analytical or empirical proof, or use [bench-gate-override] in commit message."
-            exit 1
+            # HARD check (replaces old file-presence-only test): asserts the gate
+            # file is stamped with this version, is PASS, is not a working-note
+            # draft, and — for quality claims — was measured against THIS version.
+            python3 scripts/validate_bench_gate.py "$V"
           fi
 
       - name: Check pgmnemo.control default_version matches tag
@@ -176,14 +176,24 @@ jobs:
       - name: Build and install extension
         run: cd extension && make PG_CONFIG=/usr/lib/postgresql/17/bin/pg_config && sudo make install PG_CONFIG=/usr/lib/postgresql/17/bin/pg_config
 
-      - name: Verify extension loads
+      - name: Verify extension loads and is the candidate version
         env:
           PGUSER: runner
           PGPASSWORD: runner
           PGHOST: localhost
           PGPORT: 5433
           PGDATABASE: pgmnemo_test
-        run: /usr/lib/postgresql/17/bin/psql -c "CREATE EXTENSION pgmnemo CASCADE;"
+        run: |
+          PSQL=/usr/lib/postgresql/17/bin/psql
+          $PSQL -c "CREATE EXTENSION pgmnemo CASCADE;"
+          # Assert the installed extension is exactly the version under release —
+          # closes the "ran against whatever was installed" gap.
+          INSTALLED=$($PSQL -tAc "SELECT extversion FROM pg_extension WHERE extname='pgmnemo'")
+          echo "installed extversion: $INSTALLED (tag: ${{ steps.version.outputs.VERSION }})"
+          test "$INSTALLED" = "${{ steps.version.outputs.VERSION }}" || {
+            echo "::error::installcheck ran against pgmnemo $INSTALLED, not the v${{ steps.version.outputs.VERSION }} release. Gate result would be invalid."
+            exit 1
+          }
 
       - name: Run installcheck
         env:
@@ -233,23 +243,20 @@ jobs:
             echo "VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Check bench-gate file exists
+      - name: Validate bench-gate file
         id: gate
         run: |
           VERSION=${{ steps.version.outputs.VERSION }}
-          GATE="benchmarks/gate/v${VERSION}.json"
           OVERRIDE="${{ github.event.inputs.bench_override }}"
-          if [ ! -f "$GATE" ]; then
-            if [ "$OVERRIDE" = "true" ] || echo "${{ github.event.head_commit.message }}" | grep -q '\[bench-gate-override\]'; then
-              echo "::warning::bench-gate bypassed"
-              echo "bench_pass=override" >> "$GITHUB_OUTPUT"
-            else
-              echo "::error::$GATE missing. Run benchmarks and commit the gate file, or use [bench-gate-override] in commit message."
-              exit 1
-            fi
+          if [ "$OVERRIDE" = "true" ] || echo "${{ github.event.head_commit.message }}" | grep -q '\[bench-gate-override\]'; then
+            echo "::warning::bench-gate bypassed"
+            echo "bench_pass=override" >> "$GITHUB_OUTPUT"
           else
+            # Was: "if file exists → PASS" (validated nothing). Now: assert the
+            # committed gate artifact is honest — version-stamped, PASS, not a
+            # draft, quality numbers measured against this version.
+            python3 scripts/validate_bench_gate.py "$VERSION"
             echo "bench_pass=true" >> "$GITHUB_OUTPUT"
-            echo "Gate file $GATE found — Δ=0 or previously confirmed."
           fi
 
   # ─── Job 2.5: clean-room install gate (THE gate missing when v0.7.1 shipped) ─

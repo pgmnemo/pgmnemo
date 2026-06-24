@@ -22,14 +22,23 @@ jobs:
         run: cd extension && make PG_CONFIG=/usr/lib/postgresql/17/bin/pg_config
       - name: Install extension
         run: cd extension && sudo make install PG_CONFIG=/usr/lib/postgresql/17/bin/pg_config
-      - name: Verify extension loads
+      - name: Verify extension loads and matches control default_version
         env:
           PGUSER: runner
           PGPASSWORD: runner
           PGHOST: localhost
           PGPORT: 5433
           PGDATABASE: pgmnemo_test
-        run: /usr/lib/postgresql/17/bin/psql -c "CREATE EXTENSION pgmnemo CASCADE;"
+        run: |
+          PSQL=/usr/lib/postgresql/17/bin/psql
+          $PSQL -c "CREATE EXTENSION pgmnemo CASCADE;"
+          WANT=$(grep '^default_version' extension/pgmnemo.control | sed "s/.*= *'//;s/'.*//")
+          GOT=$($PSQL -tAc "SELECT extversion FROM pg_extension WHERE extname='pgmnemo'")
+          echo "installed extversion: $GOT (control default_version: $WANT)"
+          test "$GOT" = "$WANT" || {
+            echo "::error::installed pgmnemo $GOT != control default_version $WANT — installcheck would validate the wrong code."
+            exit 1
+          }
       - name: Run installcheck
         id: installcheck
         continue-on-error: true
@@ -41,7 +50,14 @@ jobs:
           PGDATABASE: pgmnemo_test
         run: cd extension && make installcheck PG_CONFIG=/usr/lib/postgresql/17/bin/pg_config
       - name: Update expected files from PG 17 output (baseline reset)
-        if: steps.installcheck.outcome == 'failure' && github.event_name == 'push' && github.ref == 'refs/heads/main'
+        # OPT-IN ONLY (hardened 2026-06-23). Previously this auto-committed new
+        # expected output on ANY non-ERROR installcheck failure on main — which
+        # silently laundered behavioral/ranking changes into the baseline (a
+        # non-ERROR diff = "test now passes" forever after). It now requires an
+        # explicit [baseline-reset-ok] token in the commit message, so a human
+        # has affirmed the diff is a cosmetic PG-version formatting change, not a
+        # real regression. Without the token, installcheck failure just fails.
+        if: steps.installcheck.outcome == 'failure' && github.event_name == 'push' && github.ref == 'refs/heads/main' && contains(github.event.head_commit.message, '[baseline-reset-ok]')
         run: |
           if ls extension/results/*.out 2>/dev/null; then
             # Safety guard: never auto-commit expected files that contain ERROR lines
@@ -149,10 +165,12 @@ jobs:
 
   compat-matrix:
     # Multi-PG-version compatibility check. PG 17 is the gate (covered by
-    # installcheck above); PG 14/15/16 are continue-on-error to give visibility
-    # without blocking ship while we verify older-version compatibility claims
-    # in META.json + README. As of v0.4.1 the compatibility matrix is
-    # aspirational — file an issue if any non-17 version fails.
+    # installcheck above); PG 14/15/16 are continue-on-error for visibility.
+    # As of v0.10.1 the extension uses PG17-only `SET EXPRESSION` syntax, so
+    # CREATE EXTENSION genuinely fails on 14/15/16 and META.json now declares
+    # `PostgreSQL: 17.0.0` to match. This matrix is therefore EXPECTED-RED and
+    # tracks the effort to restore pre-17 support (see issue); flip it back to
+    # a hard gate once <17 install succeeds again.
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -227,14 +245,25 @@ jobs:
           # Read current default_version from control file
           TARGET_VER=$(grep '^default_version' extension/pgmnemo.control | sed "s/.*= *'//;s/'.*//")
           echo "Target version: $TARGET_VER"
-          for FROM_VER in 0.2.1 0.3.0 0.4.0 0.4.1 0.5.0; do
-            # Skip if no upgrade script exists from this version
-            if [ ! -f "extension/pgmnemo--${FROM_VER}--${TARGET_VER}.sql" ] && [ "$FROM_VER" != "$TARGET_VER" ]; then
-              # Check if there's a multi-hop path — just do a smoke check
-              echo "::notice::No direct upgrade script from $FROM_VER to $TARGET_VER — skipping"
-              continue
-            fi
-            [ "$FROM_VER" = "$TARGET_VER" ] && continue
+          # Derive the FROM-version list DYNAMICALLY from the direct-upgrade scripts
+          # that actually exist in the repo, instead of a hardcoded list that drifts
+          # behind releases (the old list 0.2.1..0.5.0 + a hardcoded 0.9.8 referenced
+          # versions with no install script left in-tree → "no installation script
+          # nor update path" failures). A FROM version qualifies only if BOTH its
+          # fresh-install script and a direct FROM→TARGET upgrade script are present.
+          FROM_VERS=""
+          for f in extension/pgmnemo--*--${TARGET_VER}.sql; do
+            [ -e "$f" ] || continue
+            FV=$(basename "$f" | sed -E "s/^pgmnemo--(.+)--${TARGET_VER//./\\.}\.sql$/\1/")
+            [ -f "extension/pgmnemo--${FV}.sql" ] && FROM_VERS="$FROM_VERS $FV"
+          done
+          FROM_VERS=$(echo $FROM_VERS | tr ' ' '\n' | sort -u | tr '\n' ' ')
+          if [ -z "$(echo $FROM_VERS | tr -d ' ')" ]; then
+            echo "::error::No direct FROM→${TARGET_VER} upgrade script with a matching fresh-install script found. Every release needs at least one tested upgrade path."
+            exit 1
+          fi
+          echo "Discovered upgrade sources → $TARGET_VER: $FROM_VERS"
+          for FROM_VER in $FROM_VERS; do
             echo "::group::Upgrade chain from $FROM_VER → $TARGET_VER"
             DB_NAME="upgrade_test_$(echo $FROM_VER | tr . _)"
             sudo -u postgres $PSQL -p 5433 -c "DROP DATABASE IF EXISTS $DB_NAME"
@@ -250,12 +279,14 @@ jobs:
             echo "::endgroup::"
           done
           echo "✓ All upgrade paths verified to $TARGET_VER"
-          # Confirm updated_at trigger + patch_count column present after upgrade
-          # (regression guard: v0.10.0 inherits these from v0.9.x; verify chain)
+          # Confirm updated_at trigger + patch_count column present after upgrade.
+          # Use the earliest discovered upgrade source (not a hardcoded version).
+          COL_FROM=$(echo $FROM_VERS | tr ' ' '\n' | sort -V | head -1)
+          echo "Column-survival check uses upgrade source $COL_FROM → $TARGET_VER"
           DB_VERIFY="updated_at_verify_$(echo $TARGET_VER | tr . _)"
           sudo -u postgres $PSQL -p 5433 -c "DROP DATABASE IF EXISTS $DB_VERIFY"
           sudo -u postgres $PSQL -p 5433 -c "CREATE DATABASE $DB_VERIFY OWNER runner"
-          $PSQL -d $DB_VERIFY -c "CREATE EXTENSION pgmnemo VERSION '0.9.8' CASCADE"
+          $PSQL -d $DB_VERIFY -c "CREATE EXTENSION pgmnemo VERSION '$COL_FROM' CASCADE"
           $PSQL -d $DB_VERIFY -c "ALTER EXTENSION pgmnemo UPDATE TO '$TARGET_VER'"
           PATCH_COL=$($PSQL -d $DB_VERIFY -tAc "SELECT column_name FROM information_schema.columns WHERE table_schema='pgmnemo' AND table_name='agent_lesson' AND column_name='patch_count'")
           UPDAT_COL=$($PSQL -d $DB_VERIFY -tAc "SELECT column_name FROM information_schema.columns WHERE table_schema='pgmnemo' AND table_name='agent_lesson' AND column_name='updated_at'")
