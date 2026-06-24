@@ -1,6 +1,6 @@
 # pgmnemo Installation Guide
 
-**Versions:** v0.8.3+
+**Versions:** v0.12.0+
 **License:** Apache-2.0
 **Prerequisites:** PostgreSQL 14+ with [pgvector](https://github.com/pgvector/pgvector) 0.7.0+
 
@@ -13,7 +13,7 @@ robustness. **Most production Docker users want path 3 (Dockerfile COPY).**
 
 ```bash
 # Requires pgxnclient (pip install pgxnclient)
-pgxn install pgmnemo==0.8.3
+pgxn install pgmnemo==0.12.0
 psql -d your_db -c "CREATE EXTENSION pgmnemo CASCADE;"
 ```
 
@@ -30,14 +30,14 @@ You can skip `make` entirely:
 
 ```bash
 # 1. Download the release zip
-curl -LO https://github.com/pgmnemo/pgmnemo/releases/download/v0.8.3/pgmnemo-0.8.3.zip
-unzip pgmnemo-0.8.3.zip
+curl -LO https://github.com/pgmnemo/pgmnemo/releases/download/v0.12.0/pgmnemo-0.12.0.zip
+unzip pgmnemo-0.12.0.zip
 
 # 2. Copy the extension contents to PostgreSQL's extension directory.
-#    The zip un-nests to a single pgmnemo-0.8.3/extension/ directory holding
+#    The zip un-nests to a single pgmnemo-0.12.0/extension/ directory holding
 #    pgmnemo.control + pgmnemo--*.sql — copy its contents in one shot:
 SHAREDIR=$(pg_config --sharedir)
-sudo cp -r pgmnemo-0.8.3/extension/* "$SHAREDIR/extension/"
+sudo cp -r pgmnemo-0.12.0/extension/* "$SHAREDIR/extension/"
 
 # 3. Load the extension
 psql -d your_db -c "CREATE EXTENSION pgmnemo CASCADE;"
@@ -69,13 +69,13 @@ layer. **No compilation involved** — `COPY` is enough.
 FROM pgvector/pgvector:pg17
 
 # Download release zip (or use ADD from a local checkout)
-ADD https://github.com/pgmnemo/pgmnemo/releases/download/v0.8.3/pgmnemo-0.8.3.zip /tmp/
+ADD https://github.com/pgmnemo/pgmnemo/releases/download/v0.12.0/pgmnemo-0.12.0.zip /tmp/
 
 RUN apt-get update && apt-get install -y --no-install-recommends unzip \
-    && unzip /tmp/pgmnemo-0.8.3.zip -d /tmp/ \
-    && cp -r /tmp/pgmnemo-0.8.3/extension/* \
+    && unzip /tmp/pgmnemo-0.12.0.zip -d /tmp/ \
+    && cp -r /tmp/pgmnemo-0.12.0/extension/* \
           /usr/share/postgresql/17/extension/ \
-    && rm -rf /tmp/pgmnemo-0.8.3 /tmp/pgmnemo-0.8.3.zip \
+    && rm -rf /tmp/pgmnemo-0.12.0 /tmp/pgmnemo-0.12.0.zip \
     && apt-get remove -y unzip \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 ```
@@ -111,14 +111,14 @@ docker compose exec postgres psql -U bench -d bench -c "CREATE EXTENSION pgmnemo
 
 ```dockerfile
 # bump the ADD line to the new version, rebuild image:
-ADD https://github.com/pgmnemo/pgmnemo/releases/download/v0.8.3/pgmnemo-0.8.3.zip /tmp/
+ADD https://github.com/pgmnemo/pgmnemo/releases/download/v0.12.0/pgmnemo-0.12.0.zip /tmp/
 ```
 
 Then:
 ```bash
 docker compose build postgres
 docker compose up -d postgres
-docker compose exec postgres psql -U bench -d bench -c "ALTER EXTENSION pgmnemo UPDATE TO '0.8.3';"
+docker compose exec postgres psql -U bench -d bench -c "ALTER EXTENSION pgmnemo UPDATE TO '0.12.0';"
 ```
 
 Volume `pgdata` carries the schema state across image rebuilds. The extension
@@ -134,11 +134,11 @@ vendor the extension files into your repository:
 ```bash
 # One-time bootstrap (run on your dev machine with internet access)
 mkdir -p docker/postgres/pgmnemo-extension/
-curl -L https://github.com/pgmnemo/pgmnemo/releases/download/v0.8.3/pgmnemo-0.8.3.zip | \
+curl -L https://github.com/pgmnemo/pgmnemo/releases/download/v0.12.0/pgmnemo-0.12.0.zip | \
     bsdtar -xf- -C /tmp/
-cp -r /tmp/pgmnemo-0.8.3/extension/* \
+cp -r /tmp/pgmnemo-0.12.0/extension/* \
    docker/postgres/pgmnemo-extension/
-git add docker/postgres/pgmnemo-extension/ && git commit -m "vendor pgmnemo 0.8.3"
+git add docker/postgres/pgmnemo-extension/ && git commit -m "vendor pgmnemo 0.12.0"
 ```
 
 Dockerfile:
@@ -204,7 +204,7 @@ After any install path:
 
 ```sql
 -- Version
-SELECT pgmnemo.version();   -- → '0.8.3'
+SELECT pgmnemo.version();   -- → '0.12.0'
 
 -- Sanity smoke. NOTE: the embedding arg needs an explicit ::vector(1024) cast (so the
 -- ingest() overload resolves) and importance needs ::smallint; lesson_text must be >= 20 chars.
