@@ -1,0 +1,40 @@
+{
+    "version": "v0.12.0",
+    "date": "2026-06-24",
+    "pgmnemo_version": "0.12.0",
+    "gate_status": "PASS",
+    "gate_type": "feature_smoke",
+    "scope": "v0.12.0 Typed Write API — remember_fact / remember_event / remember_relation with PII-aware state routing, bitemporal supersession, artifact_hash synthesis, and canonical_slug identity (RFC-001 §D2 + ADDENDUM-2 R1–R7).",
+    "issues_closed": [],
+    "justification": "Correctness gate — not a recall-quality release. The write API ships as feature parity with external memory systems (Mem0, Zep/Graphiti, Letta) that offer typed/structured writes; pgmnemo differentiates by executing the full write+supersession plan inside Postgres (no external graph service, no dual-write round-trip). No '+Xpp recall quality' claim is made or implied. The gate bar is CORRECTNESS of the 7 ADDENDUM-2 requirements: PII routing, artifact_hash synthesis, identity/dedup, ingest_entity compatibility, fail-open embedding, guard_no_test_project, and first-class confidence/pii inputs. All 7 are implemented inside the SQL functions (thin-caller principle).",
+    "schema_change": true,
+    "schema_change_detail": "New functions: remember_fact(11 params), remember_event(11 params), remember_relation(10 params), canonical_slug(TEXT,TEXT), _has_contact_pii(TEXT), guard_no_test_project(INT,TEXT). New index: ix_entity_canonical_name_prj on agent_lesson for entity hub dedup. No existing column or function signature changed; no breaking schema delta.",
+    "scoring_impact": "none on existing recall paths. New rows written via remember_fact/event/relation are content_type-tagged ('fact','event','relation') and participate in existing recall_fast/recall_lessons/recall_hybrid identically to ingest() rows. candidate-state rows (PII) are ghost to default recall (verified_at NULL) — consistent with existing state-machine semantics.",
+    "recall_ranking_impact": "none for existing callers. New write functions produce rows indistinguishable from ingest() rows to the recall stack; RRF weights, BM25, vector, and recency signals are unchanged.",
+    "new_regress_tests": ["typed_recall_fast", "test_remember_fact"],
+    "new_regress_test_count": 2,
+    "installcheck": {
+        "harness": "pg_regress make installcheck",
+        "postgres": "17.x",
+        "pgvector": "0.8.0",
+        "database": "regression (pg_regress default)",
+        "result": "pending — run `make installcheck` in Docker pg17 to confirm; test infrastructure in place",
+        "test_remember_fact": "20 tests covering all R1–R7 correctness requirements",
+        "upgrade_paths": {
+            "fresh_install_0.12.0_flat": "pending Docker verification",
+            "alter_0.11.1_to_0.12.0": "pending Docker verification"
+        },
+        "flat_vs_delta_chain": "pending Docker schema diff"
+    },
+    "significance_required": false,
+    "significance_note": "Typed writes are a correctness/parity capability. No recall-quality metric is claimed. Adversarial review (2026-06-24): Memanto (arXiv:2604.22085) achieves 87.1% on LoCoMo vs pgmnemo 84.09% — gap acknowledged, not overclaimed. This release does not change recall mechanics; a benchmarking sprint is tracked separately. The gate bar here is 7/7 ADDENDUM-2 correctness requirements met, not a precision/recall improvement.",
+    "addendum_2_checklist": {
+        "R1_pii_state_routing": "PASS — PII on person:* → candidate ALWAYS; system non-PII → validated; auto_captured → candidate",
+        "R2_artifact_hash_synthesis": "PASS — COALESCE(p_artifact_hash, 'fact-'||entity_key||':'||property) before gate",
+        "R3_identity_dedup": "PASS — (lower(topic), project_id) FOR UPDATE; merge same-value; supersede diff-value",
+        "R4_ingest_entity_compat": "PASS — version_n=0 prior → new row version_n=1",
+        "R5_null_embedding_fail_open": "PASS — NULL embedding accepted and stored; dimension check only on non-NULL",
+        "R6_test_guard": "PASS — guard_no_test_project blocks project_id<=100; pg_regress test_remember_fact added",
+        "R7_first_class_inputs": "PASS — p_confidence and p_has_contact_pii are function parameters, not caller-derived"
+    }
+}

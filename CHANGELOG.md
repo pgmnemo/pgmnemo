@@ -15,6 +15,84 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.12.0] — 2026-06-24
+
+### Theme
+
+**Typed Write API — `remember_fact / remember_event / remember_relation`.**
+Adds three structured write functions to the extension. Existing recall API unchanged.
+
+> **Positioning note (2026-06-24):** Typed structured writes are industry parity — Mem0,
+> Zep/Graphiti, and Letta all expose entity/relation write primitives. This release
+> brings pgmnemo to write-side parity. Differentiation remains the single-plan SQL
+> architecture (write + supersession + recall in one Postgres plan, zero external
+> round-trips). No recall-quality improvement is claimed for this release.
+
+### Added
+
+- **`pgmnemo.remember_fact(role, entity_key, property, value, confidence, has_contact_pii, embedding, source_type, project_id, commit_sha, artifact_hash)`**
+  Writes a named property fact about an entity. Returns `(id BIGINT, final_state TEXT)`.
+  PII-aware state routing built in (ADR-61 D4): `email/phone/address/telegram/full_name`
+  on `person:*` keys → `candidate` regardless of source; `system` non-PII → `validated`;
+  `auto_captured` → `candidate`; `agent_authored` conf ≥ 0.8 non-PII → `validated`.
+  Bitemporal supersession: different value → closes prior row, inserts new `version_n+1`.
+  Merge: same value → updates `confidence = GREATEST(existing, new)`, re-classifies state.
+  Synthesizes `artifact_hash = 'fact-<entity_key>:<property>'` when caller omits it.
+  Identity key: `(lower(entity_key/property), project_id)` with `SELECT FOR UPDATE`.
+
+- **`pgmnemo.remember_event(role, entity_key, label, body, occurred_at, confidence, embedding, source_type, project_id, commit_sha, artifact_hash)`**
+  Appends an immutable event record (`content_type = 'event'`). Returns `BIGINT id`.
+
+- **`pgmnemo.remember_relation(role, from_key, to_key, relation_type, confidence, embedding, source_type, project_id, commit_sha, artifact_hash)`**
+  Writes a directed typed relation (`content_type = 'relation'`). Idempotent on triple.
+  Opportunistically links entity hubs via `add_edge()` when hub rows exist.
+  Returns `BIGINT id`.
+
+- **`pgmnemo.canonical_slug(type TEXT, label TEXT) → TEXT`**
+  Normalises arbitrary text to `^(person|org|project|product|location|concept):[a-z0-9_]+$`
+  max 72 chars. `IMMUTABLE PARALLEL SAFE`.
+
+- **`pgmnemo._has_contact_pii(property TEXT) → BOOLEAN`**
+  Returns `TRUE` for `{email, phone, address, telegram, full_name}`. `IMMUTABLE`.
+
+- **`pgmnemo.guard_no_test_project(project_id INT, allowed_db TEXT DEFAULT NULL)`**
+  Safety guard for test harnesses. Raises when `project_id ≤ 100`.
+
+- **`ix_entity_canonical_name_prj`** unique index on `agent_lesson(lower(metadata->>'canonical_name'), project_id)` for entity hub dedup.
+
+- **pg_regress tests:** `typed_recall_fast` (0.12.0 upgrade path) and `test_remember_fact` (20 tests covering ADDENDUM-2 R1–R7).
+
+- **Spec:** `spec/v3/memory-era/RFC-001-ADDENDUM-2-write-api-learnings.md` (7 correctness requirements) and `RFC-001-ADDENDUM-typed-recall-coverage.md`.
+
+### Migration from `ingest_entity`
+
+Callers of `ingest_entity` can switch to `remember_fact` with the same
+`entity_key + project_id`. Existing rows (`version_n = 0` sentinel) are absorbed
+on the first `remember_fact` write: prior row is closed, new row gets `version_n = 1`.
+No schema migration required. To opt existing rows into `content_type` filtering,
+run the bulk-update in `spec/v3/memory-era/RFC-001-ADDENDUM-typed-recall-coverage.md`.
+
+### Promote bulk-helper (for `candidate` PII rows)
+
+To promote PII candidate rows after human review:
+
+```sql
+UPDATE pgmnemo.agent_lesson
+SET state = 'validated', verified_at = NOW()
+WHERE project_id = $1
+  AND state = 'candidate'
+  AND content_type = 'fact'
+  AND <your_review_condition>;
+```
+
+### No breaking changes
+
+All existing function signatures unchanged. `recall_fast`, `recall_lessons`,
+`recall_hybrid`, `ingest`, and `add_edge` are unmodified. New `remember_*` rows
+are indistinguishable from `ingest()` rows to the recall stack.
+
+---
+
 ## [0.11.0] — 2026-06-23
 
 ### Theme
