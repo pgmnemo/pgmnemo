@@ -44,6 +44,36 @@
         ],
         "pg_regress_installcheck": "pending — make installcheck in Docker pg17 (no pg_regress harness in this env); SQL test fixtures in extension/sql/test_remember_fact.sql"
     },
+    "real_db_integration_tests_remember_event": {
+        "harness": "psycopg2 Python — real PostgreSQL 17.10 (not mocks)",
+        "postgres": "17.10",
+        "pgvector": "0.8.3",
+        "database": "pgmnemo_0120_bench (fresh CREATE DATABASE + pgmnemo 0.11.1 + 0.12.0 delta)",
+        "result": "PASS — 28/28 tests",
+        "tests_run": 28,
+        "tests_passed": 28,
+        "date_run": "2026-06-24",
+        "coverage": [
+            "RE-1: helper reuse (_has_contact_pii, canonical_slug from impl_A)",
+            "RE-2: signature (11 params)",
+            "RE-3: guard_no_test_project blocks ≤100, allows 99999",
+            "RE-4: basic write → positive id",
+            "RE-5: content_type=event, topic=entity_key:event:label",
+            "RE-6: artifact_hash='event-entity_key:label', NOT NULL (R2)",
+            "RE-7a: system → validated",
+            "RE-7b: system → verified_at NOT NULL",
+            "RE-7c: agent_authored conf≥0.8 → validated",
+            "RE-7d: agent_authored conf<0.8 → candidate",
+            "RE-7e: auto_captured → candidate",
+            "RE-7f: NULL source_type → candidate (default)",
+            "RE-8: verified_at gate — validated=NOT NULL, candidate=NULL (ghost)",
+            "RE-9: bitemporal t_valid_from=occurred_at; metadata.occurred_at stored",
+            "RE-10: append-only — two writes → two distinct ids, count=2",
+            "RE-11: NULL embedding fail-open (R5)",
+            "RE-12: input validation — invalid entity_key, NULL event_label raise",
+            "RE-13: metadata.entity_key + metadata.event_label populated"
+        ]
+    },
     "significance_required": false,
     "significance_note": "Typed writes are a correctness/parity capability. No recall-quality metric is claimed. Adversarial review (2026-06-24): Memanto (arXiv:2604.22085) achieves 87.1% on LoCoMo vs pgmnemo 84.09% — gap acknowledged, not overclaimed. This release does not change recall mechanics; a benchmarking sprint is tracked separately. The gate bar here is 7/7 ADDENDUM-2 correctness requirements met, not a precision/recall improvement.",
     "addendum_2_checklist": {
