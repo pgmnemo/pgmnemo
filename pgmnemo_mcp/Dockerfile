@@ -1,4 +1,4 @@
-# pgmnemo-mcp — containerised MCP server (v0.8.2).
+# pgmnemo-mcp — containerised MCP server.
 # Run on Linux/CI without polluting the host's Python env (isolates psycopg2/mcp
 # deps that conflict with other agent libraries). stdio transport: launch with
 # `docker run -i --rm ...` from your MCP client config.

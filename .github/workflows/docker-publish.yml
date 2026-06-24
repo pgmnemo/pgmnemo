@@ -34,7 +34,15 @@ jobs:
           fi
           [ -z "$V" ] && V="dev"
           echo "version=$V" >> "$GITHUB_OUTPUT"
-          echo "Building pgmnemo-mcp image version: $V"
+          # Only move the :latest tag for a real version release (tag push), never
+          # for a 'dev'/ad-hoc workflow_dispatch build — otherwise a dev image can
+          # silently clobber :latest for every puller.
+          if [ "${{ github.event_name }}" = "push" ] && [ "$V" != "dev" ]; then
+            echo "push_latest=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "push_latest=false" >> "$GITHUB_OUTPUT"
+          fi
+          echo "Building pgmnemo-mcp image version: $V (push_latest from this build: see above)"
 
       - name: Check Docker Hub credentials
         id: creds
@@ -55,6 +63,36 @@ jobs:
       - uses: docker/setup-qemu-action@v3
       - uses: docker/setup-buildx-action@v3
 
+      # Build a single-arch image into the LOCAL daemon and assert that the
+      # package it actually installed reports the version we are about to tag it
+      # with. Without this, the :<version> tag is an unverified claim — the image
+      # could carry a different pgmnemo-mcp build. Runs before login/push so a
+      # mismatch fails the job before anything is published. (Skipped for 'dev'.)
+      - name: Build for verification (amd64, load to local daemon)
+        uses: docker/build-push-action@v6
+        with:
+          context: pgmnemo_mcp
+          file: pgmnemo_mcp/Dockerfile
+          platforms: linux/amd64
+          load: true
+          push: false
+          tags: pgmnemo-mcp:verify
+
+      - name: Assert image reports the expected version
+        run: |
+          V="${{ steps.ver.outputs.version }}"
+          ACTUAL=$(docker run --rm --entrypoint python pgmnemo-mcp:verify \
+            -c "import importlib.metadata as m; print(m.version('pgmnemo-mcp'))" | tr -d '[:space:]')
+          echo "image pgmnemo-mcp version: '$ACTUAL' (expected '$V')"
+          if [ "$V" = "dev" ]; then
+            echo "::notice::dev build — skipping strict version equality (image reports $ACTUAL)"
+          elif [ "$ACTUAL" != "$V" ]; then
+            echo "::error::Docker image installs pgmnemo-mcp $ACTUAL but is tagged $V. Refusing to publish a mislabeled image."
+            exit 1
+          else
+            echo "✓ image version matches tag"
+          fi
+
       - name: Log in to Docker Hub
         if: steps.creds.outputs.push == 'true'
         uses: docker/login-action@v3
@@ -69,9 +107,11 @@ jobs:
           file: pgmnemo_mcp/Dockerfile
           platforms: linux/amd64,linux/arm64
           push: ${{ steps.creds.outputs.push }}
+          # :latest only moves for a real version release (see push_latest); a
+          # 'dev'/dispatch build publishes only its own :<version> tag.
           tags: |
             ${{ vars.DOCKERHUB_IMAGE || 'pgmnemo/pgmnemo-mcp' }}:${{ steps.ver.outputs.version }}
-            ${{ vars.DOCKERHUB_IMAGE || 'pgmnemo/pgmnemo-mcp' }}:latest
+            ${{ steps.ver.outputs.push_latest == 'true' && format('{0}:latest', vars.DOCKERHUB_IMAGE || 'pgmnemo/pgmnemo-mcp') || '' }}
 
       - name: Update Docker Hub description + README
         if: steps.creds.outputs.desc == 'true'
