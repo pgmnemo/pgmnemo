@@ -169,22 +169,30 @@ FROM pgmnemo.remember_fact(
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- T14: artifact_hash synthesis — non-NULL; value = 'fact-<entity_key>:<property>' (R2)
+-- Note: DO block required — CTE+JOIN cannot see rows inserted by the same command
+--       (PostgreSQL intra-command snapshot; fixes CTE visibility regression).
 -- ─────────────────────────────────────────────────────────────────────────────
 
-WITH rf AS (
-    SELECT id FROM pgmnemo.remember_fact(
+DO $$
+DECLARE v_id BIGINT; v_hash TEXT;
+BEGIN
+    SELECT id INTO v_id FROM pgmnemo.remember_fact(
         'tc_rmf', 'concept:art_hash_test', 'description',
         'artifact_hash synthesis test',
-        0.9, NULL, NULL, 'system', 99999
-    )
-)
-SELECT
-    (al.artifact_hash IS NOT NULL)                               AS hash_not_null,
-    (al.artifact_hash = 'fact-concept:art_hash_test:description') AS hash_correct
-FROM rf JOIN pgmnemo.agent_lesson al ON al.id = rf.id;
+        0.9, NULL, NULL, 'system', 99999);
+    SELECT artifact_hash INTO v_hash FROM pgmnemo.agent_lesson WHERE id = v_id;
+    IF v_hash IS NOT NULL AND v_hash = 'fact-concept:art_hash_test:description' THEN
+        RAISE NOTICE 'hash_ok: %', v_hash;
+    ELSE
+        RAISE NOTICE 'hash_FAIL: %', COALESCE(v_hash, 'NULL');
+    END IF;
+END;
+$$;
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- T15: dedup/merge — same (entity_key, property, value) → same row id (R3)
+-- Note: row_count check is a separate statement (CTE subqueries cannot see
+--       rows inserted within the same command due to PostgreSQL snapshot rules).
 -- ─────────────────────────────────────────────────────────────────────────────
 
 WITH
@@ -196,32 +204,36 @@ w2 AS (
     SELECT id AS id2
     FROM pgmnemo.remember_fact('tc_rmf','org:merge_test','status','active',0.95,NULL,NULL,'system',99999)
 )
-SELECT
-    (w1.id1 = w2.id2)  AS same_id,
-    (SELECT count(*) FROM pgmnemo.agent_lesson
-     WHERE topic = 'org:merge_test/status' AND role = 'tc_rmf') AS row_count
-FROM w1, w2;
+SELECT (w1.id1 = w2.id2) AS same_id FROM w1, w2;
+
+SELECT count(*) AS row_count
+FROM pgmnemo.agent_lesson
+WHERE topic = 'org:merge_test/status' AND role = 'tc_rmf';
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- T16: supersession — different value → prior superseded, new id, version_n+1 (R3)
+-- Note: DO block required to read prior_state by id after supersession
+--       (CTE subquery cannot see id from same-command insert via snapshot rule).
 -- ─────────────────────────────────────────────────────────────────────────────
 
-WITH
-w1 AS (
-    SELECT id AS id1
-    FROM pgmnemo.remember_fact('tc_rmf','org:super_test','status','draft',0.9,NULL,NULL,'system',99999)
-),
-w2 AS (
-    SELECT id AS id2, final_state AS new_s
-    FROM pgmnemo.remember_fact('tc_rmf','org:super_test','status','published',0.9,NULL,NULL,'system',99999)
-)
-SELECT
-    (w1.id1 <> w2.id2)  AS new_id,
-    w2.new_s             AS new_state,
-    (SELECT state FROM pgmnemo.agent_lesson WHERE id = w1.id1)  AS prior_state,
-    (SELECT count(*) FROM pgmnemo.agent_lesson
-     WHERE topic = 'org:super_test/status' AND role = 'tc_rmf') AS total_rows
-FROM w1, w2;
+DO $$
+DECLARE id1 BIGINT; id2 BIGINT; new_s TEXT; prior_s TEXT; ct INT;
+BEGIN
+    SELECT id INTO id1 FROM pgmnemo.remember_fact(
+        'tc_rmf','org:super_test','status','draft',0.9,NULL,NULL,'system',99999);
+    SELECT id, final_state INTO id2, new_s FROM pgmnemo.remember_fact(
+        'tc_rmf','org:super_test','status','published',0.9,NULL,NULL,'system',99999);
+    SELECT state INTO prior_s FROM pgmnemo.agent_lesson WHERE id = id1;
+    SELECT count(*) INTO ct FROM pgmnemo.agent_lesson
+        WHERE topic = 'org:super_test/status' AND role = 'tc_rmf';
+    IF id1 <> id2 AND new_s = 'validated' AND prior_s = 'superseded' AND ct = 2 THEN
+        RAISE NOTICE 'supersession_ok';
+    ELSE
+        RAISE NOTICE 'supersession_FAIL new_id=% new_s=% prior_s=% ct=%',
+            (id1 <> id2), new_s, prior_s, ct;
+    END IF;
+END;
+$$;
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- T17: NULL embedding → fail-open (write succeeds; R5)
@@ -254,6 +266,8 @@ WHERE topic = 'person:ada_lovelace:event:birth' AND role = 'tc_rmf';
 -- T19: remember_relation — idempotent on triple; content_type=relation
 -- ─────────────────────────────────────────────────────────────────────────────
 
+-- Note: rel_rows + ctype use separate statements; same-command CTE subqueries
+--       cannot see rows inserted by the function within the same command.
 SET client_min_messages = 'WARNING';   -- suppress entity-hubs-not-found NOTICE
 
 WITH
@@ -267,40 +281,48 @@ r2 AS (
         'tc_rmf','person:ada_lovelace','org:babbage_co','member_of',0.9,NULL,'system',99999
     ) AS rid
 )
-SELECT
-    (r1.rid = r2.rid) AS idempotent,
-    (SELECT count(*) FROM pgmnemo.agent_lesson
-     WHERE topic = 'person:ada_lovelace:member_of:org:babbage_co'
-       AND role = 'tc_rmf') AS rel_rows,
-    (SELECT content_type FROM pgmnemo.agent_lesson WHERE id = r1.rid) AS ctype
-FROM r1, r2;
+SELECT (r1.rid = r2.rid) AS idempotent FROM r1, r2;
 
 RESET client_min_messages;
+
+SELECT count(*) AS rel_rows
+FROM pgmnemo.agent_lesson
+WHERE topic = 'person:ada_lovelace:member_of:org:babbage_co' AND role = 'tc_rmf';
+
+SELECT content_type AS ctype
+FROM pgmnemo.agent_lesson
+WHERE topic = 'person:ada_lovelace:member_of:org:babbage_co' AND role = 'tc_rmf'
+LIMIT 1;
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- T20: verified_at gate — validated → NOT NULL (visible to recall);
 --      candidate (PII person:phone) → NULL (ghost; invisible to default recall)
 -- ─────────────────────────────────────────────────────────────────────────────
 
-WITH rf AS (
-    SELECT id
-    FROM pgmnemo.remember_fact(
+-- Note: DO blocks required — CTE+JOIN cannot see rows from same-command SRF.
+DO $$
+DECLARE v_id BIGINT; v_vis TIMESTAMPTZ;
+BEGIN
+    SELECT id INTO v_id FROM pgmnemo.remember_fact(
         'tc_rmf', 'concept:vis_v', 'title', 'visible',
-        0.9, NULL, NULL, 'system', 99999
-    )
-)
-SELECT (al.verified_at IS NOT NULL) AS validated_vis
-FROM rf JOIN pgmnemo.agent_lesson al ON al.id = rf.id;
+        0.9, NULL, NULL, 'system', 99999);
+    SELECT verified_at INTO v_vis FROM pgmnemo.agent_lesson WHERE id = v_id;
+    IF v_vis IS NOT NULL THEN RAISE NOTICE 'validated_vis_ok';
+    ELSE RAISE NOTICE 'validated_vis_FAIL'; END IF;
+END;
+$$;
 
-WITH rf AS (
-    SELECT id
-    FROM pgmnemo.remember_fact(
+DO $$
+DECLARE v_id BIGINT; v_vis TIMESTAMPTZ;
+BEGIN
+    SELECT id INTO v_id FROM pgmnemo.remember_fact(
         'tc_rmf', 'person:pii_vis', 'phone', '+15550000000',
-        0.9, NULL, NULL, 'system', 99999
-    )
-)
-SELECT (al.verified_at IS NULL) AS candidate_invis
-FROM rf JOIN pgmnemo.agent_lesson al ON al.id = rf.id;
+        0.9, NULL, NULL, 'system', 99999);
+    SELECT verified_at INTO v_vis FROM pgmnemo.agent_lesson WHERE id = v_id;
+    IF v_vis IS NULL THEN RAISE NOTICE 'candidate_invis_ok';
+    ELSE RAISE NOTICE 'candidate_invis_FAIL'; END IF;
+END;
+$$;
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- Cleanup
