@@ -9774,6 +9774,24 @@ END;
 $$;
 COMMENT ON FUNCTION pgmnemo.guard_no_test_project(INT, TEXT) IS 'Safety guard for test harnesses (R6, v0.12.0). Raises when project_id<=100 (production sentinel).';
 
+-- _evict_prior_lesson: shared bitemporal eviction helper (RFC-001 §D3 / ADDENDUM-2 R3)
+-- Called by remember_fact and remember_relation to close a prior active row.
+-- Centralises the t_valid_to / state / is_active / updated_at update so that
+-- all supersession paths are byte-for-byte identical and a single fix propagates everywhere.
+CREATE OR REPLACE FUNCTION pgmnemo._evict_prior_lesson(p_lesson_id BIGINT)
+RETURNS VOID LANGUAGE sql AS $$
+    UPDATE pgmnemo.agent_lesson
+    SET t_valid_to = NOW(),
+        state      = 'superseded',
+        is_active  = FALSE,
+        updated_at = NOW()
+    WHERE id = p_lesson_id;
+$$;
+COMMENT ON FUNCTION pgmnemo._evict_prior_lesson(BIGINT) IS
+    'Bitemporal eviction: close active lesson (t_valid_to=NOW, state=superseded, is_active=FALSE). '
+    'Shared helper called by remember_fact + remember_relation supersession paths. '
+    'RFC-001 §D3 + ADDENDUM-2 R3. v0.12.0.';
+
 -- _has_contact_pii
 CREATE OR REPLACE FUNCTION pgmnemo._has_contact_pii(p_property TEXT)
 RETURNS BOOLEAN LANGUAGE sql IMMUTABLE STRICT PARALLEL SAFE AS $$
@@ -9918,13 +9936,8 @@ BEGIN
             RETURN QUERY SELECT _prior.id, _merge_state;
             RETURN;
         ELSE
-            -- SUPERSEDE: different value — close prior row, open new version
-            UPDATE pgmnemo.agent_lesson
-            SET t_valid_to = NOW(),
-                state      = 'superseded',
-                is_active  = FALSE,
-                updated_at = NOW()
-            WHERE agent_lesson.id = _prior.id;
+            -- SUPERSEDE: different value — close prior row via shared eviction helper, open new version
+            PERFORM pgmnemo._evict_prior_lesson(_prior.id);
             _version_n := COALESCE(_prior.version_n, 0) + 1;
         END IF;
     ELSE
@@ -9992,6 +10005,21 @@ BEGIN
     END IF;
     _topic         := p_entity_key || ':event:' || p_event_label;
     _artifact_hash := COALESCE(p_artifact_hash, 'event-' || p_entity_key || ':' || p_event_label);
+
+    -- R3: Idempotency — FOR UPDATE dedup on (lower(topic), project_id).
+    -- Events are append-only (no supersession); same (entity_key, event_label, project_id)
+    -- returns the existing row id. Prevents duplicate event rows across concurrent writes.
+    SELECT id INTO _new_id
+    FROM pgmnemo.agent_lesson
+    WHERE lower(topic) = lower(_topic)
+      AND (p_project_id IS NULL OR project_id = p_project_id)
+      AND is_active
+      AND t_valid_to = 'infinity'::TIMESTAMPTZ
+    LIMIT 1 FOR UPDATE;
+    IF FOUND THEN
+        RETURN _new_id;
+    END IF;
+
     IF p_source_type = 'auto_captured' THEN
         _final_state := 'candidate';
     ELSIF p_source_type = 'system' THEN

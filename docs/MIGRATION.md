@@ -732,3 +732,162 @@ SELECT edge_kind, COUNT(*) FROM pgmnemo.mem_edge GROUP BY edge_kind;          --
 
 File a GitHub issue with `version()` output + sample query if anything looks off.
 
+---
+
+## §C — `ingest_entity` → `remember_fact` (v0.12.0+)
+
+**Available from:** pgmnemo 0.12.0  
+**Effort:** zero schema changes, drop-in function swap  
+**RFC reference:** RFC-001 §D2 + ADDENDUM-2 R4
+
+### Background
+
+Before v0.12.0, callers who wanted to write structured entity properties used
+`pgmnemo.ingest()` directly (the generic low-level writer). Some early adopters
+also used an informal `ingest_entity` wrapper that populated `content_type = 'fact'`
+but left `version_n = 0` (the pre-bitemporality sentinel).
+
+`remember_fact` (v0.12.0) is the canonical replacement. It is a **drop-in upgrade**:
+same `entity_key + project_id` identity, same underlying table, but now with:
+
+- Bitemporal supersession (different value → prior row closed, new version opened)
+- PII-aware state routing (ADR-61 D4 — `email/phone/full_name/address/telegram` on
+  `person:*` keys → `candidate` always, even for `system` source)
+- Synthesized non-NULL `artifact_hash` (`'fact-' || entity_key || ':' || property`)
+- FOR UPDATE write-race guard
+- `version_n` chain starting at 1 (rows pre-dating `remember_fact` use `version_n = 0`)
+
+### version_n = 0 sentinel
+
+Rows written by legacy `ingest_entity` or direct `ingest()` calls carry `version_n = 0`
+(the default). This sentinel is preserved — no backfill is needed. When `remember_fact`
+finds an existing active row for the same `(lower(topic), project_id)`, it treats it
+uniformly: same value → merge (confidence boost); different value → supersede
+(`version_n = 0 + 1 = 1`). The version chain is correct from the first typed write.
+
+### Migration steps
+
+**Step 1: Upgrade the extension**
+
+```sql
+ALTER EXTENSION pgmnemo UPDATE TO '0.12.0';
+```
+
+No schema change. `remember_fact` is now available.
+
+**Step 2: Swap the call site**
+
+Before (legacy ingest_entity pattern):
+
+```python
+# Legacy: direct ingest() with manual content_type
+pgmnemo.ingest(
+    role='agent',
+    topic=f"{entity_key}/{property}",
+    lesson_text=value,
+    content_type='fact',
+    project_id=project_id,
+)
+```
+
+After (`remember_fact`):
+
+```python
+# remember_fact: single call, all routing inside
+pgmnemo.remember_fact(
+    p_role='agent',
+    p_entity_key=entity_key,   # e.g. 'person:alice'
+    p_property=property,        # e.g. 'email'
+    p_value=value,
+    p_confidence=0.85,
+    p_source_type='agent_authored',
+    p_project_id=project_id,
+)
+```
+
+Or in SQL directly:
+
+```sql
+SELECT id, final_state
+FROM pgmnemo.remember_fact(
+    'my_role',
+    'person:alice',
+    'email',
+    'alice@example.com',
+    0.85,          -- confidence
+    NULL,          -- auto-detect PII
+    NULL,          -- embedding (can be backfilled later)
+    'agent_authored',
+    :my_project_id
+);
+```
+
+**Step 3 (optional): Backfill content_type for existing legacy rows**
+
+Legacy `ingest()`/`ingest_entity` rows may have `content_type IS NULL` or a generic
+value. To opt them into `content_type = 'fact'` for typed-recall queries:
+
+```sql
+-- Safe batched update — set content_type to 'fact' for entity-property rows.
+-- Match on your own topic convention (e.g. 'person:%/%' for person properties).
+UPDATE pgmnemo.agent_lesson
+SET content_type = 'fact',
+    updated_at   = NOW()
+WHERE content_type IS NULL
+  AND topic LIKE '%/%'          -- adjust to your topic encoding
+  AND project_id = :my_project_id
+  AND is_active;
+-- Verify: SELECT COUNT(*) FROM pgmnemo.agent_lesson WHERE content_type IS NULL AND project_id = :my_project_id;
+```
+
+**Step 4 (optional): Promote PII candidate rows after human review**
+
+Facts written for PII properties (`email`, `phone`, etc. on `person:*` keys) land in
+`state = 'candidate'` and are invisible to default recall (`verified_at IS NULL`). After
+a human review step:
+
+```sql
+UPDATE pgmnemo.agent_lesson
+SET state       = 'validated',
+    verified_at = NOW(),
+    updated_at  = NOW()
+WHERE project_id    = :my_project_id
+  AND state         = 'candidate'
+  AND content_type  = 'fact'
+  AND metadata->>'entity_key' LIKE 'person:%'
+  -- add your review condition here, e.g.:
+  AND id IN (SELECT id FROM your_reviewed_ids_table);
+```
+
+### Identity / dedup guarantee
+
+`remember_fact` deduplicates on `(lower(entity_key) || '/' || lower(property), project_id)`.
+This is the same topic encoding as a well-formed `ingest_entity` call. Existing rows are
+**absorbed** on first `remember_fact` write — no forks, no orphans.
+
+If the new value differs from the stored value, the old row is bittemporally closed
+(`t_valid_to = NOW()`, `state = 'superseded'`, `is_active = FALSE`) and a new row is
+inserted with `version_n = prior.version_n + 1`. The superseded row is retained for
+audit/history queries.
+
+### Verification
+
+```sql
+-- Check active facts for your entity
+SELECT topic, lesson_text, state, version_n, t_valid_from, t_valid_to
+FROM pgmnemo.agent_lesson
+WHERE project_id = :my_project_id
+  AND content_type = 'fact'
+  AND topic LIKE 'person:alice/%'
+ORDER BY topic, version_n;
+
+-- Check no orphaned version_n=0 rows are blocking supersession
+SELECT topic, COUNT(*) AS versions
+FROM pgmnemo.agent_lesson
+WHERE project_id = :my_project_id
+  AND content_type = 'fact'
+  AND is_active
+GROUP BY topic
+HAVING COUNT(*) > 1;  -- should be empty; >1 means duplicate active rows
+```
+
