@@ -1,6 +1,6 @@
 -- typed_write_api.sql
 -- pgmnemo W2 draft — typed ingest / mem_write() with p_content_type
--- Reconstructed from context for MEM-ERA-W1 salvage (original was uncommitted, lost).
+-- Design reference only; implementation superseded by remember_fact/event/relation in v0.12.0.
 -- This draft captures the design intent; implementation is for W2 iteration.
 --
 -- Context:
@@ -17,7 +17,7 @@
 --   This draft implements BOTH: overload for backward compat + mem_write() facade.
 --
 -- SPDX-License-Identifier: Apache-2.0
--- Status: DRAFT (uncommitted — recreated for W2 from MEM-ERA-W1 salvage)
+-- Status: DESIGN REFERENCE (implementation delivered via remember_fact/event/relation)
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- pgmnemo.ingest — v0.12.0 typed overload (adds p_content_type as 10th param)

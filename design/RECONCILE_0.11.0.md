@@ -1,8 +1,8 @@
 # pgmnemo — Reconciliation Report: main ↔ v0.11.0
 
 **Date:** 2026-06-23  
-**Task:** MEM-ERA-W1 — Epoch of Agent Memory, Week 1  
-**Author:** SWDEV agent (MEM-ERA-W1)
+**Task:** v0.11.0 branch reconciliation  
+**Author:** release tooling
 
 ---
 
@@ -57,7 +57,7 @@ At time of reconciliation, **all branches had clean working trees** — no untra
 - `extension/sql/typed_write_api.sql` — **NOT FOUND** (see W2 note below)
 
 ### `feat/mem-era-p0.2-typed-recall` release contamination
-This branch contains v0.10.1 release commits (PGMREL-0101 series) that should not be on a feature branch. **This branch is local-only** (no `origin/` tracking). The typed-recall feature (`69a4d0e`) is now merged into main via `0b22e5f`.
+This branch contains v0.10.1 release commits (prior release commits) that should not be on a feature branch. **This branch is local-only** (no `origin/` tracking). The typed-recall feature (`69a4d0e`) is now merged into main via `0b22e5f`.
 
 **Recommended action (human decision required):**  
 Since the branch is local-only, it is safe to either:
@@ -79,7 +79,7 @@ The `extension/sql/typed_write_api.sql` draft was described as an untracked (unc
 
 **Action required for W2:** The write-API draft must be recreated from scratch. The typed recall feature (P0.2) that IS merged provides the pattern for `p_content_types` filtering in `recall_hybrid`. The write-API (W2) would add a `mem_write()` function with typed content-type tagging on ingest.
 
-**MEM-ERA-W1 addendum (salvage):** Draft reconstructed and committed to `integration/0.12.0` at `94c1ba2`. File: `extension/sql/typed_write_api.sql`. Implements:
+**Draft reconstructed and committed to** `integration/0.12.0` at `94c1ba2`. File: `extension/sql/typed_write_api.sql`. Implements:
 - `pgmnemo.ingest()` 10-param typed overload (`p_content_type TEXT DEFAULT NULL`)
 - `pgmnemo.mem_write()` ergonomic facade with content_type first-class
 - Inline regression smoke tests (W2-T1/T2/T3)
@@ -114,4 +114,4 @@ This branch is ready for:
 
 ---
 
-*MEM-ERA-W1 reconciliation complete. Main is coherent at 0.11.0. integration/0.12.0 is ready.*
+*Branch reconciliation complete. Main is coherent at 0.11.0. integration/0.12.0 is ready.*

@@ -1,0 +1,248 @@
+-- typed_recall_fast.sql
+-- pg_regress tests for pgmnemo v0.11.1: MEM-ERA-0111 — p_content_types on hot-path
+-- Covers recall_fast() and recall_lessons() gaining the typed recall parameter.
+--
+-- Coverage:
+--   T1:  recall_fast signature has 6 params (p_content_types as 6th)
+--   T2:  recall_lessons signature has 8 params (p_content_types as 8th)
+--   T3:  recall_fast p_content_types=NULL (default) — backward-compat, returns rows
+--   T4:  recall_fast p_content_types=ARRAY['procedure'] — only procedure rows returned
+--   T5:  recall_fast p_content_types=ARRAY[]::text[] — zero rows
+--   T6:  recall_fast p_content_types=ARRAY['procedure','fact'] — correct multi-type filter
+--   T7:  recall_lessons vector-only path: p_content_types=NULL → all rows
+--   T8:  recall_lessons vector-only path: p_content_types=ARRAY['fact'] → only fact rows
+--   T9:  recall_lessons vector-only path: empty array → zero rows
+--   T10: recall_fast with NULL (default) == recall_fast with explicit NULL (backward compat)
+--
+-- Prerequisites: pgmnemo installed (default_version = '0.11.1').
+-- Gate: off so we can insert raw rows without provenance.
+-- track_recall_recency: off — avoids stamping side-effects for clean counts.
+
+SET pgmnemo.gate_strict = 'off';
+SET pgmnemo.include_unverified = 'on';
+SET pgmnemo.track_recall_recency = 'off';
+SET pgmnemo.disable_hybrid = 'on';   -- force vector-only path in recall_lessons
+
+ALTER EXTENSION pgmnemo UPDATE TO '0.12.0';
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- T1: recall_fast has 6 parameters
+-- ─────────────────────────────────────────────────────────────────────────────
+
+SELECT pronargs = 6 AS recall_fast_has_six_params
+FROM pg_proc p
+JOIN pg_namespace n ON n.oid = p.pronamespace
+WHERE n.nspname = 'pgmnemo'
+  AND p.proname = 'recall_fast'
+  AND p.pronargs = 6;
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- T2: recall_lessons has 8 parameters
+-- ─────────────────────────────────────────────────────────────────────────────
+
+SELECT pronargs = 8 AS recall_lessons_has_eight_params
+FROM pg_proc p
+JOIN pg_namespace n ON n.oid = p.pronamespace
+WHERE n.nspname = 'pgmnemo'
+  AND p.proname = 'recall_lessons'
+  AND p.pronargs = 8;
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Setup: insert typed lessons with embeddings (all-zeros, same direction, so
+-- cosine similarity is stable for ordering tests).
+-- Role 'tc_rf01' isolates this test's data.
+-- content_types: procedure (×3), fact (×2), entity (×1), NULL (×1)
+-- ─────────────────────────────────────────────────────────────────────────────
+
+INSERT INTO pgmnemo.agent_lesson (role, topic, lesson_text, commit_sha, content_type, embedding)
+VALUES
+    ('tc_rf01', 'procedure alpha',   'procedure alpha beta gamma delta epsilon', 'rf01-pa1', 'procedure',
+     (SELECT array_fill(0.1, ARRAY[1024])::vector(1024))),
+    ('tc_rf01', 'procedure bravo',   'procedure alpha beta gamma delta epsilon', 'rf01-pa2', 'procedure',
+     (SELECT array_fill(0.1, ARRAY[1024])::vector(1024))),
+    ('tc_rf01', 'procedure charlie', 'procedure alpha beta gamma delta epsilon', 'rf01-pa3', 'procedure',
+     (SELECT array_fill(0.1, ARRAY[1024])::vector(1024))),
+    ('tc_rf01', 'fact alpha',        'fact alpha beta gamma delta kappa',        'rf01-fa1', 'fact',
+     (SELECT array_fill(0.1, ARRAY[1024])::vector(1024))),
+    ('tc_rf01', 'fact bravo',        'fact alpha beta gamma delta kappa',        'rf01-fa2', 'fact',
+     (SELECT array_fill(0.1, ARRAY[1024])::vector(1024))),
+    ('tc_rf01', 'entity alpha',      'entity alpha beta gamma delta lambda',     'rf01-ea1', 'entity',
+     (SELECT array_fill(0.1, ARRAY[1024])::vector(1024))),
+    ('tc_rf01', 'untyped alpha',     'untyped alpha beta gamma delta mu',        'rf01-un1',  NULL,
+     (SELECT array_fill(0.1, ARRAY[1024])::vector(1024)));
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- T3: recall_fast p_content_types=NULL (implicit default) — all 7 rows visible
+-- ─────────────────────────────────────────────────────────────────────────────
+
+SELECT count(*) AS rf_null_default_count
+FROM pgmnemo.recall_fast(
+    array_fill(0.1, ARRAY[1024])::vector(1024),
+    20,
+    'tc_rf01'
+);
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- T4: recall_fast p_content_types=ARRAY['procedure'] — exactly 3 procedure rows
+-- ─────────────────────────────────────────────────────────────────────────────
+
+SELECT count(*) AS rf_procedure_count
+FROM pgmnemo.recall_fast(
+    array_fill(0.1, ARRAY[1024])::vector(1024),
+    20,
+    'tc_rf01',
+    NULL,
+    NULL,
+    ARRAY['procedure']
+);
+
+-- All returned rows must have content_type = 'procedure'
+SELECT
+    count(*) AS returned_rows,
+    bool_and(al.content_type = 'procedure') AS all_are_procedure
+FROM pgmnemo.recall_fast(
+    array_fill(0.1, ARRAY[1024])::vector(1024),
+    20,
+    'tc_rf01',
+    NULL,
+    NULL,
+    ARRAY['procedure']
+) r
+JOIN pgmnemo.agent_lesson al ON al.id = r.lesson_id;
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- T5: recall_fast empty array → zero rows
+-- ─────────────────────────────────────────────────────────────────────────────
+
+SELECT count(*) AS rf_empty_array_count
+FROM pgmnemo.recall_fast(
+    array_fill(0.1, ARRAY[1024])::vector(1024),
+    20,
+    'tc_rf01',
+    NULL,
+    NULL,
+    ARRAY[]::text[]
+);
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- T6: recall_fast multi-type filter — 5 rows (3 procedure + 2 fact)
+-- ─────────────────────────────────────────────────────────────────────────────
+
+SELECT count(*) AS rf_proc_and_fact_count
+FROM pgmnemo.recall_fast(
+    array_fill(0.1, ARRAY[1024])::vector(1024),
+    20,
+    'tc_rf01',
+    NULL,
+    NULL,
+    ARRAY['procedure', 'fact']
+);
+
+SELECT
+    count(*) AS returned_rows,
+    bool_and(al.content_type IN ('procedure', 'fact')) AS all_in_filter
+FROM pgmnemo.recall_fast(
+    array_fill(0.1, ARRAY[1024])::vector(1024),
+    20,
+    'tc_rf01',
+    NULL,
+    NULL,
+    ARRAY['procedure', 'fact']
+) r
+JOIN pgmnemo.agent_lesson al ON al.id = r.lesson_id;
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- T7: recall_lessons vector-only path (disable_hybrid=on), NULL filter → 7 rows
+-- ─────────────────────────────────────────────────────────────────────────────
+
+SELECT count(*) AS rl_null_default_count
+FROM pgmnemo.recall_lessons(
+    array_fill(0.1, ARRAY[1024])::vector(1024),
+    20,
+    'tc_rf01'
+);
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- T8: recall_lessons vector-only: p_content_types=ARRAY['fact'] → 2 fact rows
+-- ─────────────────────────────────────────────────────────────────────────────
+
+SELECT count(*) AS rl_fact_count
+FROM pgmnemo.recall_lessons(
+    array_fill(0.1, ARRAY[1024])::vector(1024),
+    20,
+    'tc_rf01',
+    NULL,   -- project_id_filter
+    NULL,   -- query_text (disable_hybrid already set)
+    NULL,   -- as_of_ts
+    NULL,   -- exclude_dag_id
+    ARRAY['fact']
+);
+
+SELECT
+    count(*) AS returned_rows,
+    bool_and(al.content_type = 'fact') AS all_are_fact
+FROM pgmnemo.recall_lessons(
+    array_fill(0.1, ARRAY[1024])::vector(1024),
+    20,
+    'tc_rf01',
+    NULL,
+    NULL,
+    NULL,
+    NULL,
+    ARRAY['fact']
+) r
+JOIN pgmnemo.agent_lesson al ON al.id = r.lesson_id;
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- T9: recall_lessons vector-only: empty array → zero rows
+-- ─────────────────────────────────────────────────────────────────────────────
+
+SELECT count(*) AS rl_empty_array_count
+FROM pgmnemo.recall_lessons(
+    array_fill(0.1, ARRAY[1024])::vector(1024),
+    20,
+    'tc_rf01',
+    NULL, NULL, NULL, NULL,
+    ARRAY[]::text[]
+);
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- T10: recall_fast backward compat — 5-arg call == 6-arg call with NULL
+--      Both calls return the same set of lesson_ids (EXCEPT produces 0 rows).
+-- ─────────────────────────────────────────────────────────────────────────────
+
+WITH
+five_arg AS (
+    SELECT lesson_id
+    FROM pgmnemo.recall_fast(
+        array_fill(0.1, ARRAY[1024])::vector(1024),
+        20,
+        'tc_rf01'
+    )
+),
+six_arg_null AS (
+    SELECT lesson_id
+    FROM pgmnemo.recall_fast(
+        array_fill(0.1, ARRAY[1024])::vector(1024),
+        20,
+        'tc_rf01',
+        NULL,
+        NULL,
+        NULL
+    )
+),
+diff AS (
+    SELECT lesson_id FROM five_arg
+    EXCEPT
+    SELECT lesson_id FROM six_arg_null
+)
+SELECT count(*) = 0 AS backward_compat_identical
+FROM diff;
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Cleanup
+-- ─────────────────────────────────────────────────────────────────────────────
+
+DELETE FROM pgmnemo.agent_lesson WHERE role = 'tc_rf01';
+
+RESET pgmnemo.disable_hybrid;

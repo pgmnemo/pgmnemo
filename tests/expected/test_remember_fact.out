@@ -1,0 +1,396 @@
+-- test_remember_fact.sql
+-- pg_regress tests for pgmnemo v0.12.0: Typed Write API
+-- RFC-001 §D2 + ADDENDUM-2 (7 correctness requirements)
+--
+-- Coverage:
+--   T1:  remember_fact signature: 11 params
+--   T2:  remember_event signature: 11 params
+--   T3:  remember_relation signature: 10 params
+--   T4:  _has_contact_pii — PII closed set returns TRUE
+--   T5:  _has_contact_pii — non-PII returns FALSE
+--   T6:  canonical_slug normalisation (person, org)
+--   T7:  guard_no_test_project blocks project_id=42 (<=100)
+--   T8:  guard_no_test_project allows project_id=99999 (>100)
+--   T9:  remember_fact PII routing: person:* + email + system → candidate ALWAYS
+--   T10: remember_fact state: system + non-PII → validated
+--   T11: remember_fact state: agent_authored conf>=0.8, non-PII → validated
+--   T12: remember_fact state: agent_authored conf<0.8 → candidate
+--   T13: remember_fact state: auto_captured → candidate
+--   T14: remember_fact artifact_hash synthesized non-NULL (COALESCE; R2)
+--   T15: remember_fact dedup/merge — same value → same row id returned (R3)
+--   T16: remember_fact supersession — different value → prior superseded, new version (R3)
+--   T17: remember_fact NULL embedding → fail-open (write succeeds) (R5)
+--   T18: remember_event returns positive id; content_type=event
+--   T19: remember_relation idempotent on triple; content_type=relation
+--   T20: verified_at gate — validated→NOT NULL (visible); candidate (PII)→NULL (ghost)
+--
+-- Role 'tc_rmf' isolates this test's data from all other tests.
+-- Project_id 99999 (>100) passes guard_no_test_project.
+-- gate_strict off: bypass provenance gate for isolated testing.
+SET pgmnemo.gate_strict = 'off';
+SET pgmnemo.include_unverified = 'on';
+SET pgmnemo.track_recall_recency = 'off';
+ALTER EXTENSION pgmnemo UPDATE TO '0.12.0';
+NOTICE:  version "0.12.0" of extension "pgmnemo" is already installed
+-- ─────────────────────────────────────────────────────────────────────────────
+-- T1: remember_fact has 11 parameters
+-- ─────────────────────────────────────────────────────────────────────────────
+SELECT count(*) = 1 AS rf_sig_ok
+FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+WHERE n.nspname = 'pgmnemo' AND p.proname = 'remember_fact' AND p.pronargs = 11;
+ rf_sig_ok 
+-----------
+ t
+(1 row)
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- T2: remember_event has 11 parameters
+-- ─────────────────────────────────────────────────────────────────────────────
+SELECT count(*) = 1 AS re_sig_ok
+FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+WHERE n.nspname = 'pgmnemo' AND p.proname = 'remember_event' AND p.pronargs = 11;
+ re_sig_ok 
+-----------
+ t
+(1 row)
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- T3: remember_relation has 10 parameters
+-- ─────────────────────────────────────────────────────────────────────────────
+SELECT count(*) = 1 AS rr_sig_ok
+FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+WHERE n.nspname = 'pgmnemo' AND p.proname = 'remember_relation' AND p.pronargs = 10;
+ rr_sig_ok 
+-----------
+ t
+(1 row)
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- T4: _has_contact_pii — PII properties return TRUE
+-- ─────────────────────────────────────────────────────────────────────────────
+SELECT
+    pgmnemo._has_contact_pii('email')     AS email_pii,
+    pgmnemo._has_contact_pii('phone')     AS phone_pii,
+    pgmnemo._has_contact_pii('full_name') AS fn_pii,
+    pgmnemo._has_contact_pii('address')   AS addr_pii,
+    pgmnemo._has_contact_pii('telegram')  AS tg_pii;
+ email_pii | phone_pii | fn_pii | addr_pii | tg_pii 
+-----------+-----------+--------+----------+--------
+ t         | t         | t      | t        | t
+(1 row)
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- T5: _has_contact_pii — non-PII properties return FALSE
+-- ─────────────────────────────────────────────────────────────────────────────
+SELECT
+    pgmnemo._has_contact_pii('affiliation') AS aff_pii,
+    pgmnemo._has_contact_pii('occupation')  AS occ_pii;
+ aff_pii | occ_pii 
+---------+---------
+ f       | f
+(1 row)
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- T6: canonical_slug normalisation
+-- ─────────────────────────────────────────────────────────────────────────────
+SELECT pgmnemo.canonical_slug('person', 'Ada Lovelace') AS slug_person;
+ slug_person
+---------------------
+ person:ada_lovelace
+(1 row)
+
+SELECT pgmnemo.canonical_slug('org', 'ACME Corp.')      AS slug_org;
+ slug_org
+---------------
+ org:acme_corp
+(1 row)
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- T7: guard_no_test_project — blocks IDs <= 100
+-- ─────────────────────────────────────────────────────────────────────────────
+DO $$
+BEGIN
+    PERFORM pgmnemo.guard_no_test_project(42);
+    RAISE NOTICE 'UNEXPECTED: project_id=42 not blocked';
+EXCEPTION WHEN OTHERS THEN
+    RAISE NOTICE 'guard_ok: blocked project_id=42 (<=100)';
+END;
+$$;
+NOTICE:  guard_ok: blocked project_id=42 (<=100)
+DO
+-- ─────────────────────────────────────────────────────────────────────────────
+-- T8: guard_no_test_project — allows IDs > 100
+-- ─────────────────────────────────────────────────────────────────────────────
+DO $$
+BEGIN
+    PERFORM pgmnemo.guard_no_test_project(99999);
+    RAISE NOTICE 'guard_ok: allowed project_id=99999 (>100)';
+EXCEPTION WHEN OTHERS THEN
+    RAISE NOTICE 'UNEXPECTED: blocked project_id=99999: %', SQLERRM;
+END;
+$$;
+NOTICE:  guard_ok: allowed project_id=99999 (>100)
+DO
+-- ─────────────────────────────────────────────────────────────────────────────
+-- T9: PII routing — person:* + email + system source → candidate ALWAYS (R1/ADR-61 D4)
+-- ─────────────────────────────────────────────────────────────────────────────
+SELECT final_state AS pii_sys_state
+FROM pgmnemo.remember_fact(
+    'tc_rmf',
+    'person:ada_lovelace',
+    'email',
+    'ada@example.com',
+    0.95,      -- high confidence (would be validated if not PII)
+    NULL,      -- auto-detect PII
+    NULL,      -- no embedding
+    'system',  -- system source → normally validated; PII overrides to candidate
+    99999      -- test project_id
+);
+ pii_sys_state 
+---------------
+ candidate
+(1 row)
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- T10: system source + non-PII → validated
+-- ─────────────────────────────────────────────────────────────────────────────
+SELECT final_state AS sys_nonpii_state
+FROM pgmnemo.remember_fact(
+    'tc_rmf', 'person:ada_lovelace', 'affiliation', 'Babbage Institute',
+    0.9, NULL, NULL, 'system', 99999
+);
+ sys_nonpii_state 
+------------------
+ validated
+(1 row)
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- T11: agent_authored conf>=0.8, non-PII → validated
+-- ─────────────────────────────────────────────────────────────────────────────
+SELECT final_state AS agent_hi_state
+FROM pgmnemo.remember_fact(
+    'tc_rmf', 'person:ada_lovelace', 'occupation', 'Mathematician',
+    0.85, NULL, NULL, 'agent_authored', 99999
+);
+ agent_hi_state 
+----------------
+ validated
+(1 row)
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- T12: agent_authored conf<0.8 → candidate
+-- ─────────────────────────────────────────────────────────────────────────────
+SELECT final_state AS agent_lo_state
+FROM pgmnemo.remember_fact(
+    'tc_rmf', 'org:babbage_co', 'industry', 'Computing',
+    0.6, NULL, NULL, 'agent_authored', 99999
+);
+ agent_lo_state 
+----------------
+ candidate
+(1 row)
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- T13: auto_captured → candidate
+-- ─────────────────────────────────────────────────────────────────────────────
+SELECT final_state AS autocap_state
+FROM pgmnemo.remember_fact(
+    'tc_rmf', 'org:babbage_co', 'founded', '1837',
+    0.95, NULL, NULL, 'auto_captured', 99999
+);
+ autocap_state 
+---------------
+ candidate
+(1 row)
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- T14: artifact_hash synthesis — non-NULL; value = 'fact-<entity_key>:<property>' (R2)
+-- Note: DO block required — CTE+JOIN cannot see rows inserted by the same command
+--       (PostgreSQL intra-command snapshot; fixes CTE visibility regression).
+-- ─────────────────────────────────────────────────────────────────────────────
+DO $$
+DECLARE v_id BIGINT; v_hash TEXT;
+BEGIN
+    SELECT id INTO v_id FROM pgmnemo.remember_fact(
+        'tc_rmf', 'concept:art_hash_test', 'description',
+        'artifact_hash synthesis test',
+        0.9, NULL, NULL, 'system', 99999);
+    SELECT artifact_hash INTO v_hash FROM pgmnemo.agent_lesson WHERE id = v_id;
+    IF v_hash IS NOT NULL AND v_hash = 'fact-concept:art_hash_test:description' THEN
+        RAISE NOTICE 'hash_ok: %', v_hash;
+    ELSE
+        RAISE NOTICE 'hash_FAIL: %', COALESCE(v_hash, 'NULL');
+    END IF;
+END;
+$$;
+NOTICE:  hash_ok: fact-concept:art_hash_test:description
+DO
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- T15: dedup/merge — same (entity_key, property, value) → same row id (R3)
+-- Note: row_count check is a separate statement (CTE subqueries cannot see
+--       rows inserted within the same command due to PostgreSQL snapshot rules).
+-- ─────────────────────────────────────────────────────────────────────────────
+WITH
+w1 AS (
+    SELECT id AS id1
+    FROM pgmnemo.remember_fact('tc_rmf','org:merge_test','status','active',0.9,NULL,NULL,'system',99999)
+),
+w2 AS (
+    SELECT id AS id2
+    FROM pgmnemo.remember_fact('tc_rmf','org:merge_test','status','active',0.95,NULL,NULL,'system',99999)
+)
+SELECT (w1.id1 = w2.id2) AS same_id FROM w1, w2;
+ same_id
+---------
+ t
+(1 row)
+
+SELECT count(*) AS row_count
+FROM pgmnemo.agent_lesson
+WHERE topic = 'org:merge_test/status' AND role = 'tc_rmf';
+ row_count
+-----------
+         1
+(1 row)
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- T16: supersession — different value → prior superseded, new id, version_n+1 (R3)
+-- Note: DO block required to read prior_state by id after supersession
+--       (CTE subquery cannot see id from same-command insert via snapshot rule).
+-- ─────────────────────────────────────────────────────────────────────────────
+DO $$
+DECLARE id1 BIGINT; id2 BIGINT; new_s TEXT; prior_s TEXT; ct INT;
+BEGIN
+    SELECT id INTO id1 FROM pgmnemo.remember_fact(
+        'tc_rmf','org:super_test','status','draft',0.9,NULL,NULL,'system',99999);
+    SELECT id, final_state INTO id2, new_s FROM pgmnemo.remember_fact(
+        'tc_rmf','org:super_test','status','published',0.9,NULL,NULL,'system',99999);
+    SELECT state INTO prior_s FROM pgmnemo.agent_lesson WHERE id = id1;
+    SELECT count(*) INTO ct FROM pgmnemo.agent_lesson
+        WHERE topic = 'org:super_test/status' AND role = 'tc_rmf';
+    IF id1 <> id2 AND new_s = 'validated' AND prior_s = 'superseded' AND ct = 2 THEN
+        RAISE NOTICE 'supersession_ok';
+    ELSE
+        RAISE NOTICE 'supersession_FAIL new_id=% new_s=% prior_s=% ct=%',
+            (id1 <> id2), new_s, prior_s, ct;
+    END IF;
+END;
+$$;
+NOTICE:  supersession_ok
+DO
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- T17: NULL embedding → fail-open (write succeeds; R5)
+-- ─────────────────────────────────────────────────────────────────────────────
+SELECT (id > 0) AS null_emb_ok
+FROM pgmnemo.remember_fact(
+    'tc_rmf', 'concept:null_emb', 'note', 'null embedding test',
+    0.9, NULL, NULL, 'system', 99999
+);
+ null_emb_ok 
+-------------
+ t
+(1 row)
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- T18: remember_event — positive id; content_type=event; state=validated (system)
+-- ─────────────────────────────────────────────────────────────────────────────
+SELECT (pgmnemo.remember_event(
+    'tc_rmf',
+    'person:ada_lovelace',
+    'birth',
+    'Born in London',
+    '1815-12-10 00:00:00+00'::TIMESTAMPTZ,
+    0.9, NULL, 'system', 99999
+) > 0) AS event_ok;
+ event_ok 
+----------
+ t
+(1 row)
+
+SELECT content_type, state
+FROM pgmnemo.agent_lesson
+WHERE topic = 'person:ada_lovelace:event:birth' AND role = 'tc_rmf';
+ content_type | state
+--------------+-----------
+ event        | validated
+(1 row)
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- T19: remember_relation — idempotent on triple; content_type=relation
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Note: rel_rows + ctype use separate statements; same-command CTE subqueries
+--       cannot see rows inserted by the function within the same command.
+SET client_min_messages = 'WARNING';   -- suppress entity-hubs-not-found NOTICE
+WITH
+r1 AS (
+    SELECT pgmnemo.remember_relation(
+        'tc_rmf','person:ada_lovelace','org:babbage_co','member_of',0.9,NULL,'system',99999
+    ) AS rid
+),
+r2 AS (
+    SELECT pgmnemo.remember_relation(
+        'tc_rmf','person:ada_lovelace','org:babbage_co','member_of',0.9,NULL,'system',99999
+    ) AS rid
+)
+SELECT (r1.rid = r2.rid) AS idempotent FROM r1, r2;
+ idempotent
+------------
+ t
+(1 row)
+
+RESET client_min_messages;
+SELECT count(*) AS rel_rows
+FROM pgmnemo.agent_lesson
+WHERE topic = 'person:ada_lovelace:member_of:org:babbage_co' AND role = 'tc_rmf';
+ rel_rows
+----------
+        1
+(1 row)
+
+SELECT content_type AS ctype
+FROM pgmnemo.agent_lesson
+WHERE topic = 'person:ada_lovelace:member_of:org:babbage_co' AND role = 'tc_rmf'
+LIMIT 1;
+   ctype
+----------
+ relation
+(1 row)
+-- ─────────────────────────────────────────────────────────────────────────────
+-- T20: verified_at gate — validated → NOT NULL (visible to recall);
+--      candidate (PII person:phone) → NULL (ghost; invisible to default recall)
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Note: DO blocks required — CTE+JOIN cannot see rows from same-command SRF.
+DO $$
+DECLARE v_id BIGINT; v_vis TIMESTAMPTZ;
+BEGIN
+    SELECT id INTO v_id FROM pgmnemo.remember_fact(
+        'tc_rmf', 'concept:vis_v', 'title', 'visible',
+        0.9, NULL, NULL, 'system', 99999);
+    SELECT verified_at INTO v_vis FROM pgmnemo.agent_lesson WHERE id = v_id;
+    IF v_vis IS NOT NULL THEN RAISE NOTICE 'validated_vis_ok';
+    ELSE RAISE NOTICE 'validated_vis_FAIL'; END IF;
+END;
+$$;
+NOTICE:  validated_vis_ok
+DO
+DO $$
+DECLARE v_id BIGINT; v_vis TIMESTAMPTZ;
+BEGIN
+    SELECT id INTO v_id FROM pgmnemo.remember_fact(
+        'tc_rmf', 'person:pii_vis', 'phone', '+15550000000',
+        0.9, NULL, NULL, 'system', 99999);
+    SELECT verified_at INTO v_vis FROM pgmnemo.agent_lesson WHERE id = v_id;
+    IF v_vis IS NULL THEN RAISE NOTICE 'candidate_invis_ok';
+    ELSE RAISE NOTICE 'candidate_invis_FAIL'; END IF;
+END;
+$$;
+NOTICE:  candidate_invis_ok
+DO
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Cleanup
+-- ─────────────────────────────────────────────────────────────────────────────
+DELETE FROM pgmnemo.agent_lesson WHERE role = 'tc_rmf';
+DELETE 14
