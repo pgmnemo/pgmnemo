@@ -1,0 +1,260 @@
+-- test_v0120.sql
+-- pg_regress tests for pgmnemo v0.12.0: bitemporal internals + boundary conditions
+-- Complements test_remember_fact.sql (T1-T20: typed write API happy path).
+-- Coverage:
+--   BT1:  _evict_prior_lesson helper exists (pronargs=1)
+--   BT2:  _evict_prior_lesson direct call: is_active=F, state=superseded, t_valid_to<inf
+--   BT3:  remember_fact confidence out of [0,1] (1.1) → raises exception
+--   BT4:  remember_fact confidence=0.0 (min valid) → agent_authored → candidate
+--   BT5:  remember_fact confidence=1.0 (max valid) → agent_authored → validated
+--   BT6:  remember_fact confidence=0.8 (boundary, inclusive) → agent_authored → validated
+--   BT7:  remember_fact confidence=0.79 (just below 0.8) → agent_authored → candidate
+--   BT8:  remember_fact merge: GREATEST confidence raised + state promoted candidate→validated
+--   BT9:  remember_fact 3-gen chain: version_n=3 after two supersessions; 1 active row
+--   BT10: remember_event idempotency: same (entity_key, event_label) → same id
+--   BT11: remember_event two different labels → 2 distinct rows
+--   BT12: canonical_slug invalid type prefix → raises exception
+--   BT13: fact topic encoding: '<entity_key>/<property>' (lowercase slash-separated)
+--   BT14: has_contact_pii explicit TRUE override → candidate even for non-PII property
+--
+-- Role 'tc_v0120' isolates data. project_id=99999 (>100) passes guard_no_test_project.
+-- gate_strict off: bypass provenance gate for isolated testing.
+-- SPDX-License-Identifier: Apache-2.0
+
+SET pgmnemo.gate_strict = 'off';
+SET pgmnemo.include_unverified = 'on';
+SET pgmnemo.track_recall_recency = 'off';
+
+ALTER EXTENSION pgmnemo UPDATE TO '0.12.0';
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- BT1: _evict_prior_lesson helper exists (pronargs=1)
+-- ─────────────────────────────────────────────────────────────────────────────
+
+SELECT count(*) = 1 AS helper_ok
+FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+WHERE n.nspname = 'pgmnemo'
+  AND p.proname = '_evict_prior_lesson'
+  AND p.pronargs = 1;
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- BT2: _evict_prior_lesson direct call — columns set correctly
+-- ─────────────────────────────────────────────────────────────────────────────
+
+DO $$
+DECLARE
+    v_id BIGINT;
+    v_ok BOOLEAN;
+BEGIN
+    SELECT id INTO v_id
+    FROM pgmnemo.remember_fact(
+        'tc_v0120', 'org:evict_d', 'x', 'v',
+        0.9, NULL, NULL, 'system', 99999
+    );
+    PERFORM pgmnemo._evict_prior_lesson(v_id);
+    SELECT (NOT is_active) AND (state = 'superseded') AND (t_valid_to < 'infinity'::TIMESTAMPTZ)
+    INTO v_ok
+    FROM pgmnemo.agent_lesson WHERE id = v_id;
+    IF v_ok THEN
+        RAISE NOTICE 'evict_direct_ok';
+    ELSE
+        RAISE NOTICE 'evict_direct_FAIL';
+    END IF;
+END;
+$$;
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- BT3: confidence out of [0,1] → raises exception
+-- ─────────────────────────────────────────────────────────────────────────────
+
+DO $$
+BEGIN
+    PERFORM pgmnemo.remember_fact(
+        'tc_v0120', 'org:oob_conf', 'x', 'v',
+        1.1, NULL, NULL, 'system', 99999
+    );
+    RAISE NOTICE 'conf_oob_UNEXPECTED';
+EXCEPTION WHEN OTHERS THEN
+    RAISE NOTICE 'conf_oob_ok';
+END;
+$$;
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- BT4: confidence=0.0 (min valid) → no exception; agent_authored → candidate
+-- ─────────────────────────────────────────────────────────────────────────────
+
+SELECT final_state AS c0_st
+FROM pgmnemo.remember_fact(
+    'tc_v0120', 'org:conf_min', 'p', 'v',
+    0.0, NULL, NULL, 'agent_authored', 99999
+);
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- BT5: confidence=1.0 (max valid) → agent_authored >= 0.8 → validated
+-- ─────────────────────────────────────────────────────────────────────────────
+
+SELECT final_state AS c1_st
+FROM pgmnemo.remember_fact(
+    'tc_v0120', 'org:conf_max', 'p', 'v',
+    1.0, NULL, NULL, 'agent_authored', 99999
+);
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- BT6: confidence=0.8 (boundary, inclusive) → agent_authored >= 0.8 → validated
+-- ─────────────────────────────────────────────────────────────────────────────
+
+SELECT final_state AS c08_st
+FROM pgmnemo.remember_fact(
+    'tc_v0120', 'org:conf_08', 'p', 'v',
+    0.8, NULL, NULL, 'agent_authored', 99999
+);
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- BT7: confidence=0.79 (just below 0.8) → agent_authored → candidate
+-- ─────────────────────────────────────────────────────────────────────────────
+
+SELECT final_state AS c079_st
+FROM pgmnemo.remember_fact(
+    'tc_v0120', 'org:conf_079', 'p', 'v',
+    0.79, NULL, NULL, 'agent_authored', 99999
+);
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- BT8: merge same value — GREATEST confidence raised; state promoted candidate→validated
+-- ─────────────────────────────────────────────────────────────────────────────
+
+DO $$
+DECLARE
+    id1 BIGINT; id2 BIGINT; ms TEXT; cf REAL;
+BEGIN
+    -- First call: agent_authored, conf=0.6 → candidate
+    SELECT id INTO id1
+    FROM pgmnemo.remember_fact('tc_v0120','org:merge_c','prop','same_val',
+        0.6, NULL, NULL, 'agent_authored', 99999);
+    -- Second call: same value, system, conf=0.9 → merge → validated + GREATEST(0.6,0.9)=0.9
+    SELECT id, final_state INTO id2, ms
+    FROM pgmnemo.remember_fact('tc_v0120','org:merge_c','prop','same_val',
+        0.9, NULL, NULL, 'system', 99999);
+    SELECT confidence INTO cf FROM pgmnemo.agent_lesson WHERE id = id1;
+    IF id1 = id2 AND ms = 'validated' AND cf >= 0.89::REAL THEN
+        RAISE NOTICE 'merge_ok';
+    ELSE
+        RAISE NOTICE 'merge_FAIL same_id=% state=% conf=%', (id1=id2), ms, cf;
+    END IF;
+END;
+$$;
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- BT9: 3-generation chain — version_n=3 after two supersessions; only 1 active
+-- ─────────────────────────────────────────────────────────────────────────────
+
+DO $$
+BEGIN
+    PERFORM pgmnemo.remember_fact('tc_v0120','org:chain3','prop','alpha',0.9,NULL,NULL,'system',99999);
+    PERFORM pgmnemo.remember_fact('tc_v0120','org:chain3','prop','beta', 0.9,NULL,NULL,'system',99999);
+    PERFORM pgmnemo.remember_fact('tc_v0120','org:chain3','prop','gamma',0.9,NULL,NULL,'system',99999);
+END;
+$$;
+
+SELECT version_n AS chain_vn
+FROM pgmnemo.agent_lesson
+WHERE topic = 'org:chain3/prop' AND role = 'tc_v0120' AND is_active;
+
+SELECT count(*) = 1 AS one_active
+FROM pgmnemo.agent_lesson
+WHERE topic = 'org:chain3/prop' AND role = 'tc_v0120' AND is_active;
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- BT10: remember_event idempotency — same (entity_key, event_label) → same id
+-- ─────────────────────────────────────────────────────────────────────────────
+
+DO $$
+DECLARE
+    id1 BIGINT; id2 BIGINT;
+BEGIN
+    id1 := pgmnemo.remember_event(
+        'tc_v0120', 'person:bt_idem_ev', 'start', 'Started',
+        NULL::TIMESTAMPTZ, 0.9, NULL, 'system', 99999
+    );
+    id2 := pgmnemo.remember_event(
+        'tc_v0120', 'person:bt_idem_ev', 'start', 'Started',
+        NULL::TIMESTAMPTZ, 0.9, NULL, 'system', 99999
+    );
+    IF id1 = id2 THEN
+        RAISE NOTICE 'event_idem_ok';
+    ELSE
+        RAISE NOTICE 'event_idem_FAIL id1=% id2=%', id1, id2;
+    END IF;
+END;
+$$;
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- BT11: remember_event different labels → 2 distinct rows
+-- ─────────────────────────────────────────────────────────────────────────────
+
+DO $$
+BEGIN
+    PERFORM pgmnemo.remember_event('tc_v0120','person:bt_two_ev','born','Birth event',
+        NULL::TIMESTAMPTZ, 0.9, NULL, 'system', 99999);
+    PERFORM pgmnemo.remember_event('tc_v0120','person:bt_two_ev','died','Death event',
+        NULL::TIMESTAMPTZ, 0.9, NULL, 'system', 99999);
+END;
+$$;
+
+SELECT count(*) = 2 AS two_ev_ok
+FROM pgmnemo.agent_lesson
+WHERE role = 'tc_v0120'
+  AND content_type = 'event'
+  AND topic LIKE 'person:bt_two_ev%';
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- BT12: canonical_slug invalid type prefix → raises exception
+-- ─────────────────────────────────────────────────────────────────────────────
+
+DO $$
+BEGIN
+    PERFORM pgmnemo.canonical_slug('unknown_type', 'foo');
+    RAISE NOTICE 'slug_type_UNEXPECTED';
+EXCEPTION WHEN OTHERS THEN
+    RAISE NOTICE 'slug_type_ok';
+END;
+$$;
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- BT13: fact topic encoding — '<entity_key>/<property>' (lowercase, slash separator)
+-- ─────────────────────────────────────────────────────────────────────────────
+
+DO $$
+DECLARE
+    v_id    BIGINT;
+    v_topic TEXT;
+BEGIN
+    SELECT id INTO v_id
+    FROM pgmnemo.remember_fact(
+        'tc_v0120', 'org:topic_test', 'myprop', 'val',
+        0.9, NULL, NULL, 'system', 99999
+    );
+    SELECT topic INTO v_topic FROM pgmnemo.agent_lesson WHERE id = v_id;
+    IF v_topic = 'org:topic_test/myprop' THEN
+        RAISE NOTICE 'topic_ok';
+    ELSE
+        RAISE NOTICE 'topic_FAIL: %', v_topic;
+    END IF;
+END;
+$$;
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- BT14: has_contact_pii explicit TRUE override → candidate even for non-PII property
+-- ─────────────────────────────────────────────────────────────────────────────
+
+SELECT final_state AS pii_ovrd_s
+FROM pgmnemo.remember_fact(
+    'tc_v0120', 'person:pii_ovrd', 'occupation', 'Engineer',
+    0.9, TRUE, NULL, 'system', 99999
+);
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Cleanup
+-- ─────────────────────────────────────────────────────────────────────────────
+
+DELETE FROM pgmnemo.agent_lesson WHERE role = 'tc_v0120';
