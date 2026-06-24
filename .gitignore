@@ -54,6 +54,7 @@ spec/*
 !spec/v061/
 !spec/v062/
 !spec/v063/
+!spec/v0120/
 research/
 design/*
 !design/RFC-001-memory-organism.md
