@@ -74,6 +74,43 @@
             "RE-13: metadata.entity_key + metadata.event_label populated"
         ]
     },
+    "real_db_integration_tests_remember_relation": {
+        "harness": "psycopg2 Python — real PostgreSQL 17.10 (not mocks)",
+        "postgres": "17.10",
+        "pgvector": "0.8.3",
+        "database": "pgmnemo_rel_bench (fresh CREATE DATABASE + pgmnemo 0.12.0 flat SQL)",
+        "result": "PASS — 24/24 tests",
+        "tests_run": 24,
+        "tests_passed": 24,
+        "date_run": "2026-06-24",
+        "addendum2_r8_fix": "FIXED — added CREATE UNIQUE INDEX IF NOT EXISTS uq_mem_edge_active to 0.11.1→0.12.0 delta; ensures ON CONFLICT (source_id, target_id, relation_type) WHERE valid_until IS NULL is always valid regardless of upgrade path",
+        "coverage": [
+            "T1: uq_mem_edge_active partial index present (ADDENDUM-2 R8 fix verified)",
+            "T2: add_edge first insert succeeds",
+            "T3: add_edge idempotent — single active row on repeated triple",
+            "T4: add_edge max-mode — weight non-decreasing",
+            "T5: add_edge avg-mode — weight averaged correctly",
+            "T6: add_edge replace-mode — weight replaced unconditionally",
+            "T7: three independent active edges (CAUSED_BY, CO_OCCURRED, ENTITY_LINK)",
+            "T8: remember_relation returns positive lesson_id",
+            "T9: content_type=relation",
+            "T10: topic encoding = from_key:relation_type:to_key",
+            "T11: artifact_hash = 'rel-from:type:to' (ADDENDUM-2 R2)",
+            "T12: idempotent — second call returns same id, raises confidence (GREATEST)",
+            "T13: system source → validated + verified_at NOT NULL",
+            "T14: auto_captured → candidate + verified_at NULL (ghost)",
+            "T15: agent_authored conf≥0.8 → validated",
+            "T16: agent_authored conf<0.8 → candidate",
+            "T17: mem_edge dual-write when entity hubs present",
+            "T18: no-hub graceful degradation — lesson written, add_edge skipped with NOTICE",
+            "T19: invalid from_key raises exception",
+            "T20: invalid to_key raises exception",
+            "T21: NULL relation_type raises exception",
+            "T22: NULL embedding fail-open (ADDENDUM-2 R5)",
+            "T23: guard_no_test_project blocks prod-range project_id (ADDENDUM-2 R6)",
+            "T24: metadata contains from_key, to_key, relation_type"
+        ]
+    },
     "significance_required": false,
     "significance_note": "Typed writes are a correctness/parity capability. No recall-quality metric is claimed. Adversarial review (2026-06-24): Memanto (arXiv:2604.22085) achieves 87.1% on LoCoMo vs pgmnemo 84.09% — gap acknowledged, not overclaimed. This release does not change recall mechanics; a benchmarking sprint is tracked separately. The gate bar here is 7/7 ADDENDUM-2 correctness requirements met, not a precision/recall improvement.",
     "addendum_2_checklist": {

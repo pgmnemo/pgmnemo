@@ -10,6 +10,18 @@
 
 DO $$ BEGIN RAISE NOTICE 'pgmnemo: upgrading to version 0.12.0 (Typed Write API)'; END; $$;
 
+-- ADDENDUM-2 R8: Ensure uq_mem_edge_active partial index exists.
+-- add_edge() uses ON CONFLICT (source_id, target_id, relation_type) WHERE valid_until IS NULL
+-- which requires this partial unique index. Created in 0.5.0 delta; re-asserted here
+-- defensively (IF NOT EXISTS) to guard against non-standard upgrade paths or direct SQL installs.
+CREATE UNIQUE INDEX IF NOT EXISTS uq_mem_edge_active
+    ON pgmnemo.mem_edge (source_id, target_id, relation_type)
+    WHERE valid_until IS NULL;
+
+COMMENT ON INDEX pgmnemo.uq_mem_edge_active IS
+    'Partial unique index on active edges (valid_until IS NULL). '
+    'Enables ON CONFLICT upsert in add_edge(). Created in 0.5.0; re-asserted in 0.12.0 (ADDENDUM-2 R8).';
+
 CREATE UNIQUE INDEX IF NOT EXISTS ix_entity_canonical_name_prj
     ON pgmnemo.agent_lesson (
         lower(metadata->>'canonical_name'),
