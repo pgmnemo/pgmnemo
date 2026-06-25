@@ -13,8 +13,8 @@
 --   T9: Boundary — relation content_type cleared; NULL content_type preserved
 SET pgmnemo.gate_strict = 'off';
 SET pgmnemo.include_unverified = 'on';
-ALTER EXTENSION pgmnemo UPDATE TO '0.12.0';
-NOTICE:  version "0.12.0" of extension "pgmnemo" is already installed
+ALTER EXTENSION pgmnemo UPDATE TO '0.12.1';
+NOTICE:  version "0.12.1" of extension "pgmnemo" is already installed
 -- ============================================================================
 -- T1: Function exists with 1-arg signature
 -- ============================================================================
