@@ -48,7 +48,7 @@ Adds three structured write functions to the extension. Existing recall API unch
 
 - **`pgmnemo.remember_fact(role, entity_key, property, value, confidence, has_contact_pii, embedding, source_type, project_id, commit_sha, artifact_hash)`**
   Writes a named property fact about an entity. Returns `(id BIGINT, final_state TEXT)`.
-  PII-aware state routing built in (ADR-61 D4): `email/phone/address/telegram/full_name`
+  PII-aware state routing built in (RFC-001 §D4): `email/phone/address/telegram/full_name`
   on `person:*` keys → `candidate` regardless of source; `system` non-PII → `validated`;
   `auto_captured` → `candidate`; `agent_authored` conf ≥ 0.8 non-PII → `validated`.
   Bitemporal supersession: different value → closes prior row, inserts new `version_n+1`.
@@ -131,7 +131,7 @@ Adds per-call typed recall filtering to `recall_hybrid()` via a new 10th paramet
   returns zero rows (explicit exclusion, not silent all-types fallback). NULL or
   omitted behaves identically to the pre-v0.11.0 9-parameter API. Uses the
   `ix_pgmnemo_content_type_active` partial index added in this migration for
-  efficient pushdown. (ADR-61 §3 D3)
+  efficient pushdown. (RFC-001 §D2)
 
 - **`content_type` partial index** (`ix_pgmnemo_content_type_active`) on
   `agent_lesson (content_type)` WHERE `is_active AND t_valid_to = 'infinity'`.

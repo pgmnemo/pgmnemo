@@ -1,7 +1,7 @@
 # Property Conventions — pgmnemo fact vocabulary
 
 **Status:** ACTIVE (P1, Memory Era)
-**Source:** ADR-61 §5.3 · §3 D2.1 · §3 D4
+**Source:** RFC-001 §5.3 · §3 D2.1 · §3 D4
 **Date:** 2026-06-22
 
 ---
@@ -97,7 +97,7 @@ for which the property is meaningful; `any` means it may appear on any entity ty
 3. **Repeating values** — if a property can legitimately have multiple values (e.g. several
    phone numbers), use distinct suffixes: `email_primary`, `email_work`, `email_personal`.
    Do not write multiple rows with identical `p_property`; `remember_fact` will supersede
-   the previous value (see ADR-61 §3 D2.1 branch logic).
+   the previous value (see RFC-001 §3 D2.1 branch logic).
 4. **Agent-defined extensions** — any agent may introduce a new property key not listed
    here.  New keys SHOULD be submitted as a PR to this file to remain discoverable.
    The naming rule above applies to extensions too.
@@ -127,7 +127,7 @@ the caller passes through the typed write API.
 ## 5. Privacy classification and state gate
 
 Properties are classified into two privacy tiers.  The `remember_fact` state gate
-(ADR-61 §3 D2.1 / D4) enforces the initial `state` based on source type:
+(RFC-001 §3 D2.1 / D4) enforces the initial `state` based on source type:
 
 ### 5.1 PII properties (restricted)
 
@@ -220,6 +220,6 @@ SELECT * FROM pgmnemo.recall_hybrid(
 | Document | Relationship |
 |----------|-------------|
 | `design/SLUG_CONVENTION.md` | Defines `p_entity_key` format used in this doc |
-| `ADR-61 §5.3` | Primary source; this doc expands and operationalises it |
-| `ADR-61 §3 D2` | `remember_fact` contract including state-gate logic |
-| `ADR-61 §5.4` | `relation_type` whitelist for `remember_relation` |
+| `RFC-001 §5.3` | Primary source; this doc expands and operationalises it |
+| `RFC-001 §3 D2` | `remember_fact` contract including state-gate logic |
+| `RFC-001 §5.4` | `relation_type` whitelist for `remember_relation` |

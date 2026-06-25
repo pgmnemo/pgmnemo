@@ -1,6 +1,6 @@
 -- typed_recall.sql
 -- pg_regress tests for pgmnemo v0.11.0: P0.2 — p_content_types typed recall
--- ADR-61 §3 D3
+-- RFC-001 §D2
 --
 -- Coverage:
 --   T1: New parameter signature is present (9 params → 10 params)
@@ -21,7 +21,7 @@ SET pgmnemo.gate_strict = 'off';
 SET pgmnemo.include_unverified = 'on';
 SET pgmnemo.track_recall_recency = 'off';  -- disable stamping side-effects for clean tests
 
-ALTER EXTENSION pgmnemo UPDATE TO '0.12.0';
+ALTER EXTENSION pgmnemo UPDATE TO '0.12.1';
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- T1: Function signature — 10 parameters including p_content_types

@@ -751,7 +751,7 @@ but left `version_n = 0` (the pre-bitemporality sentinel).
 same `entity_key + project_id` identity, same underlying table, but now with:
 
 - Bitemporal supersession (different value → prior row closed, new version opened)
-- PII-aware state routing (ADR-61 D4 — `email/phone/full_name/address/telegram` on
+- PII-aware state routing (RFC-001 §D4 — `email/phone/full_name/address/telegram` on
   `person:*` keys → `candidate` always, even for `system` source)
 - Synthesized non-NULL `artifact_hash` (`'fact-' || entity_key || ':' || property`)
 - FOR UPDATE write-race guard

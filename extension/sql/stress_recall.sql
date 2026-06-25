@@ -3,7 +3,7 @@
 -- Actual 100K/1M/10M stress run: benchmarks/scripts/stress_recall_large.py
 
 -- Apply the v0.6.1 migration.
-ALTER EXTENSION pgmnemo UPDATE TO '0.12.0';
+ALTER EXTENSION pgmnemo UPDATE TO '0.12.1';
 
 -- ── Function exists with correct signature ────────────────────────────────────
 

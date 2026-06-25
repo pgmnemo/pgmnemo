@@ -13,7 +13,7 @@
 
 SET pgmnemo.gate_strict = 'off';
 SET pgmnemo.include_unverified = 'on';
-ALTER EXTENSION pgmnemo UPDATE TO '0.12.0';
+ALTER EXTENSION pgmnemo UPDATE TO '0.12.1';
 
 -- ============================================================================
 -- Seed data

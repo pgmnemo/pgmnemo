@@ -32,7 +32,7 @@ SET pgmnemo.gate_strict = 'off';
 SET pgmnemo.include_unverified = 'on';
 SET pgmnemo.track_recall_recency = 'off';
 
-ALTER EXTENSION pgmnemo UPDATE TO '0.12.0';
+ALTER EXTENSION pgmnemo UPDATE TO '0.12.1';
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- T1: remember_fact has 11 parameters
@@ -114,7 +114,7 @@ END;
 $$;
 
 -- ─────────────────────────────────────────────────────────────────────────────
--- T9: PII routing — person:* + email + system source → candidate ALWAYS (R1/ADR-61 D4)
+-- T9: PII routing — person:* + email + system source → candidate ALWAYS (R1/RFC-001 §D4)
 -- ─────────────────────────────────────────────────────────────────────────────
 
 SELECT final_state AS pii_sys_state

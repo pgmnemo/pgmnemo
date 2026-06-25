@@ -1,7 +1,7 @@
 # Slug Convention — pgmnemo entity identifiers
 
 **Status:** ACTIVE (P1, Memory Era)
-**Source:** ADR-61 §3 D1 · §4.2 · §6 P0.3
+**Source:** RFC-001 §3 D1 · §4.2 · §6 P0.3
 **Date:** 2026-06-22
 
 ---
