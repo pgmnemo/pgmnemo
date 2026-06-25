@@ -41,7 +41,7 @@ jobs:
           PGDATABASE: pgmnemo_test
         run: cd extension && make installcheck PG_CONFIG=/usr/lib/postgresql/17/bin/pg_config
       - name: Update expected files from PG 17 output (baseline reset)
-        if: steps.installcheck.outcome == 'failure' && github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: steps.installcheck.outcome == 'failure' && github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/release/'))
         run: |
           if ls extension/results/*.out 2>/dev/null; then
             # Safety guard: never auto-commit expected files that contain ERROR lines
