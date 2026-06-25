@@ -255,7 +255,7 @@ jobs:
           DB_VERIFY="updated_at_verify_$(echo $TARGET_VER | tr . _)"
           sudo -u postgres $PSQL -p 5433 -c "DROP DATABASE IF EXISTS $DB_VERIFY"
           sudo -u postgres $PSQL -p 5433 -c "CREATE DATABASE $DB_VERIFY OWNER runner"
-          $PSQL -d $DB_VERIFY -c "CREATE EXTENSION pgmnemo VERSION '0.9.8' CASCADE"
+          $PSQL -d $DB_VERIFY -c "CREATE EXTENSION pgmnemo VERSION '0.9.7' CASCADE"
           $PSQL -d $DB_VERIFY -c "ALTER EXTENSION pgmnemo UPDATE TO '$TARGET_VER'"
           PATCH_COL=$($PSQL -d $DB_VERIFY -tAc "SELECT column_name FROM information_schema.columns WHERE table_schema='pgmnemo' AND table_name='agent_lesson' AND column_name='patch_count'")
           UPDAT_COL=$($PSQL -d $DB_VERIFY -tAc "SELECT column_name FROM information_schema.columns WHERE table_schema='pgmnemo' AND table_name='agent_lesson' AND column_name='updated_at'")
