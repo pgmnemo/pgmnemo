@@ -91,6 +91,19 @@ while IFS= read -r f; do
       fi
     done < "$PATTERN_FILE"
   fi
+
+  # 3) built-in generic markers (always on, no private file needed) --------------
+  #    Shipped product code must cite the product's own spec, not internal
+  #    design-record ids. Keeps the public surface decoupled from any consumer.
+  for pat in 'ADR-[0-9]'; do
+    bhits="$(grep -nE "$pat" "$f" 2>/dev/null || true)"
+    if [ -n "$bhits" ]; then
+      while IFS= read -r ln; do
+        err "$f:${ln%%:*}: internal marker [/$pat/] — cite RFC-001/own spec instead: $(printf '%s' "$ln" | cut -d: -f2-)"
+      done <<< "$bhits"
+      leaks=$((leaks + 1))
+    fi
+  done
 done < <(collect_files)
 
 if [ "$leaks" -gt 0 ]; then

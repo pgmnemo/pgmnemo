@@ -13,7 +13,7 @@
 [![PGXN](https://badge.pgxn.org/stable/pgmnemo.svg)](https://pgxn.org/dist/pgmnemo/)
 [![CI](https://github.com/pgmnemo/pgmnemo/actions/workflows/ci.yml/badge.svg)](https://github.com/pgmnemo/pgmnemo/actions/workflows/ci.yml)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-17-4169E1.svg)](https://www.postgresql.org/)
-[![Version](https://img.shields.io/badge/version-0.12.0-blue.svg)](https://github.com/pgmnemo/pgmnemo/releases/tag/v0.12.0)
+[![Version](https://img.shields.io/badge/version-0.12.1-blue.svg)](https://github.com/pgmnemo/pgmnemo/releases/tag/v0.12.1)
 [![LoCoMo recall@10](https://img.shields.io/badge/LoCoMo_recall%4010-0.8409-success.svg)](docs/img/all_metrics_history.md)
 [![LongMemEval recall@10](https://img.shields.io/badge/LongMemEval_recall%4010-0.9604-brightgreen.svg)](docs/img/all_metrics_history.md)
 <!-- [![GitHub Stars](https://img.shields.io/github/stars/pgmnemo/pgmnemo.svg?style=social)](https://github.com/pgmnemo/pgmnemo) -->

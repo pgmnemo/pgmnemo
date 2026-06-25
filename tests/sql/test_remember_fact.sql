@@ -85,15 +85,18 @@ SELECT pgmnemo.canonical_slug('person', 'Ada Lovelace') AS slug_person;
 SELECT pgmnemo.canonical_slug('org', 'ACME Corp.')      AS slug_org;
 
 -- ─────────────────────────────────────────────────────────────────────────────
--- T7: guard_no_test_project — blocks IDs <= 100
+-- T7: guard_no_test_project — blocks IDs at/below the configured floor
+-- (floor is caller-configured; default 0 imposes no scheme, so the test opts in)
 -- ─────────────────────────────────────────────────────────────────────────────
+
+SET pgmnemo.test_project_floor = 100;
 
 DO $$
 BEGIN
     PERFORM pgmnemo.guard_no_test_project(42);
     RAISE NOTICE 'UNEXPECTED: project_id=42 not blocked';
 EXCEPTION WHEN OTHERS THEN
-    RAISE NOTICE 'guard_ok: blocked project_id=42 (<=100)';
+    RAISE NOTICE 'guard_ok: blocked project_id=42 (<=floor)';
 END;
 $$;
 

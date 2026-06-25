@@ -3,7 +3,7 @@
 -- RFC-001 §D2 + ADDENDUM-2 (7 correctness requirements)
 --
 -- All three functions encode write-path discipline at the database layer:
---   • PII-aware candidate routing (ADR-61 §D4) — R1
+--   • PII-aware candidate routing (RFC-001 §D4) — R1
 --   • Non-NULL artifact_hash synthesis before provenance gate — R2
 --   • Identity/dedup on (lower(topic), project_id) with FOR UPDATE — R3
 --   • Drop-in upgrade from ingest_entity (same key+project) — R4
@@ -15,8 +15,9 @@
 -- 0. guard_no_test_project — safety guard for test harnesses (R6)
 --
 -- Call at the start of any test script before writing data. Raises if the
--- supplied project_id looks like a production ID (≤ 100) so test scripts
--- cannot accidentally mutate prod data when pointed at the wrong database.
+-- supplied project_id is NULL or at/below the caller-configured production floor
+-- (GUC pgmnemo.test_project_floor, default 0 = disabled) so test scripts cannot
+-- accidentally mutate prod data when pointed at the wrong database.
 -- Accepts an optional database allowlist for stricter env checks.
 -- ─────────────────────────────────────────────────────────────────────────────
 
@@ -26,19 +27,25 @@ CREATE OR REPLACE FUNCTION pgmnemo.guard_no_test_project(
 )
 RETURNS VOID
 LANGUAGE plpgsql AS $$
+DECLARE
+    v_floor INT;
 BEGIN
     IF p_project_id IS NULL THEN
         RAISE EXCEPTION
             'pgmnemo.guard_no_test_project: p_project_id IS NULL — '
-            'tests must use an explicit test project_id (> 10000 recommended)';
+            'tests must pass an explicit test project_id';
     END IF;
-    -- Project IDs ≤ 100 are reserved for production use in Agency.
-    -- Tests should use project_id > 10000 (e.g. 99999).
-    IF p_project_id <= 100 THEN
+    -- Block writes to project_ids the deployment reserves for production.
+    -- The floor is caller-configured (no numbering convention is baked into the
+    -- product): SET pgmnemo.test_project_floor = <N>;  (e.g. 100 reserves ids 1..100).
+    -- Default 0 => the floor check is a no-op, so a fresh install imposes no
+    -- project-id scheme on consumers.
+    v_floor := COALESCE(NULLIF(current_setting('pgmnemo.test_project_floor', true), '')::int, 0);
+    IF p_project_id <= v_floor THEN
         RAISE EXCEPTION
-            'pgmnemo.guard_no_test_project: project_id=% looks like a production ID '
-            '(≤ 100). Tests should use project_id > 10000 to avoid prod contamination.',
-            p_project_id;
+            'pgmnemo.guard_no_test_project: project_id=% is at/below the configured '
+            'production floor (pgmnemo.test_project_floor=%). Use a higher test project_id.',
+            p_project_id, v_floor;
     END IF;
     -- Optional: enforce DB name
     IF p_allowed_db IS NOT NULL AND current_database() <> p_allowed_db THEN
@@ -51,8 +58,9 @@ END;
 $$;
 
 COMMENT ON FUNCTION pgmnemo.guard_no_test_project(INT, TEXT) IS
-    'Safety guard for test harnesses (R6, v0.12.0). '
-    'Raises EXCEPTION when p_project_id ≤ 100 (reserved for production). '
+    'Safety guard for test harnesses (RFC-001 §D testing guidance). '
+    'Raises EXCEPTION when p_project_id IS NULL, or <= the caller-configured floor '
+    'GUC pgmnemo.test_project_floor (default 0 = floor check disabled). '
     'Call at the start of test scripts before any data writes. '
     'Optional p_allowed_db enforces that tests only run on a named test database.';
 
@@ -76,7 +84,7 @@ COMMENT ON FUNCTION pgmnemo._has_contact_pii(TEXT) IS
     'Returns TRUE when p_property is in the PII closed set: '
     '{email, phone, address, telegram, full_name}. '
     'Used by remember_fact() for automatic candidate-state routing on person:* entities. '
-    'v0.12.0. Source: PROPERTY_CONVENTIONS.md §5.1 / ADR-61 D4.';
+    'v0.12.0. Source: PROPERTY_CONVENTIONS.md §5.1 / RFC-001 §D4.';
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- 2. canonical_slug — slug normalisation helper (SLUG_CONVENTION.md §4)
@@ -152,7 +160,7 @@ COMMENT ON FUNCTION pgmnemo.canonical_slug(TEXT, TEXT) IS
 -- 3. remember_fact — structured property write with bitemporal supersession
 --    RFC-001 §D2 + ADDENDUM-2 R1–R7
 --
--- State routing (R1, ADR-61 D4) — runs INSIDE the function, caller stays thin:
+-- State routing (R1, RFC-001 §D4) — runs INSIDE the function, caller stays thin:
 --   PII property on person:* entity → candidate ALWAYS (overrides source_type)
 --   source_type = 'system'         → validated
 --   source_type = 'auto_captured'  → candidate
@@ -247,7 +255,7 @@ BEGIN
         pgmnemo._has_contact_pii(p_property) AND (p_entity_key LIKE 'person:%')
     );
 
-    -- ── State routing (R1, ADR-61 D4) ───────────────────────────────────────
+    -- ── State routing (R1, RFC-001 §D4) ───────────────────────────────────────
     -- PII on person key → candidate ALWAYS (safety overrides even system source)
     IF _is_pii THEN
         _final_state := 'candidate';
@@ -355,7 +363,7 @@ $$;
 COMMENT ON FUNCTION pgmnemo.remember_fact(TEXT,TEXT,TEXT,TEXT,REAL,BOOLEAN,vector,TEXT,INT,TEXT,TEXT) IS
     'Typed fact write with bitemporal supersession, PII-aware state routing, '
     'and synthesized artifact_hash. RFC-001 §D2 + ADDENDUM-2 R1–R7. v0.12.0. '
-    'State routing (ADR-61 D4): '
+    'State routing (RFC-001 §D4): '
     '  PII property on person:* → candidate ALWAYS; '
     '  source_type=system → validated; '
     '  source_type=auto_captured → candidate; '

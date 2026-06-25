@@ -1,0 +1,15 @@
+{
+  "version": "v0.12.1",
+  "date": "2026-06-25",
+  "pgmnemo_version": "0.12.1",
+  "gate_status": "PASS",
+  "gate_type": "feature_smoke",
+  "significance_required": false,
+  "scope": "Vendor decoupling release. guard_no_test_project floor moved to caller-configured GUC pgmnemo.test_project_floor (default 0=disabled); internal ADR citations replaced with RFC-001. No data-model, recall, or ranking change.",
+  "justification": "Hygiene/decoupling release — gated by CORRECTNESS (installcheck + flat-vs-delta identical + upgrade path), not recall quality. No '+Xpp' claim made or implied. remember_fact/event/relation behaviour unchanged from 0.12.0.",
+  "schema_change": false,
+  "scoring_impact": "none",
+  "recall_ranking_impact": "none",
+  "new_regress_tests": [],
+  "new_regress_test_count": 0
+}

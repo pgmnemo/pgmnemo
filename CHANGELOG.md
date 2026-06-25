@@ -15,6 +15,22 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.12.1] — 2026-06-25
+
+### Theme
+Vendor decoupling — remove consumer-specific assumptions from the product surface.
+
+### Changed
+- `guard_no_test_project()`: the production floor is no longer hardcoded. It now reads the
+  GUC `pgmnemo.test_project_floor` (default `0` = floor check disabled). Consumers opt in via
+  `SET pgmnemo.test_project_floor = <N>;` — the product no longer imposes a project-id numbering scheme.
+- Documentation now cites the product's own spec (RFC-001) instead of an internal design-record id.
+
+### Notes
+- No data-model or recall change; `remember_fact/event/relation` behaviour is unchanged.
+- Upgrade: `ALTER EXTENSION pgmnemo UPDATE TO '0.12.1';`. Deployments relying on the old hard
+  floor of 100 should add `SET pgmnemo.test_project_floor = 100;` (e.g. in their test harness).
+
 ## [0.12.0] — 2026-06-24
 
 ### Theme
