@@ -2,7 +2,7 @@
 -- Pure-SQL boolean and integer checks — no embeddings, no floating-point comparisons.
 
 -- Apply the v0.6.2 migration.
-ALTER EXTENSION pgmnemo UPDATE TO '0.11.0';
+ALTER EXTENSION pgmnemo UPDATE TO '0.12.0';
 
 -- ── Signature check ───────────────────────────────────────────────────────────
 

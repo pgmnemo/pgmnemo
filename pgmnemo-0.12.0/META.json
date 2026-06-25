@@ -1,0 +1,62 @@
+{
+    "name": "pgmnemo",
+    "abstract": "Single-plan multimodal agent memory for PostgreSQL — token-budget navigation, provenance-gated writes, outcome-learning",
+    "description": "pgmnemo is a PostgreSQL extension that fuses HNSW vector search (pgvector), BM25 full-text, graph-edge proximity, and JSONB metadata filtering into one SQL query plan inside your existing database. No new service, no data egress, no LLM cost per write. Features: provenance-gated writes (enforce/warn/off), token-economy navigation (navigate_locate + navigate_expand), outcome-learning (reinforce/confidence), bitemporal point-in-time recall, ACID in-place embedding updates, and multi-tenant RLS. Apache-2.0.",
+    "version": "0.12.0",
+    "maintainer": [
+        "Alex Gaydabura <asistentgaidaburas@gmail.com>"
+    ],
+    "license": "apache_2_0",
+    "provides": {
+        "pgmnemo": {
+            "abstract": "Single-plan multimodal agent memory for PostgreSQL — token-budget navigation, provenance-gated writes, outcome-learning",
+            "version": "0.12.0",
+            "file": "extension/pgmnemo--0.12.0.sql",
+            "docfile": "README.md"
+        }
+    },
+    "resources": {
+        "homepage": "https://github.com/pgmnemo/pgmnemo",
+        "bugtracker": {
+            "web": "https://github.com/pgmnemo/pgmnemo/issues"
+        },
+        "repository": {
+            "url": "https://github.com/pgmnemo/pgmnemo.git",
+            "web": "https://github.com/pgmnemo/pgmnemo",
+            "type": "git"
+        }
+    },
+    "prereqs": {
+        "runtime": {
+            "requires": {
+                "PostgreSQL": "14.0.0",
+                "vector": "0.7.0"
+            }
+        },
+        "build": {
+            "requires": {
+                "pg_config": 0
+            }
+        }
+    },
+    "tags": [
+        "memory",
+        "agent",
+        "agents",
+        "llm",
+        "vector",
+        "pgvector",
+        "provenance",
+        "rag",
+        "graph",
+        "multi-tenant",
+        "hnsw",
+        "recall"
+    ],
+    "release_status": "stable",
+    "generated_by": "hand",
+    "meta-spec": {
+        "version": "1.0.0",
+        "url": "https://pgxn.org/meta/spec.txt"
+    }
+}

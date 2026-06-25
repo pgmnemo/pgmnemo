@@ -3,7 +3,7 @@
 -- No live table required — avoids embedding dependency in pg_regress.
 
 -- Apply the v0.6.1 migration.
-ALTER EXTENSION pgmnemo UPDATE TO '0.11.0';
+ALTER EXTENSION pgmnemo UPDATE TO '0.12.0';
 
 -- ── Signature checks ─────────────────────────────────────────────────────────
 
