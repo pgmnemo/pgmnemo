@@ -94,13 +94,13 @@ SELECT
 -- T6: canonical_slug normalisation
 -- ─────────────────────────────────────────────────────────────────────────────
 SELECT pgmnemo.canonical_slug('person', 'Ada Lovelace') AS slug_person;
- slug_person
+     slug_person     
 ---------------------
  person:ada_lovelace
 (1 row)
 
 SELECT pgmnemo.canonical_slug('org', 'ACME Corp.')      AS slug_org;
- slug_org
+   slug_org    
 ---------------
  org:acme_corp
 (1 row)
@@ -117,7 +117,6 @@ EXCEPTION WHEN OTHERS THEN
 END;
 $$;
 NOTICE:  guard_ok: blocked project_id=42 (<=100)
-DO
 -- ─────────────────────────────────────────────────────────────────────────────
 -- T8: guard_no_test_project — allows IDs > 100
 -- ─────────────────────────────────────────────────────────────────────────────
@@ -130,7 +129,6 @@ EXCEPTION WHEN OTHERS THEN
 END;
 $$;
 NOTICE:  guard_ok: allowed project_id=99999 (>100)
-DO
 -- ─────────────────────────────────────────────────────────────────────────────
 -- T9: PII routing — person:* + email + system source → candidate ALWAYS (R1/ADR-61 D4)
 -- ─────────────────────────────────────────────────────────────────────────────
@@ -224,8 +222,6 @@ BEGIN
 END;
 $$;
 NOTICE:  hash_ok: fact-concept:art_hash_test:description
-DO
-
 -- ─────────────────────────────────────────────────────────────────────────────
 -- T15: dedup/merge — same (entity_key, property, value) → same row id (R3)
 -- Note: row_count check is a separate statement (CTE subqueries cannot see
@@ -241,7 +237,7 @@ w2 AS (
     FROM pgmnemo.remember_fact('tc_rmf','org:merge_test','status','active',0.95,NULL,NULL,'system',99999)
 )
 SELECT (w1.id1 = w2.id2) AS same_id FROM w1, w2;
- same_id
+ same_id 
 ---------
  t
 (1 row)
@@ -249,7 +245,7 @@ SELECT (w1.id1 = w2.id2) AS same_id FROM w1, w2;
 SELECT count(*) AS row_count
 FROM pgmnemo.agent_lesson
 WHERE topic = 'org:merge_test/status' AND role = 'tc_rmf';
- row_count
+ row_count 
 -----------
          1
 (1 row)
@@ -278,8 +274,6 @@ BEGIN
 END;
 $$;
 NOTICE:  supersession_ok
-DO
-
 -- ─────────────────────────────────────────────────────────────────────────────
 -- T17: NULL embedding → fail-open (write succeeds; R5)
 -- ─────────────────────────────────────────────────────────────────────────────
@@ -312,7 +306,7 @@ SELECT (pgmnemo.remember_event(
 SELECT content_type, state
 FROM pgmnemo.agent_lesson
 WHERE topic = 'person:ada_lovelace:event:birth' AND role = 'tc_rmf';
- content_type | state
+ content_type |   state   
 --------------+-----------
  event        | validated
 (1 row)
@@ -335,7 +329,7 @@ r2 AS (
     ) AS rid
 )
 SELECT (r1.rid = r2.rid) AS idempotent FROM r1, r2;
- idempotent
+ idempotent 
 ------------
  t
 (1 row)
@@ -344,7 +338,7 @@ RESET client_min_messages;
 SELECT count(*) AS rel_rows
 FROM pgmnemo.agent_lesson
 WHERE topic = 'person:ada_lovelace:member_of:org:babbage_co' AND role = 'tc_rmf';
- rel_rows
+ rel_rows 
 ----------
         1
 (1 row)
@@ -353,10 +347,11 @@ SELECT content_type AS ctype
 FROM pgmnemo.agent_lesson
 WHERE topic = 'person:ada_lovelace:member_of:org:babbage_co' AND role = 'tc_rmf'
 LIMIT 1;
-   ctype
+  ctype   
 ----------
  relation
 (1 row)
+
 -- ─────────────────────────────────────────────────────────────────────────────
 -- T20: verified_at gate — validated → NOT NULL (visible to recall);
 --      candidate (PII person:phone) → NULL (ghost; invisible to default recall)
@@ -374,7 +369,6 @@ BEGIN
 END;
 $$;
 NOTICE:  validated_vis_ok
-DO
 DO $$
 DECLARE v_id BIGINT; v_vis TIMESTAMPTZ;
 BEGIN
@@ -387,10 +381,7 @@ BEGIN
 END;
 $$;
 NOTICE:  candidate_invis_ok
-DO
-
 -- ─────────────────────────────────────────────────────────────────────────────
 -- Cleanup
 -- ─────────────────────────────────────────────────────────────────────────────
 DELETE FROM pgmnemo.agent_lesson WHERE role = 'tc_rmf';
-DELETE 14

@@ -63,7 +63,6 @@ BEGIN
 END;
 $$;
 NOTICE:  evict_direct_ok
-DO
 -- ─────────────────────────────────────────────────────────────────────────────
 -- BT3: confidence out of [0,1] → raises exception
 -- ─────────────────────────────────────────────────────────────────────────────
@@ -79,7 +78,6 @@ EXCEPTION WHEN OTHERS THEN
 END;
 $$;
 NOTICE:  conf_oob_ok
-DO
 -- ─────────────────────────────────────────────────────────────────────────────
 -- BT4: confidence=0.0 (min valid) → no exception; agent_authored → candidate
 -- ─────────────────────────────────────────────────────────────────────────────
@@ -88,7 +86,7 @@ FROM pgmnemo.remember_fact(
     'tc_v0120', 'org:conf_min', 'p', 'v',
     0.0, NULL, NULL, 'agent_authored', 99999
 );
- c0_st     
+   c0_st   
 -----------
  candidate
 (1 row)
@@ -101,7 +99,7 @@ FROM pgmnemo.remember_fact(
     'tc_v0120', 'org:conf_max', 'p', 'v',
     1.0, NULL, NULL, 'agent_authored', 99999
 );
- c1_st     
+   c1_st   
 -----------
  validated
 (1 row)
@@ -114,7 +112,7 @@ FROM pgmnemo.remember_fact(
     'tc_v0120', 'org:conf_08', 'p', 'v',
     0.8, NULL, NULL, 'agent_authored', 99999
 );
- c08_st    
+  c08_st   
 -----------
  validated
 (1 row)
@@ -127,7 +125,7 @@ FROM pgmnemo.remember_fact(
     'tc_v0120', 'org:conf_079', 'p', 'v',
     0.79, NULL, NULL, 'agent_authored', 99999
 );
- c079_st   
+  c079_st  
 -----------
  candidate
 (1 row)
@@ -156,7 +154,6 @@ BEGIN
 END;
 $$;
 NOTICE:  merge_ok
-DO
 -- ─────────────────────────────────────────────────────────────────────────────
 -- BT9: 3-generation chain — version_n=3 after two supersessions; only 1 active
 -- ─────────────────────────────────────────────────────────────────────────────
@@ -167,7 +164,6 @@ BEGIN
     PERFORM pgmnemo.remember_fact('tc_v0120','org:chain3','prop','gamma',0.9,NULL,NULL,'system',99999);
 END;
 $$;
-DO
 SELECT version_n AS chain_vn
 FROM pgmnemo.agent_lesson
 WHERE topic = 'org:chain3/prop' AND role = 'tc_v0120' AND is_active;
@@ -207,7 +203,6 @@ BEGIN
 END;
 $$;
 NOTICE:  event_idem_ok
-DO
 -- ─────────────────────────────────────────────────────────────────────────────
 -- BT11: remember_event different labels → 2 distinct rows
 -- ─────────────────────────────────────────────────────────────────────────────
@@ -219,7 +214,6 @@ BEGIN
         NULL::TIMESTAMPTZ, 0.9, NULL, 'system', 99999);
 END;
 $$;
-DO
 SELECT count(*) = 2 AS two_ev_ok
 FROM pgmnemo.agent_lesson
 WHERE role = 'tc_v0120'
@@ -242,7 +236,6 @@ EXCEPTION WHEN OTHERS THEN
 END;
 $$;
 NOTICE:  slug_type_ok
-DO
 -- ─────────────────────────────────────────────────────────────────────────────
 -- BT13: fact topic encoding — '<entity_key>/<property>' (lowercase, slash separator)
 -- ─────────────────────────────────────────────────────────────────────────────
@@ -265,7 +258,6 @@ BEGIN
 END;
 $$;
 NOTICE:  topic_ok
-DO
 -- ─────────────────────────────────────────────────────────────────────────────
 -- BT14: has_contact_pii explicit TRUE override → candidate even for non-PII property
 -- ─────────────────────────────────────────────────────────────────────────────
@@ -283,4 +275,3 @@ FROM pgmnemo.remember_fact(
 -- Cleanup
 -- ─────────────────────────────────────────────────────────────────────────────
 DELETE FROM pgmnemo.agent_lesson WHERE role = 'tc_v0120';
-DELETE 14

@@ -107,11 +107,11 @@ CREATE TABLE pgmnemo.agent_lesson (
     verified_at      TIMESTAMPTZ,
 
     -- Full-text search vectors (generated)
-    topic_tsv        TSVECTOR GENERATED ALWAYS AS (to_tsvector('english', coalesce(topic, ''))) STORED,
-    lesson_tsv       TSVECTOR GENERATED ALWAYS AS (to_tsvector('english', coalesce(lesson_text, ''))) STORED,
+    topic_tsv        TSVECTOR GENERATED ALWAYS AS (to_tsvector('simple', coalesce(topic, ''))) STORED,
+    lesson_tsv       TSVECTOR GENERATED ALWAYS AS (to_tsvector('simple', coalesce(lesson_text, ''))) STORED,
     full_text        TSVECTOR GENERATED ALWAYS AS (
-                         setweight(to_tsvector('english', coalesce(topic, '')), 'A') ||
-                         setweight(to_tsvector('english', coalesce(lesson_text, '')), 'B')
+                         setweight(to_tsvector('simple', coalesce(topic, '')), 'A') ||
+                         setweight(to_tsvector('simple', coalesce(lesson_text, '')), 'B')
                      ) STORED,
 
     -- Dense vector embedding (pgvector, 1024-dim)
@@ -7839,28 +7839,8 @@ COMMENT ON FUNCTION pgmnemo.recall_fast(vector, INT, TEXT, INT, TEXT) IS
 -- v0.10.1 upgrade applied inline (pgmnemo--0.10.0--0.10.1.sql)
 -- ─────────────────────────────────────────────────────────────────────────────
 
--- ─────────────────────────────────────────────────────────────────────────────
--- A. Schema: change stored tsvector columns from 'english' to 'simple'
---    Requires PG 16+ (ALTER COLUMN SET EXPRESSION AS).
---    On a fresh 0.10.0 install the table may have data — SET EXPRESSION rewrites
---    the table, rebuilding stored values and GIN indexes automatically.
--- ─────────────────────────────────────────────────────────────────────────────
-
-ALTER TABLE pgmnemo.agent_lesson
-    ALTER COLUMN topic_tsv SET EXPRESSION AS (
-        to_tsvector('simple', coalesce(topic, ''))
-    );
-
-ALTER TABLE pgmnemo.agent_lesson
-    ALTER COLUMN lesson_tsv SET EXPRESSION AS (
-        to_tsvector('simple', coalesce(lesson_text, ''))
-    );
-
-ALTER TABLE pgmnemo.agent_lesson
-    ALTER COLUMN full_text SET EXPRESSION AS (
-        setweight(to_tsvector('simple', coalesce(topic, '')), 'A') ||
-        setweight(to_tsvector('simple', coalesce(lesson_text, '')), 'B')
-    );
+-- A. Schema: tsvector columns already use 'simple' in CREATE TABLE above —
+--    no ALTER needed on a fresh install (PG14-16-safe).
 
 -- Update the legacy trigger function (v0.2.x compat shim) to match.
 -- The trigger is a no-op in PG 17 because lesson_tsv is GENERATED ALWAYS,

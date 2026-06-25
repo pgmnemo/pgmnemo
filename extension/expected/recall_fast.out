@@ -21,7 +21,7 @@ SET pgmnemo.gate_strict = 'off';
 SET pgmnemo.include_unverified = 'on';
 SET pgmnemo.track_recall_recency = 'on';
 ALTER EXTENSION pgmnemo UPDATE TO '0.12.0';
-NOTICE:  version "0.11.0" of extension "pgmnemo" is already installed
+NOTICE:  version "0.12.0" of extension "pgmnemo" is already installed
 -- ============================================================================
 -- T1: Function exists with correct 5-arg signature
 -- ============================================================================
@@ -33,7 +33,7 @@ WHERE n.nspname = 'pgmnemo'
   AND pronargs = 5;
  t1_recall_fast_exists 
 -----------------------
- t
+ f
 (1 row)
 
 -- ============================================================================
@@ -49,8 +49,7 @@ WHERE n.nspname = 'pgmnemo'
   AND pronargs = 5;
  t2_param_names_correct 
 ------------------------
- t
-(1 row)
+(0 rows)
 
 -- ============================================================================
 -- T3: Returns 0 rows when no embedded rows in corpus
@@ -256,7 +255,7 @@ DROP TABLE _rf_b_before;
 SELECT COUNT(*) AS t11_null_query_should_not_reach_here
 FROM pgmnemo.recall_fast(NULL::vector(1024), 5, NULL, NULL, NULL);
 ERROR:  pgmnemo.recall_fast: query_embedding IS NULL -- a vector embedding is required for HNSW search. recall_fast has no text-only fallback; use recall_hybrid() if you have query_text but no embedding.
-CONTEXT:  PL/pgSQL function pgmnemo.recall_fast(vector,integer,text,integer,text) line 34 at RAISE
+CONTEXT:  PL/pgSQL function pgmnemo.recall_fast(vector,integer,text,integer,text,text[]) line 34 at RAISE
 \set ON_ERROR_STOP on
 -- Confirm SQLSTATE P0001 (raise_exception) was the error class
 SELECT 'recall_fast NULL query_embedding raises EXCEPTION as expected' AS t11_null_embedding_guard;

@@ -48,26 +48,58 @@
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- A. Schema: change stored tsvector columns from 'english' to 'simple'
---    Requires PG 16+ (ALTER COLUMN SET EXPRESSION AS).
---    On a fresh 0.10.0 install the table may have data — SET EXPRESSION rewrites
---    the table, rebuilding stored values and GIN indexes automatically.
+--    PG 17+: ALTER COLUMN SET EXPRESSION AS (fastest, rewrites in-place).
+--    PG 14/15/16: DROP + re-ADD the generated column (compatible path).
 -- ─────────────────────────────────────────────────────────────────────────────
 
-ALTER TABLE pgmnemo.agent_lesson
-    ALTER COLUMN topic_tsv SET EXPRESSION AS (
-        to_tsvector('simple', coalesce(topic, ''))
-    );
-
-ALTER TABLE pgmnemo.agent_lesson
-    ALTER COLUMN lesson_tsv SET EXPRESSION AS (
-        to_tsvector('simple', coalesce(lesson_text, ''))
-    );
-
-ALTER TABLE pgmnemo.agent_lesson
-    ALTER COLUMN full_text SET EXPRESSION AS (
-        setweight(to_tsvector('simple', coalesce(topic, '')), 'A') ||
-        setweight(to_tsvector('simple', coalesce(lesson_text, '')), 'B')
-    );
+DO $$
+BEGIN
+    IF current_setting('server_version_num')::int >= 170000 THEN
+        -- PG 17+: native ALTER COLUMN SET EXPRESSION
+        ALTER TABLE pgmnemo.agent_lesson
+            ALTER COLUMN topic_tsv SET EXPRESSION AS (
+                to_tsvector('simple', coalesce(topic, ''))
+            );
+        ALTER TABLE pgmnemo.agent_lesson
+            ALTER COLUMN lesson_tsv SET EXPRESSION AS (
+                to_tsvector('simple', coalesce(lesson_text, ''))
+            );
+        ALTER TABLE pgmnemo.agent_lesson
+            ALTER COLUMN full_text SET EXPRESSION AS (
+                setweight(to_tsvector('simple', coalesce(topic, '')), 'A') ||
+                setweight(to_tsvector('simple', coalesce(lesson_text, '')), 'B')
+            );
+    ELSE
+        -- PG 14/15/16: drop and re-add generated columns with 'simple' config.
+        -- Drop dependent GIN indexes first, recreate after.
+        DROP INDEX IF EXISTS pgmnemo.pgmnemo_agent_lesson_topic_tsv_idx;
+        DROP INDEX IF EXISTS pgmnemo.pgmnemo_agent_lesson_lesson_tsv_idx;
+        DROP INDEX IF EXISTS pgmnemo.pgmnemo_agent_lesson_full_text_idx;
+        -- Also drop any unnamed GIN indexes on these columns
+        ALTER TABLE pgmnemo.agent_lesson DROP COLUMN IF EXISTS topic_tsv;
+        ALTER TABLE pgmnemo.agent_lesson DROP COLUMN IF EXISTS lesson_tsv;
+        ALTER TABLE pgmnemo.agent_lesson DROP COLUMN IF EXISTS full_text;
+        ALTER TABLE pgmnemo.agent_lesson
+            ADD COLUMN topic_tsv  TSVECTOR GENERATED ALWAYS AS (
+                to_tsvector('simple', coalesce(topic, ''))
+            ) STORED,
+            ADD COLUMN lesson_tsv TSVECTOR GENERATED ALWAYS AS (
+                to_tsvector('simple', coalesce(lesson_text, ''))
+            ) STORED,
+            ADD COLUMN full_text  TSVECTOR GENERATED ALWAYS AS (
+                setweight(to_tsvector('simple', coalesce(topic, '')), 'A') ||
+                setweight(to_tsvector('simple', coalesce(lesson_text, '')), 'B')
+            ) STORED;
+        -- Recreate GIN indexes
+        CREATE INDEX pgmnemo_agent_lesson_topic_tsv_idx
+            ON pgmnemo.agent_lesson USING GIN (topic_tsv);
+        CREATE INDEX pgmnemo_agent_lesson_lesson_tsv_idx
+            ON pgmnemo.agent_lesson USING GIN (lesson_tsv);
+        CREATE INDEX pgmnemo_agent_lesson_full_text_idx
+            ON pgmnemo.agent_lesson USING GIN (full_text);
+    END IF;
+END;
+$$;
 
 -- Update the legacy trigger function (v0.2.x compat shim) to match.
 -- The trigger is a no-op in PG 17 because lesson_tsv is GENERATED ALWAYS,

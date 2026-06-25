@@ -16,7 +16,7 @@
 SET pgmnemo.gate_strict = 'off';
 SET pgmnemo.include_unverified = 'on';
 ALTER EXTENSION pgmnemo UPDATE TO '0.12.0';
-NOTICE:  version "0.11.0" of extension "pgmnemo" is already installed
+NOTICE:  version "0.12.0" of extension "pgmnemo" is already installed
 -- Confirm new columns exist (boolean check avoids alignment-sensitive output)
 SELECT
     SUM(CASE WHEN column_name = 'last_recalled_at' THEN 1 ELSE 0 END) = 1 AS has_last_recalled_at,
