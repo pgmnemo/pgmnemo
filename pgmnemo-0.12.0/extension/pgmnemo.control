@@ -1,9 +1,0 @@
-# pgmnemo extension control file
-# SPDX-License-Identifier: Apache-2.0
-comment = 'In-your-Postgres agent memory — single-plan multimodal recall, token-budget navigation, provenance-gated writes'
-default_version = '0.12.0'
-requires = 'vector'
-relocatable = false
-schema = 'pgmnemo'
-trusted = true
-superuser = false

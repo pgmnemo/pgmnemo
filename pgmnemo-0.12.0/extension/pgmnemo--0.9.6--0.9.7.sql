@@ -1,9 +1,0 @@
--- pgmnemo--0.9.6--0.9.7.sql
--- Upgrade: pgmnemo 0.9.6 → 0.9.7
--- SPDX-License-Identifier: Apache-2.0
---
--- v0.9.7 is an MCP-only release: pgmnemo-mcp gains pgmnemo.get_params tool
--- (exposes server config to MCP clients) and fixes the smoke-pypi test suite.
--- No PostgreSQL schema changes — this upgrade script is a no-op intentional marker.
--- ALTER EXTENSION pgmnemo UPDATE TO '0.9.7';
--- (no DDL changes)

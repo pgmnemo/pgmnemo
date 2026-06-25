@@ -1,6 +1,6 @@
 -- pgmnemo--0.11.1--0.12.0.sql
 -- pgmnemo upgrade 0.11.1 → 0.12.0
--- MEM-ERA-0120: Typed Write API — remember_fact / remember_event / remember_relation
+-- v0.12.0: Typed Write API — remember_fact / remember_event / remember_relation
 -- RFC-001 §D2 + ADDENDUM-2 (7 correctness requirements)
 --
 -- No breaking changes. No schema column additions. All new symbols.
