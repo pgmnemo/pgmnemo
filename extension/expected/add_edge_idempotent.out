@@ -30,7 +30,7 @@ SELECT count(*) = 1 AS uq_mem_edge_active_exists
 FROM pg_indexes
 WHERE schemaname = 'pgmnemo'
   AND indexname  = 'uq_mem_edge_active';
- uq_mem_edge_active_exists
+ uq_mem_edge_active_exists 
 ---------------------------
  t
 (1 row)
@@ -86,7 +86,7 @@ SELECT count(*) = 1 AS index_recreated
 FROM pg_indexes
 WHERE schemaname = 'pgmnemo'
   AND indexname  = 'uq_mem_edge_active';
- index_recreated
+ index_recreated 
 -----------------
  t
 (1 row)
