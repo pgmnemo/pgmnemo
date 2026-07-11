@@ -76,7 +76,7 @@ CREATE OR REPLACE FUNCTION pgmnemo._has_contact_pii(p_property TEXT)
 RETURNS BOOLEAN LANGUAGE sql IMMUTABLE STRICT PARALLEL SAFE AS $$
     SELECT p_property IN ('email', 'phone', 'address', 'telegram', 'full_name');
 $$;
-COMMENT ON FUNCTION pgmnemo._has_contact_pii(TEXT) IS 'PII property detector. Returns TRUE for {email,phone,address,telegram,full_name}. PROPERTY_CONVENTIONS §5.1 / ADR-61 D4. v0.12.0.';
+COMMENT ON FUNCTION pgmnemo._has_contact_pii(TEXT) IS 'PII property detector. Returns TRUE for {email,phone,address,telegram,full_name}. PROPERTY_CONVENTIONS §5.1 / RFC-001 §D4. v0.12.0.';
 
 -- canonical_slug
 CREATE OR REPLACE FUNCTION pgmnemo.canonical_slug(p_type TEXT, p_label TEXT)
@@ -170,7 +170,7 @@ BEGIN
         pgmnemo._has_contact_pii(p_property) AND (p_entity_key LIKE 'person:%')
     );
 
-    -- R1: State routing (ADR-61 D4)
+    -- R1: State routing (RFC-001 §D4)
     -- PII on person:* → candidate ALWAYS (even system source)
     IF _is_pii THEN
         _final_state := 'candidate';

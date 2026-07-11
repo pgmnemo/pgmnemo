@@ -6,7 +6,7 @@
 -- Install: CREATE EXTENSION pgmnemo;
 -- Upgrade: ALTER EXTENSION pgmnemo UPDATE TO '0.11.0';
 --
--- v0.11.0 (ADR-61 §3 D3 / P0.2): typed recall
+-- v0.11.0 (RFC-001 §D3 / P0.2): typed recall
 --   Single change: add optional param p_content_types text[] DEFAULT NULL (LAST)
 --   to pgmnemo.recall_hybrid. NULL → unchanged behavior (all content types;
 --   full backward compat). non-NULL → pushes content_type = ANY(p_content_types)
@@ -8916,7 +8916,7 @@ COMMENT ON COLUMN pgmnemo.agent_lesson.full_text IS
     'GIN index: pgmnemo_agent_lesson_full_text_idx.';
 
 -- ─────────────────────────────────────────────────────────────────────────────
--- v0.11.0 additions (typed recall — ADR-61 §3 D3 / P0.2)
+-- v0.11.0 additions (typed recall — RFC-001 §D3 / P0.2)
 -- ─────────────────────────────────────────────────────────────────────────────
 -- ─────────────────────────────────────────────────────────────────────────────
 -- recall_hybrid — v0.11.0 (based on 0.10.1 body + p_content_types param)
@@ -9288,7 +9288,7 @@ END;
 $func$;
 
 COMMENT ON FUNCTION pgmnemo.recall_hybrid(vector, TEXT, INT, TEXT, INT, DOUBLE PRECISION, DOUBLE PRECISION, INT, TEXT, text[]) IS
-    'v0.11.0 — ADR-61 §3 D3 / P0.2: typed recall. '
+    'v0.11.0 — RFC-001 §D3 / P0.2: typed recall. '
     'New param p_content_types text[] DEFAULT NULL (LAST, backward-compatible). '
     'NULL → unchanged behavior (all content types). '
     'non-NULL → pushes content_type = ANY(p_content_types) into BOTH subplans (vec + BM25) '

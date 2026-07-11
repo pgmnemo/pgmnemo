@@ -8894,7 +8894,7 @@ COMMENT ON COLUMN pgmnemo.agent_lesson.full_text IS
     'GIN index: pgmnemo_agent_lesson_full_text_idx.';
 
 -- ─────────────────────────────────────────────────────────────────────────────
--- v0.11.0 additions (typed recall — ADR-61 §3 D3 / P0.2)
+-- v0.11.0 additions (typed recall — RFC-001 §D3 / P0.2)
 -- ─────────────────────────────────────────────────────────────────────────────
 -- ─────────────────────────────────────────────────────────────────────────────
 -- recall_hybrid — v0.11.0 (based on 0.10.1 body + p_content_types param)
@@ -9266,7 +9266,7 @@ END;
 $func$;
 
 COMMENT ON FUNCTION pgmnemo.recall_hybrid(vector, TEXT, INT, TEXT, INT, DOUBLE PRECISION, DOUBLE PRECISION, INT, TEXT, text[]) IS
-    'v0.11.0 — ADR-61 §3 D3 / P0.2: typed recall. '
+    'v0.11.0 — RFC-001 §D3 / P0.2: typed recall. '
     'New param p_content_types text[] DEFAULT NULL (LAST, backward-compatible). '
     'NULL → unchanged behavior (all content types). '
     'non-NULL → pushes content_type = ANY(p_content_types) into BOTH subplans (vec + BM25) '
@@ -9777,7 +9777,7 @@ CREATE OR REPLACE FUNCTION pgmnemo._has_contact_pii(p_property TEXT)
 RETURNS BOOLEAN LANGUAGE sql IMMUTABLE STRICT PARALLEL SAFE AS $$
     SELECT p_property IN ('email', 'phone', 'address', 'telegram', 'full_name');
 $$;
-COMMENT ON FUNCTION pgmnemo._has_contact_pii(TEXT) IS 'PII property detector. Returns TRUE for {email,phone,address,telegram,full_name}. PROPERTY_CONVENTIONS §5.1 / ADR-61 D4. v0.12.0.';
+COMMENT ON FUNCTION pgmnemo._has_contact_pii(TEXT) IS 'PII property detector. Returns TRUE for {email,phone,address,telegram,full_name}. PROPERTY_CONVENTIONS §5.1 / RFC-001 §D4. v0.12.0.';
 
 -- canonical_slug
 CREATE OR REPLACE FUNCTION pgmnemo.canonical_slug(p_type TEXT, p_label TEXT)
@@ -9871,7 +9871,7 @@ BEGIN
         pgmnemo._has_contact_pii(p_property) AND (p_entity_key LIKE 'person:%')
     );
 
-    -- R1: State routing (ADR-61 D4)
+    -- R1: State routing (RFC-001 §D4)
     -- PII on person:* → candidate ALWAYS (even system source)
     IF _is_pii THEN
         _final_state := 'candidate';

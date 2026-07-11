@@ -130,7 +130,7 @@ END;
 $$;
 NOTICE:  guard_ok: allowed project_id=99999 (>100)
 -- ─────────────────────────────────────────────────────────────────────────────
--- T9: PII routing — person:* + email + system source → candidate ALWAYS (R1/ADR-61 D4)
+-- T9: PII routing — person:* + email + system source → candidate ALWAYS (R1/RFC-001 §D4)
 -- ─────────────────────────────────────────────────────────────────────────────
 SELECT final_state AS pii_sys_state
 FROM pgmnemo.remember_fact(

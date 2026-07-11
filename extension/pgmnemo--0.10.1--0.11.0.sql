@@ -1,6 +1,6 @@
 -- pgmnemo--0.10.1--0.11.0.sql
 -- pgmnemo upgrade 0.10.1 → 0.11.0
--- ADR-61 §3 D3 / P0.2: typed recall — p_content_types in recall_hybrid
+-- RFC-001 §D3 / P0.2: typed recall — p_content_types in recall_hybrid
 --
 -- Single change: add optional parameter p_content_types text[] DEFAULT NULL (LAST)
 -- to pgmnemo.recall_hybrid.
@@ -388,7 +388,7 @@ END;
 $func$;
 
 COMMENT ON FUNCTION pgmnemo.recall_hybrid(vector, TEXT, INT, TEXT, INT, DOUBLE PRECISION, DOUBLE PRECISION, INT, TEXT, text[]) IS
-    'v0.11.0 — ADR-61 §3 D3 / P0.2: typed recall. '
+    'v0.11.0 — RFC-001 §D3 / P0.2: typed recall. '
     'New param p_content_types text[] DEFAULT NULL (LAST, backward-compatible). '
     'NULL → unchanged behavior (all content types). '
     'non-NULL → pushes content_type = ANY(p_content_types) into BOTH subplans (vec + BM25) '

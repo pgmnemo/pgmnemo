@@ -1,6 +1,6 @@
 -- pgmnemo--0.10.0--0.11.0.sql
 -- pgmnemo upgrade 0.10.0 → 0.11.0
--- ADR-61 §3 D3 / P0.2: typed recall — p_content_types in recall_hybrid
+-- RFC-001 §D3 / P0.2: typed recall — p_content_types in recall_hybrid
 --
 -- Changes in this file (applied on top of 0.10.0 base):
 --
@@ -12,7 +12,7 @@
 --   Schema change: topic_tsv, lesson_tsv, full_text generated columns use 'simple'.
 --   New GUC: pgmnemo.bm25_budget_ms (INT, default 250, min 1).
 --
--- [New in 0.11.0 — ADR-61 §3 D3, P0.2]
+-- [New in 0.11.0 — RFC-001 §D3, P0.2]
 --   recall_hybrid: new optional LAST parameter p_content_types text[] DEFAULT NULL
 --     NULL  → unchanged behavior (all content types; full backward compat).
 --     non-NULL → pushes content_type = ANY(p_content_types) into BOTH subplans
@@ -479,7 +479,7 @@ END;
 $func$;
 
 COMMENT ON FUNCTION pgmnemo.recall_hybrid(vector, TEXT, INT, TEXT, INT, DOUBLE PRECISION, DOUBLE PRECISION, INT, TEXT, text[]) IS
-    'v0.11.0 — ADR-61 §3 D3 / P0.2: typed recall. '
+    'v0.11.0 — RFC-001 §D3 / P0.2: typed recall. '
     'New param p_content_types text[] DEFAULT NULL (LAST, backward-compatible). '
     'NULL → unchanged behavior (all content types). '
     'non-NULL → pushes content_type = ANY(p_content_types) into BOTH subplans (vec + BM25) '

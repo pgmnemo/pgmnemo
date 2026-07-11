@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 test_typed_recall_p02.py — Regression test for P0.2: p_content_types in recall_hybrid.
-ADR-61 §3 D3 / pgmnemo v0.11.0
+RFC-001 §D3 / pgmnemo v0.11.0
 
 Runs on TEST DB (pgmnemo_regression), NEVER on agency_v3.
 

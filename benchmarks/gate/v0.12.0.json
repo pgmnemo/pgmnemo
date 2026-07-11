@@ -28,7 +28,7 @@
             "T4-T5: _has_contact_pii PII closed set",
             "T6: canonical_slug normalisation",
             "T7-T8: guard_no_test_project (blocks ≤100, allows 99999)",
-            "T9: PII+system → candidate (ADR-61 D4 override)",
+            "T9: PII+system → candidate (RFC-001 §D4 override)",
             "T10: system+non-PII → validated",
             "T11: agent_authored conf≥0.8+non-PII → validated",
             "T12: agent_authored conf<0.8 → candidate",
