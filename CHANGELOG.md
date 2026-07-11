@@ -40,6 +40,34 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.12.2] — 2026-07-11
+
+### Fixed
+
+- **`add_edge()` ON CONFLICT constraint mismatch (PGMNEMO-0122-1).** `add_edge()`
+  used `ON CONFLICT (source_id, target_id, relation_type) WHERE valid_until IS NULL`
+  but the required partial unique index `uq_mem_edge_active` was absent in some
+  upgrade paths (pg_dump restore, direct SQL installs, manual drops). Every call
+  raised: `ERROR: there is no unique or exclusion constraint matching the ON CONFLICT
+  specification`. The migration `pgmnemo--0.12.1--0.12.2.sql` defensively re-asserts
+  the index with `CREATE UNIQUE INDEX IF NOT EXISTS uq_mem_edge_active` and
+  re-stamps `add_edge()` with `CREATE OR REPLACE` so the conflict target is
+  guaranteed present on every install and upgrade path.
+
+### Tests
+
+- New pg_regress test `add_edge_idempotent` reproduces the bug (R2: drop index →
+  confirm ON CONFLICT error), verifies the fix (R3: recreate index), and exercises
+  all three `p_mode` variants (`replace`, `max`, `avg`) for idempotency.
+
+### Upgrade
+
+```sql
+ALTER EXTENSION pgmnemo UPDATE TO '0.12.2';
+```
+
+---
+
 ## [0.12.1] — 2026-06-25
 
 ### Theme

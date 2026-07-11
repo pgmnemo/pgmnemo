@@ -1,0 +1,168 @@
+-- add_edge_idempotent.sql
+-- Regression: PGMNEMO-0122-1 — pgmnemo.add_edge() idempotent upsert (v0.12.2)
+--
+-- Bug: add_edge() uses ON CONFLICT (source_id, target_id, relation_type)
+-- WHERE valid_until IS NULL, which requires the partial unique index
+-- uq_mem_edge_active. When the index is absent the call raises:
+--   ERROR: there is no unique or exclusion constraint matching the ON CONFLICT specification
+--
+-- Fix (v0.12.2): migration defensively re-asserts uq_mem_edge_active.
+--
+-- Test coverage:
+--   R1: uq_mem_edge_active index exists after fresh install / migration
+--   R2: dropping the index reproduces the exact bug (ON CONFLICT error)
+--   R3: recreating the index (as the v0.12.2 migration does) fixes add_edge()
+--   R4: back-to-back calls with same (source, target, relation_type) are idempotent
+--   R5: p_mode='max' idempotency (weight monotonic)
+--   R6: p_mode='avg' idempotency (weight converges)
+--
+-- Role 'tc_add_edge_v0122' isolates data. project_id=99998 (>0, passes floor check).
+-- SPDX-License-Identifier: Apache-2.0
+SET pgmnemo.gate_strict = 'off';
+SET pgmnemo.track_recall_recency = 'off';
+-- Ensure we are on v0.12.2
+ALTER EXTENSION pgmnemo UPDATE TO '0.12.2';
+NOTICE:  version "0.12.2" of extension "pgmnemo" is already installed
+-- ─────────────────────────────────────────────────────────────────────────────
+-- R1: uq_mem_edge_active index exists
+-- ─────────────────────────────────────────────────────────────────────────────
+SELECT count(*) = 1 AS uq_mem_edge_active_exists
+FROM pg_indexes
+WHERE schemaname = 'pgmnemo'
+  AND indexname  = 'uq_mem_edge_active';
+ uq_mem_edge_active_exists
+---------------------------
+ t
+(1 row)
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Setup: create two agent_lesson rows for FK endpoints
+-- ─────────────────────────────────────────────────────────────────────────────
+DO $$
+DECLARE
+    src BIGINT; tgt BIGINT;
+BEGIN
+    SELECT id INTO src FROM pgmnemo.remember_fact(
+        'tc_add_edge_v0122', 'org:edge_src', 'prop', 'src_val',
+        0.9, NULL, NULL, 'system', 99998
+    );
+    SELECT id INTO tgt FROM pgmnemo.remember_fact(
+        'tc_add_edge_v0122', 'org:edge_tgt', 'prop', 'tgt_val',
+        0.9, NULL, NULL, 'system', 99998
+    );
+    CREATE TEMP TABLE _tc_add_edge (src BIGINT, tgt BIGINT) ON COMMIT PRESERVE ROWS;
+    INSERT INTO _tc_add_edge VALUES (src, tgt);
+    RAISE NOTICE 'setup_ok';
+END;
+$$;
+NOTICE:  setup_ok
+-- ─────────────────────────────────────────────────────────────────────────────
+-- R2: Reproduce bug — drop uq_mem_edge_active, call add_edge → ERROR captured
+-- ─────────────────────────────────────────────────────────────────────────────
+DROP INDEX pgmnemo.uq_mem_edge_active;
+DO $$
+DECLARE
+    src BIGINT; tgt BIGINT;
+BEGIN
+    SELECT t.src, t.tgt INTO src, tgt FROM _tc_add_edge t;
+    PERFORM pgmnemo.add_edge(src, tgt, 'CAUSED_BY', 0.8, '{}', 'replace');
+    RAISE NOTICE 'add_edge_no_error_UNEXPECTED';
+EXCEPTION WHEN OTHERS THEN
+    IF SQLERRM LIKE '%no unique or exclusion constraint%' THEN
+        RAISE NOTICE 'bug_reproduced: ON CONFLICT error when index absent';
+    ELSE
+        RAISE NOTICE 'unexpected_error: %', SQLERRM;
+    END IF;
+END;
+$$;
+NOTICE:  bug_reproduced: ON CONFLICT error when index absent
+-- ─────────────────────────────────────────────────────────────────────────────
+-- R3: Fix — recreate uq_mem_edge_active (exactly as v0.12.2 migration does)
+-- ─────────────────────────────────────────────────────────────────────────────
+CREATE UNIQUE INDEX uq_mem_edge_active
+    ON pgmnemo.mem_edge (source_id, target_id, relation_type)
+    WHERE valid_until IS NULL;
+SELECT count(*) = 1 AS index_recreated
+FROM pg_indexes
+WHERE schemaname = 'pgmnemo'
+  AND indexname  = 'uq_mem_edge_active';
+ index_recreated
+-----------------
+ t
+(1 row)
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- R4: add_edge() idempotent with p_mode='replace' (default)
+-- Two calls, same (source, target, relation_type) → exactly 1 active edge
+-- ─────────────────────────────────────────────────────────────────────────────
+DO $$
+DECLARE
+    src BIGINT; tgt BIGINT;
+    cnt INT;
+    w   REAL;
+BEGIN
+    SELECT t.src, t.tgt INTO src, tgt FROM _tc_add_edge t;
+    -- First call
+    PERFORM pgmnemo.add_edge(src, tgt, 'CAUSED_BY', 0.7, '{"call":1}'::jsonb, 'replace');
+    -- Second call (same edge, different weight) → upsert
+    PERFORM pgmnemo.add_edge(src, tgt, 'CAUSED_BY', 0.9, '{"call":2}'::jsonb, 'replace');
+    SELECT count(*), MAX(weight) INTO cnt, w
+    FROM pgmnemo.mem_edge
+    WHERE source_id = src AND target_id = tgt AND valid_until IS NULL;
+    IF cnt = 1 AND w > 0.89 THEN
+        RAISE NOTICE 'replace_idempotent_ok: 1 active edge weight=0.9';
+    ELSE
+        RAISE NOTICE 'replace_idempotent_FAIL: cnt=% weight=%', cnt, w;
+    END IF;
+END;
+$$;
+NOTICE:  replace_idempotent_ok: 1 active edge weight=0.9
+-- ─────────────────────────────────────────────────────────────────────────────
+-- R5: p_mode='max' — weight is monotonically non-decreasing
+-- ─────────────────────────────────────────────────────────────────────────────
+DO $$
+DECLARE
+    src BIGINT; tgt BIGINT;
+    w   REAL;
+BEGIN
+    SELECT t.src, t.tgt INTO src, tgt FROM _tc_add_edge t;
+    -- Edge already exists with weight=0.9 from R4; max(0.9, 0.5)=0.9
+    PERFORM pgmnemo.add_edge(src, tgt, 'CAUSED_BY', 0.5, '{}', 'max');
+    SELECT weight INTO w
+    FROM pgmnemo.mem_edge
+    WHERE source_id = src AND target_id = tgt AND valid_until IS NULL;
+    IF w > 0.89 THEN
+        RAISE NOTICE 'max_monotonic_ok: weight unchanged at 0.9';
+    ELSE
+        RAISE NOTICE 'max_monotonic_FAIL: weight=%', w;
+    END IF;
+END;
+$$;
+NOTICE:  max_monotonic_ok: weight unchanged at 0.9
+-- ─────────────────────────────────────────────────────────────────────────────
+-- R6: p_mode='avg' — weight averages (converges, stays bounded [0,1])
+-- ─────────────────────────────────────────────────────────────────────────────
+DO $$
+DECLARE
+    src BIGINT; tgt BIGINT;
+    w   REAL;
+BEGIN
+    SELECT t.src, t.tgt INTO src, tgt FROM _tc_add_edge t;
+    -- current weight ~0.9; avg(0.9, 0.1) = 0.5
+    PERFORM pgmnemo.add_edge(src, tgt, 'CAUSED_BY', 0.1, '{}', 'avg');
+    SELECT weight INTO w
+    FROM pgmnemo.mem_edge
+    WHERE source_id = src AND target_id = tgt AND valid_until IS NULL;
+    IF w > 0.0 AND w < 1.0 THEN
+        RAISE NOTICE 'avg_bounded_ok: weight in (0,1)';
+    ELSE
+        RAISE NOTICE 'avg_bounded_FAIL: weight=%', w;
+    END IF;
+END;
+$$;
+NOTICE:  avg_bounded_ok: weight in (0,1)
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Cleanup
+-- ─────────────────────────────────────────────────────────────────────────────
+DELETE FROM pgmnemo.agent_lesson WHERE role = 'tc_add_edge_v0122';
+DROP TABLE _tc_add_edge;
