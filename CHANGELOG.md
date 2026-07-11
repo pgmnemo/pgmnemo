@@ -54,11 +54,33 @@ Versions follow [Semantic Versioning](https://semver.org/).
   re-stamps `add_edge()` with `CREATE OR REPLACE` so the conflict target is
   guaranteed present on every install and upgrade path.
 
+- **Dedup active `mem_edge` rows before unique index (PGMNEMO-0122-2).** The 0.12.2
+  migration now deduplicates active edges before creating `uq_mem_edge_active`.
+  Production environments with duplicate active rows (same `source_id`, `target_id`,
+  `relation_type`, `valid_until IS NULL`) would have caused `CREATE UNIQUE INDEX` to
+  fail. The migration keeps the highest-id row and closes earlier duplicates by
+  setting `valid_until = NOW()`. This is a no-op on clean databases.
+
+- **GUC-based `guard_no_test_project` re-asserted (PGMNEMO-0122-2).** The migration
+  drops any 0-arg `guard_no_test_project()` overload (defensive; no-op if absent)
+  and re-asserts the canonical 2-arg GUC-based variant introduced in v0.12.1. The
+  guard reads `pgmnemo.test_project_floor` (default `0` = disabled) rather than any
+  hardcoded threshold, so a fresh install imposes no project-id numbering scheme on
+  consumers. See `docs/MIGRATION.md §0.12.1→0.12.2` for the full dedup pattern and
+  guard usage.
+
 ### Tests
 
 - New pg_regress test `add_edge_idempotent` reproduces the bug (R2: drop index →
   confirm ON CONFLICT error), verifies the fix (R3: recreate index), and exercises
   all three `p_mode` variants (`replace`, `max`, `avg`) for idempotency.
+
+- New pg_regress test `guc_guard_threshold` (PGMNEMO-0122-2): proves the guard
+  uses GUC `pgmnemo.test_project_floor` rather than a hardcoded threshold.
+  G1 confirms no 0-arg overload exists. G2 confirms floor=0 allows project_id=42
+  (old hardcoded `<=100` would have blocked it). G3/G4 confirm floor=500 blocks
+  project_id=500 and allows project_id=501. G5 confirms floor=0 allows
+  project_id=1 (smallest positive id).
 
 ### Upgrade
 

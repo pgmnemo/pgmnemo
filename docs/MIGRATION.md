@@ -5,6 +5,115 @@ This guide covers version-to-version upgrade paths and migration from an externa
 
 ---
 
+## 0.12.1 → 0.12.2
+
+**Release date:** 2026-07-11 | **SQL changes:** Yes
+
+### Upgrade
+
+```sql
+ALTER EXTENSION pgmnemo UPDATE TO '0.12.2';
+```
+
+### What changed
+
+1. **`add_edge()` ON CONFLICT fix (PGMNEMO-0122-1):** The `uq_mem_edge_active`
+   partial unique index is defensively re-asserted. See CHANGELOG for details.
+
+2. **Dedup before unique index (PGMNEMO-0122-2):** The migration deduplicates
+   active `mem_edge` rows before creating `uq_mem_edge_active`. Production
+   databases with duplicate active edges (same `source_id`, `target_id`,
+   `relation_type`, `valid_until IS NULL`) would have caused `CREATE UNIQUE INDEX`
+   to fail. The migration keeps the highest-`id` row per duplicate group and closes
+   earlier duplicates by setting `valid_until = NOW()`.
+
+3. **GUC-based guard re-asserted (PGMNEMO-0122-2):** Any `guard_no_test_project()`
+   0-arg overload is dropped. The canonical 2-arg GUC-based variant is re-asserted.
+
+### Dedup pattern for active `mem_edge` rows
+
+If you are upgrading from 0.12.x and suspect your database has duplicate active
+edges, this pattern is what the migration runs automatically. You can run it manually
+in advance to verify your exposure before the upgrade:
+
+```sql
+-- Dry-run: count how many duplicate active edges exist
+SELECT
+    source_id, target_id, relation_type,
+    COUNT(*) AS active_count
+FROM pgmnemo.mem_edge
+WHERE valid_until IS NULL
+GROUP BY source_id, target_id, relation_type
+HAVING COUNT(*) > 1
+ORDER BY active_count DESC;
+-- Zero rows = clean; >0 rows = the migration will close the extras.
+```
+
+The dedup SQL the migration runs (keep highest `id`, close others):
+
+```sql
+-- Run inside a transaction before CREATE UNIQUE INDEX uq_mem_edge_active
+BEGIN;
+
+WITH ranked AS (
+    SELECT id,
+           ROW_NUMBER() OVER (
+               PARTITION BY source_id, target_id, relation_type
+               ORDER BY id DESC          -- keep highest id (most recently inserted)
+           ) AS rn
+    FROM pgmnemo.mem_edge
+    WHERE valid_until IS NULL
+),
+to_close AS (
+    SELECT id FROM ranked WHERE rn > 1   -- all but the winning row
+)
+UPDATE pgmnemo.mem_edge
+SET valid_until = NOW()
+WHERE id IN (SELECT id FROM to_close);
+
+-- Inspect how many were closed:
+-- GET DIAGNOSTICS _closed = ROW_COUNT;
+-- RAISE NOTICE 'closed % duplicate active edge(s)', _closed;
+
+COMMIT;
+```
+
+> **Note:** Closed duplicate rows are **not deleted** — they are bittemporally
+> retired (`valid_until = NOW()`). They remain queryable for history/audit purposes
+> but are excluded from active-edge queries (`WHERE valid_until IS NULL`).
+
+### GUC-based guard
+
+The `guard_no_test_project(p_project_id INT, p_allowed_db TEXT DEFAULT NULL)`
+function was updated in v0.12.1 to read `pgmnemo.test_project_floor` (GUC)
+instead of using a hardcoded threshold. The v0.12.2 migration re-asserts this
+to ensure the GUC-based variant is installed on all upgrade paths.
+
+**Usage in test scripts:**
+
+```sql
+-- In your test setup, configure the floor for your project-id scheme:
+SET pgmnemo.test_project_floor = 100;   -- block ids 1..100 (your production range)
+
+-- Guard call at the start of each test:
+PERFORM pgmnemo.guard_no_test_project(99999);   -- passes (99999 > 100)
+PERFORM pgmnemo.guard_no_test_project(42);      -- raises EXCEPTION (42 <= 100)
+
+-- Default (floor=0): no project-id scheme imposed; all positive ids pass:
+SET pgmnemo.test_project_floor = 0;
+PERFORM pgmnemo.guard_no_test_project(1);       -- passes (1 > 0)
+```
+
+The default `floor=0` is a no-op — a fresh install imposes no project-id numbering
+convention. Operators opt in by `SET pgmnemo.test_project_floor = <N>`.
+
+### Breaking changes
+
+None. No schema column additions, no table rewrites. Estimated duration: <1 s
+(dedup UPDATE on `mem_edge` + index assertion + function re-stamp).
+
+---
+
 ## 0.9.5 → 0.9.6
 
 **Release date:** 2026-06-19 | **SQL changes:** Yes
