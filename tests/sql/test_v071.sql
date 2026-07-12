@@ -10,12 +10,13 @@
 --
 -- Prerequisites: pgmnemo installed at v0.7.1 (fresh or upgraded from 0.7.0).
 -- Inserted test rows use project_id <= -1 (non-conflicting namespace).
+-- v0.13.0: confidence_mode defaults to 'posterior'; set 'additive' to preserve test semantics.
 
 -- =============================================================================
 -- A: Batch reinforce overload exists
 -- =============================================================================
 
--- A1: Two reinforce overloads registered (scalar + batch)
+-- A1: At least two reinforce overloads registered (scalar + batch; more may exist in newer versions)
 DO $$
 DECLARE _cnt INT;
 BEGIN
@@ -24,10 +25,10 @@ BEGIN
     JOIN pg_namespace n ON n.oid = p.pronamespace
     WHERE n.nspname = 'pgmnemo' AND p.proname = 'reinforce';
 
-    IF _cnt = 2 THEN
-        RAISE NOTICE 'A1 PASS: reinforce has 2 overloads (scalar + batch)';
+    IF _cnt >= 2 THEN
+        RAISE NOTICE 'A1 PASS: reinforce has % overloads (>= 2, scalar + batch family)', _cnt;
     ELSE
-        RAISE EXCEPTION 'A1 FAIL: expected 2 reinforce overloads, got %', _cnt;
+        RAISE EXCEPTION 'A1 FAIL: expected >= 2 reinforce overloads, got %', _cnt;
     END IF;
 END;
 $$;

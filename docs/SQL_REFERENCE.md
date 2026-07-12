@@ -1,6 +1,6 @@
 # pgmnemo SQL Reference
 
-**Version coverage:** v0.10.0 (current)  
+**Version coverage:** v0.13.0 (current)  
 **Status:** authoritative — function signatures here match `extension/pgmnemo--*.sql`.
 
 For usage patterns and worked examples see `USAGE.md`; for upgrade paths see
@@ -50,6 +50,12 @@ installs the `pgmnemo` schema and pulls `vector` (pgvector) and `pg_trgm`.
 | `version_n` | INT DEFAULT 1 | monotonically increasing version counter; increment on substantial revision (v0.9.6) |
 | `patch_count` | INT DEFAULT 0 | minor patch edit counter; reset to 0 on each `version_n` increment (v0.9.6) |
 | `source_dag_id` | TEXT NULL | opaque identifier of the workflow run that produced this lesson; NULL = unknown/manual origin. Covered by sparse index `ix_pgmnemo_agent_lesson_source_dag_id WHERE source_dag_id IS NOT NULL`. (v0.9.6) |
+| `success_count` | INT DEFAULT 0 | count of `'success'` outcomes from `reinforce()` calls. |
+| `fail_count` | INT DEFAULT 0 | count of `'failure'` outcomes from `reinforce()` calls. |
+| `confidence` | REAL NOT NULL DEFAULT 0.5 | posterior mean confidence: `(success_count + α) / (success_count + fail_count + α + β)`. Updated on every `reinforce()` call in posterior mode. CHECK: [0.0, 1.0]. (v0.7.0; formula updated v0.13.0) |
+| `use_count` | INT NOT NULL DEFAULT 0 | count of reinforce calls where the lesson was confirmed used (`p_used = TRUE` or `NULL`). Separate from `recall_count` (shown) and from `success_count + fail_count` (outcome trials). (v0.13.0) |
+| `last_outcome` | TEXT | last outcome string: `'success'`, `'failure'`, or `'neutral'`. |
+| `last_outcome_at` | TIMESTAMPTZ | timestamp of most recent `reinforce()` call that changed counts. |
 
 Indexes: HNSW on `embedding` (cosine_ops), B-tree on `(role, project_id)`,
 GIN on `lesson_tsv` (v0.2.2+), GIN on `metadata`,
@@ -656,6 +662,98 @@ SELECT * FROM pgmnemo.mark_stale(
 
 ---
 
+### 2.10 `pgmnemo.reinforce(...)` — Outcome Loop v2 (v0.13.0)
+
+Records the outcome of a lesson application and recomputes posterior confidence.
+
+#### Scalar form
+
+```sql
+pgmnemo.reinforce(
+    p_lesson_id  BIGINT,
+    p_outcome    TEXT,            -- 'success' | 'failure' | 'neutral'
+    p_used       BOOLEAN DEFAULT NULL   -- NEW in v0.13.0
+) RETURNS REAL  -- new confidence value
+```
+
+#### Batch form
+
+```sql
+pgmnemo.reinforce(
+    p_lesson_ids  BIGINT[],
+    p_outcome     TEXT,
+    p_used        BOOLEAN DEFAULT NULL
+) RETURNS INT   -- count of lessons updated
+```
+
+#### `p_used` semantics
+
+| `p_used` | Effect |
+|---|---|
+| `NULL` (default) | Backward-compat: treated as `TRUE`. All shown lessons counted. |
+| `TRUE` | Lesson was confirmed used. Counts and confidence updated. |
+| `FALSE` | Lesson was shown but not used. No count or confidence change. Returns current confidence unchanged. |
+
+When `p_used = FALSE`, the lesson was not tested against reality. Counting it would dilute the signal.
+
+#### Confidence computation (`confidence_mode = 'posterior'`)
+
+```
+confidence = (success_count + α) / (success_count + fail_count + α + β)
+```
+
+Where `α = pgmnemo.confidence_prior_alpha` (default 1.0) and `β = pgmnemo.confidence_prior_beta` (default 1.0).
+
+#### Neutral outcome
+
+`p_outcome = 'neutral'` increments `use_count` (when `p_used` is not FALSE) but does not change `success_count`, `fail_count`, or `confidence`. Returns current confidence.
+
+#### p_min_score calibration (match_confidence interpretation)
+
+| match_confidence | Interpretation | Recommendation |
+|---|---|---|
+| ≥ 0.85 | Strong semantic match | Always include |
+| 0.65 – 0.85 | Moderate match | Include if budget allows |
+| 0.40 – 0.65 | Weak match | MEM_AB v2 TOT: cosine > 0.4 → turns −34% |
+| < 0.40 | Near-random similarity | Exclude (noise > signal) |
+
+Recommended default: `p_min_score => 0.40` based on MEM_AB v2 TOT results.
+
+#### Overload resolution
+
+| Call | Resolves to |
+|---|---|
+| `reinforce(42, 'success')` | 2-param scalar (compat shim → 3-param with p_used=NULL) |
+| `reinforce(42, 'success', TRUE)` | 3-param scalar (v0.13.0) |
+| `reinforce(ARRAY[1,2], 'success')` | 2-param batch (compat shim) |
+| `reinforce(ARRAY[1,2], 'success', FALSE)` | 3-param batch (v0.13.0) |
+
+**Note:** 2-param overloads are **deprecated in v0.13.0** and will be removed in v0.14.0.
+
+#### `p_min_score` on recall functions (v0.13.0)
+
+All recall functions now accept `p_min_score REAL DEFAULT NULL` as the last parameter:
+
+```sql
+-- recall_hybrid: 11th parameter
+pgmnemo.recall_hybrid(..., p_min_score REAL DEFAULT NULL)
+
+-- recall_fast: 7th parameter
+pgmnemo.recall_fast(..., p_min_score REAL DEFAULT NULL)
+
+-- recall_lessons: 9th parameter
+pgmnemo.recall_lessons(..., p_min_score REAL DEFAULT NULL)
+
+-- recall_lessons_pooled: 4th parameter
+pgmnemo.recall_lessons_pooled(query_embedding, k, app_id, p_min_score REAL DEFAULT NULL)
+```
+
+When `p_min_score IS NOT NULL`, rows where `match_confidence < p_min_score` are filtered before `ORDER BY / LIMIT k`. `match_confidence = LEAST(1.0, GREATEST(0.0, cosine_similarity))`. `NULL` = no filter (backward-compatible, bit-identical to v0.12.x).
+
+Ghost-lesson NOTICE fires only when `p_min_score IS NULL` and result set is empty.
+
+---
+
 ## 3. GUCs
 
 > **Reading GUCs:** `SHOW pgmnemo.*` will fail because pgmnemo is a pure-SQL extension
@@ -684,18 +782,48 @@ SELECT * FROM pgmnemo.mark_stale(
 | `pgmnemo.include_unverified` | bool | `false` | `true` / `false` | Include ghost lessons (`verified_at IS NULL`) in `recall_lessons()` output. |
 | `pgmnemo.max_query_text_chars` | int | `2000` (v0.5.0+) | 0 – any | Maximum length of `query_text` in `recall_lessons()` and `lesson_text` in `ingest()`. Input exceeding the cap is silently truncated with a `RAISE NOTICE`. Set to `0` to disable the cap entirely. |
 
-### 3.3 Outcome-learning GUCs (used by `reinforce()`, v0.9.3+)
+### 3.3 Outcome-learning GUCs (used by `reinforce()`, v0.9.3+; posterior mode added v0.13.0)
+
+#### v0.13.0 posterior confidence GUCs
 
 | GUC | Type | Default | Range | Description |
 |---|---|---|---|---|
-| `pgmnemo.reinforce_success_delta` | float | **`0.02`** (v0.9.3+; was `0.10` in v0.7.0–v0.9.2) | 0.001 – 0.5 | Confidence increment on `'success'` outcome. Applied as `confidence += delta` (clamped to 1.0). Base-rate-adjusted default: slow upward drift, one success is not sufficient evidence. |
-| `pgmnemo.reinforce_fail_delta` | float | **`0.12`** (v0.9.3+; was `0.15` in v0.7.0–v0.9.2) | 0.001 – 0.5 | Confidence decrement on `'failure'` outcome. Applied as `confidence -= delta` (clamped to 0.0). Asymmetric by design: failures are penalised faster than successes are rewarded. |
+| `pgmnemo.confidence_mode` | text | **`'posterior'`** | `'posterior'` \| `'additive'` | Confidence computation mode. `'posterior'`: Beta posterior mean (v0.13.0 default). `'additive'`: legacy delta scheme (v0.7.0–v0.12.x, deprecated). Unknown value → RAISE EXCEPTION. |
+| `pgmnemo.confidence_prior_alpha` | float | **`1.0`** | 0.01 – 100.0 | Beta distribution α hyperparameter. Prior belief that a new lesson succeeds. Beta(1,1) = uniform (non-informative). Beta(2,2) = mild regularisation. Beta(5,1) = optimistic prior. |
+| `pgmnemo.confidence_prior_beta` | float | **`1.0`** | 0.01 – 100.0 | Beta distribution β hyperparameter. Prior belief in failure. See α for tuning guidance. |
 
-Override per-session or at DB/role level:
+**Posterior formula (v0.13.0 default):**
+```
+confidence = (success_count + α) / (success_count + fail_count + α + β)
+```
+
+| Scenario | s | f | α=1, β=1 | Interpretation |
+|---|---|---|---|---|
+| Zero observations | 0 | 0 | 0.500 | Prior mean: no information |
+| 1 success | 1 | 0 | 0.667 | Slightly above prior |
+| 5 success, 0 fail | 5 | 0 | 0.857 | Strong positive signal |
+| 85/15 (base-rate) | 85 | 15 | 0.843 | Reflects actual population rate |
+| 50/50 (coin flip) | 50 | 50 | 0.500 | Correctly signals no discriminative power |
+
+#### v0.9.3 delta GUCs (DEPRECATED in v0.13.0 — only active when `confidence_mode = 'additive'`)
+
+| GUC | Type | Default | Range | Description |
+|---|---|---|---|---|
+| `pgmnemo.reinforce_success_delta` | float | **`0.02`** | 0.001 – 0.5 | **DEPRECATED** (additive mode only). Confidence increment on `'success'`. Ignored in posterior mode. |
+| `pgmnemo.reinforce_fail_delta` | float | **`0.12`** | 0.001 – 0.5 | **DEPRECATED** (additive mode only). Confidence decrement on `'failure'`. Ignored in posterior mode. |
 
 ```sql
-SET pgmnemo.reinforce_success_delta = '0.05';  -- more aggressive success reward
-SET pgmnemo.reinforce_fail_delta    = '0.08';  -- lighter failure penalty
+-- Use posterior mode (default in v0.13.0):
+RESET pgmnemo.confidence_mode;  -- or SET to 'posterior'
+
+-- Use custom prior (Beta(2,2) for mild regularisation):
+SET pgmnemo.confidence_prior_alpha = '2.0';
+SET pgmnemo.confidence_prior_beta  = '2.0';
+
+-- Fall back to legacy additive mode (for A/B comparison):
+SET pgmnemo.confidence_mode = 'additive';
+SET pgmnemo.reinforce_success_delta = '0.05';
+SET pgmnemo.reinforce_fail_delta    = '0.08';
 ```
 
 ### 3.4 Multi-tenant scoping (v0.2.1+)
@@ -738,6 +866,9 @@ SELECT name, setting, sourcefile FROM pg_file_settings WHERE name LIKE 'pgmnemo.
 | v0.9.3 | `pgmnemo.reinforce_success_delta` | `0.10` → `0.02` | D1: base-rate-adjusted default; old value caused confidence saturation at ceiling |
 | v0.9.5 | `pgmnemo.track_recall_recency` | (new GUC, default `on`) | E: recall-recency stamping; opt-out (`off`) for byte-identical behaviour to v0.9.4 |
 | v0.9.3 | `pgmnemo.reinforce_fail_delta` | `0.15` → `0.12` | D1: base-rate-adjusted default; asymmetric: failures penalised faster than successes rewarded |
+| v0.13.0 | `pgmnemo.confidence_mode` | (new GUC, default `'posterior'`) | OL-v2: switches from additive delta to Beta posterior mean; `'additive'` restores pre-0.13 behaviour |
+| v0.13.0 | `pgmnemo.confidence_prior_alpha` | (new GUC, default `1.0`) | OL-v2: Beta distribution α hyperparameter; Beta(1,1) = uniform prior |
+| v0.13.0 | `pgmnemo.confidence_prior_beta` | (new GUC, default `1.0`) | OL-v2: Beta distribution β hyperparameter |
 
 Adopters who set GUCs via `ALTER SYSTEM` keep their values across version upgrades.
 Only the **function default fallback** changes when we ship a new default. To
@@ -764,6 +895,11 @@ Policies use `DROP IF EXISTS` then `CREATE`; safe to re-apply.
 | v0.2.0.1 / v0.2.1 | `recall_lessons()` params renamed: `role`→`role_filter`, `project_id`→`project_id_filter` (resolved `RETURNS TABLE` collision) | Named-argument callers must use new names |
 | v0.5.0 | 4-argument `traverse_causal_chain(start, max_depth, role, project)` **removed** (deprecated since v0.4.1 with `RAISE NOTICE`) | Use 2-arg form + `WHERE` clause (see MIGRATION.md §0.4.1→0.5.0) |
 | v0.5.0 | `mem_edge.lesson_a_id` / `lesson_b_id` **renamed** to `source_id` / `target_id` | Use `pgmnemo.add_edge()` (§1.2) to avoid direct column references; or update INSERT statements |
+| v0.13.0 | `reinforce(BIGINT, TEXT)` 2-param scalar **deprecated** → use 3-param with `p_used` | Will be removed in v0.14.0. Add `p_used => TRUE` or `p_used => FALSE` to all call sites. |
+| v0.13.0 | `reinforce(BIGINT[], TEXT)` 2-param batch **deprecated** → use 3-param with `p_used` | Will be removed in v0.14.0. |
+| v0.13.0 | `pgmnemo.reinforce_success_delta` / `reinforce_fail_delta` GUCs **deprecated** | Functional only in `confidence_mode = 'additive'`. Will be removed in v0.14.0. |
+| v0.13.0 | `recall_hybrid` 10-param overload **replaced** by 11-param (+ `p_min_score`) | `DEFAULT NULL` preserves backward compat. 10-param calls route to 11-param automatically. |
+| v0.13.0 | `recall_fast` 6-param, `recall_lessons` 8-param, `recall_lessons_pooled` 3-param all replaced by +1-param versions | `DEFAULT NULL` preserves backward compat. |
 
 For all changes per release see `CHANGELOG.md`.
 

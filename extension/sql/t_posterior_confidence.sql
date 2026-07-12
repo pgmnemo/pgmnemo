@@ -1,0 +1,82 @@
+-- t_posterior_confidence.sql
+-- pg_regress tests for pgmnemo v0.13.0 posterior confidence (Beta posterior mean)
+--
+-- Coverage:
+--   T1: Zero observations → confidence = 0.5 (Beta(1,1) prior mean = 1/(1+1))
+--   T2: One success → confidence = (1+1)/(1+0+1+1) = 2/3 ≈ 0.667
+--   T3: One more failure → confidence = (1+1)/(1+1+1+1) = 2/4 = 0.500
+--   T4: Custom prior Beta(2,2): one success → (1+2)/(1+0+2+2) = 3/5 = 0.600
+-- SPDX-License-Identifier: Apache-2.0
+
+SET pgmnemo.gate_strict = 'off';
+SET pgmnemo.include_unverified = 'on';
+
+-- Setup: two test lessons with known commit_sha for lookup
+DO $$
+BEGIN
+    PERFORM pgmnemo.ingest('test_role', 999, 'posterior_test',
+        'lesson alpha test posterior confidence computation v0130',
+        p_commit_sha => 'sha_pc_a');
+    PERFORM pgmnemo.ingest('test_role', 999, 'posterior_test',
+        'lesson beta test posterior confidence computation v0130',
+        p_commit_sha => 'sha_pc_b');
+END;
+$$;
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- T1: Zero observations → confidence = 0.5
+-- ─────────────────────────────────────────────────────────────────────────────
+SELECT confidence = 0.5 AS t1_zero_obs_is_05
+FROM pgmnemo.agent_lesson
+WHERE topic = 'posterior_test' AND commit_sha = 'sha_pc_a';
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- T2: One success → confidence = (1+1)/(1+0+1+1) = 2/3 ≈ 0.667
+-- ─────────────────────────────────────────────────────────────────────────────
+DO $$
+BEGIN
+    PERFORM pgmnemo.reinforce(
+        (SELECT id FROM pgmnemo.agent_lesson WHERE commit_sha = 'sha_pc_a'),
+        'success', TRUE);
+END;
+$$;
+
+SELECT round(confidence::numeric, 3) = 0.667 AS t2_one_success
+FROM pgmnemo.agent_lesson WHERE commit_sha = 'sha_pc_a';
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- T3: One success + one failure → confidence = (1+1)/(1+1+1+1) = 2/4 = 0.500
+-- ─────────────────────────────────────────────────────────────────────────────
+DO $$
+BEGIN
+    PERFORM pgmnemo.reinforce(
+        (SELECT id FROM pgmnemo.agent_lesson WHERE commit_sha = 'sha_pc_a'),
+        'failure', TRUE);
+END;
+$$;
+
+SELECT round(confidence::numeric, 3) = 0.500 AS t3_one_each_is_half
+FROM pgmnemo.agent_lesson WHERE commit_sha = 'sha_pc_a';
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- T4: Custom prior Beta(2,2) → one success: (1+2)/(1+0+2+2) = 3/5 = 0.600
+-- ─────────────────────────────────────────────────────────────────────────────
+SET pgmnemo.confidence_prior_alpha = '2.0';
+SET pgmnemo.confidence_prior_beta  = '2.0';
+
+DO $$
+BEGIN
+    PERFORM pgmnemo.reinforce(
+        (SELECT id FROM pgmnemo.agent_lesson WHERE commit_sha = 'sha_pc_b'),
+        'success', TRUE);
+END;
+$$;
+
+SELECT round(confidence::numeric, 3) = 0.600 AS t4_custom_prior_beta22
+FROM pgmnemo.agent_lesson WHERE commit_sha = 'sha_pc_b';
+
+RESET pgmnemo.confidence_prior_alpha;
+RESET pgmnemo.confidence_prior_beta;
+
+-- Cleanup
+DELETE FROM pgmnemo.agent_lesson WHERE topic = 'posterior_test';

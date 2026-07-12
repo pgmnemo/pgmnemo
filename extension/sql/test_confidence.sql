@@ -15,8 +15,10 @@
 -- Prerequisites: pgmnemo 0.7.0 installed.
 -- gate_strict=off: insert test rows without commit_sha/artifact_hash.
 -- include_unverified=on: recall unverified test rows.
+-- v0.13.0: confidence_mode defaults to 'posterior'; explicitly set 'additive' to keep test semantics.
 SET pgmnemo.gate_strict = 'off';
 SET pgmnemo.include_unverified = 'on';
+SET pgmnemo.confidence_mode = 'additive';
 
 -- =============================================================================
 -- T1: confidence column default and CHECK constraint

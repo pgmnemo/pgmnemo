@@ -32,7 +32,7 @@ SET pgmnemo.gate_strict = 'off';
 SET pgmnemo.include_unverified = 'on';
 SET pgmnemo.track_recall_recency = 'off';
 
-ALTER EXTENSION pgmnemo UPDATE TO '0.12.2';
+ALTER EXTENSION pgmnemo UPDATE TO '0.13.0';
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- T1: remember_fact has 11 parameters

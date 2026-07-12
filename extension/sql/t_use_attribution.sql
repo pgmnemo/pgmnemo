@@ -1,0 +1,81 @@
+-- t_use_attribution.sql
+-- pg_regress tests for pgmnemo v0.13.0 use-attribution (p_used parameter)
+--
+-- Coverage:
+--   T1: p_used = FALSE → counts unchanged, confidence unchanged
+--   T2: p_used = TRUE → success_count and use_count incremented
+--   T3: p_used = NULL (legacy) → backward-compat: counts incremented
+--   T4: neutral + p_used = TRUE → use_count incremented, success/fail unchanged
+-- SPDX-License-Identifier: Apache-2.0
+
+SET pgmnemo.gate_strict = 'off';
+SET pgmnemo.include_unverified = 'on';
+
+-- Setup
+DO $$
+BEGIN
+    PERFORM pgmnemo.ingest('test_role', 999, 'use_attr_test',
+        'lesson gamma test use attribution confirmed used v0130',
+        p_commit_sha => 'sha_ua_g');
+END;
+$$;
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- T1: p_used = FALSE → no count update, confidence unchanged (stays 0.5)
+-- ─────────────────────────────────────────────────────────────────────────────
+DO $$
+BEGIN
+    PERFORM pgmnemo.reinforce(
+        (SELECT id FROM pgmnemo.agent_lesson WHERE commit_sha = 'sha_ua_g'),
+        'success', FALSE);
+END;
+$$;
+
+SELECT success_count = 0 AND fail_count = 0 AND use_count = 0 AND confidence = 0.5
+    AS t1_not_used_no_change
+FROM pgmnemo.agent_lesson WHERE commit_sha = 'sha_ua_g';
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- T2: p_used = TRUE → success_count=1, use_count=1, confidence updated
+-- ─────────────────────────────────────────────────────────────────────────────
+DO $$
+BEGIN
+    PERFORM pgmnemo.reinforce(
+        (SELECT id FROM pgmnemo.agent_lesson WHERE commit_sha = 'sha_ua_g'),
+        'success', TRUE);
+END;
+$$;
+
+SELECT success_count = 1 AND use_count = 1 AS t2_used_counts_incremented
+FROM pgmnemo.agent_lesson WHERE commit_sha = 'sha_ua_g';
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- T3: p_used = NULL (legacy) → treated as TRUE, counts incremented
+-- ─────────────────────────────────────────────────────────────────────────────
+DO $$
+BEGIN
+    PERFORM pgmnemo.reinforce(
+        (SELECT id FROM pgmnemo.agent_lesson WHERE commit_sha = 'sha_ua_g'),
+        'failure');  -- 2-param form: p_used defaults to NULL → legacy TRUE
+END;
+$$;
+
+SELECT success_count = 1 AND fail_count = 1 AND use_count = 2 AS t3_null_legacy_counted
+FROM pgmnemo.agent_lesson WHERE commit_sha = 'sha_ua_g';
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- T4: neutral + p_used = TRUE → use_count incremented, s/f unchanged
+-- ─────────────────────────────────────────────────────────────────────────────
+DO $$
+BEGIN
+    PERFORM pgmnemo.reinforce(
+        (SELECT id FROM pgmnemo.agent_lesson WHERE commit_sha = 'sha_ua_g'),
+        'neutral', TRUE);
+END;
+$$;
+
+SELECT success_count = 1 AND fail_count = 1 AND use_count = 3 AS t4_neutral_use_count_up
+FROM pgmnemo.agent_lesson WHERE commit_sha = 'sha_ua_g';
+
+-- Cleanup
+DELETE FROM pgmnemo.agent_lesson WHERE topic = 'use_attr_test';

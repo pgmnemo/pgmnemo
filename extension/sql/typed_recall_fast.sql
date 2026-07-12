@@ -3,8 +3,8 @@
 -- Covers recall_fast() and recall_lessons() gaining the typed recall parameter.
 --
 -- Coverage:
---   T1:  recall_fast signature has 6 params (p_content_types as 6th)
---   T2:  recall_lessons signature has 8 params (p_content_types as 8th)
+--   T1:  recall_fast signature has 7 params (p_content_types as 6th)
+--   T2:  recall_lessons signature has 9 params (p_content_types as 8th)
 --   T3:  recall_fast p_content_types=NULL (default) — backward-compat, returns rows
 --   T4:  recall_fast p_content_types=ARRAY['procedure'] — only procedure rows returned
 --   T5:  recall_fast p_content_types=ARRAY[]::text[] — zero rows
@@ -23,29 +23,29 @@ SET pgmnemo.include_unverified = 'on';
 SET pgmnemo.track_recall_recency = 'off';
 SET pgmnemo.disable_hybrid = 'on';   -- force vector-only path in recall_lessons
 
-ALTER EXTENSION pgmnemo UPDATE TO '0.12.2';
+ALTER EXTENSION pgmnemo UPDATE TO '0.13.0';
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- T1: recall_fast has 6 parameters
 -- ─────────────────────────────────────────────────────────────────────────────
 
-SELECT pronargs = 6 AS recall_fast_has_six_params
+SELECT pronargs = 7 AS recall_fast_has_seven_params
 FROM pg_proc p
 JOIN pg_namespace n ON n.oid = p.pronamespace
 WHERE n.nspname = 'pgmnemo'
   AND p.proname = 'recall_fast'
-  AND p.pronargs = 6;
+  AND p.pronargs = 7;
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- T2: recall_lessons has 8 parameters
 -- ─────────────────────────────────────────────────────────────────────────────
 
-SELECT pronargs = 8 AS recall_lessons_has_eight_params
+SELECT pronargs = 9 AS recall_lessons_has_nine_params
 FROM pg_proc p
 JOIN pg_namespace n ON n.oid = p.pronamespace
 WHERE n.nspname = 'pgmnemo'
   AND p.proname = 'recall_lessons'
-  AND p.pronargs = 8;
+  AND p.pronargs = 9;
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- Setup: insert typed lessons with embeddings (all-zeros, same direction, so

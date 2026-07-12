@@ -1,0 +1,82 @@
+-- t_backward_compat.sql
+-- pg_regress tests for pgmnemo v0.13.0 backward compatibility
+--
+-- Coverage:
+--   T1: 2-param scalar reinforce(BIGINT, TEXT) still works
+--   T2: 2-param batch reinforce(BIGINT[], TEXT) still works
+--   T3: recall_hybrid exists as 11-param function (p_min_score DEFAULT NULL)
+--   T4: recall_fast exists as 7-param function (p_min_score DEFAULT NULL)
+--   T5: reinforce 3-param overloads both registered in pg_proc
+--   T6: use_count column exists on agent_lesson
+-- SPDX-License-Identifier: Apache-2.0
+
+SET pgmnemo.gate_strict = 'off';
+SET pgmnemo.include_unverified = 'on';
+
+-- Setup
+DO $$
+BEGIN
+    PERFORM pgmnemo.ingest('test_role', 999, 'compat_test',
+        'lesson epsilon test backward compatibility two param reinforce v0130',
+        p_commit_sha => 'sha_bc_e');
+END;
+$$;
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- T1: 2-param scalar reinforce still works (success_count incremented)
+-- ─────────────────────────────────────────────────────────────────────────────
+DO $$
+BEGIN
+    PERFORM pgmnemo.reinforce(
+        (SELECT id FROM pgmnemo.agent_lesson WHERE commit_sha = 'sha_bc_e'),
+        'success');
+END;
+$$;
+
+SELECT success_count = 1 AS t1_2param_scalar_works
+FROM pgmnemo.agent_lesson WHERE commit_sha = 'sha_bc_e';
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- T2: 2-param batch reinforce still works (fail_count incremented)
+-- ─────────────────────────────────────────────────────────────────────────────
+SELECT pgmnemo.reinforce(
+    ARRAY(SELECT id FROM pgmnemo.agent_lesson WHERE commit_sha = 'sha_bc_e'),
+    'failure'
+) = 1 AS t2_2param_batch_works;
+
+SELECT fail_count = 1 AS t2_fail_count_incremented
+FROM pgmnemo.agent_lesson WHERE commit_sha = 'sha_bc_e';
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- T3: recall_hybrid is 11-param function (p_min_score = 11th with DEFAULT)
+-- ─────────────────────────────────────────────────────────────────────────────
+SELECT pronargs = 11 AS t3_recall_hybrid_11params
+FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+WHERE n.nspname = 'pgmnemo' AND p.proname = 'recall_hybrid';
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- T4: recall_fast is 7-param function (p_min_score = 7th with DEFAULT)
+-- ─────────────────────────────────────────────────────────────────────────────
+SELECT pronargs = 7 AS t4_recall_fast_7params
+FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+WHERE n.nspname = 'pgmnemo' AND p.proname = 'recall_fast';
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- T5: Both 3-param reinforce overloads registered
+-- ─────────────────────────────────────────────────────────────────────────────
+SELECT count(*) = 2 AS t5_3param_overloads_both_registered
+FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+WHERE n.nspname = 'pgmnemo' AND p.proname = 'reinforce'
+  AND p.pronargs = 3;
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- T6: use_count column exists on agent_lesson
+-- ─────────────────────────────────────────────────────────────────────────────
+SELECT count(*) = 1 AS t6_use_count_column_exists
+FROM information_schema.columns
+WHERE table_schema = 'pgmnemo'
+  AND table_name   = 'agent_lesson'
+  AND column_name  = 'use_count';
+
+-- Cleanup
+DELETE FROM pgmnemo.agent_lesson WHERE topic = 'compat_test';

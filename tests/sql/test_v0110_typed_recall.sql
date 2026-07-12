@@ -25,10 +25,10 @@ BEGIN
     JOIN pg_namespace n ON n.oid = p.pronamespace
     WHERE n.nspname = 'pgmnemo' AND p.proname = 'recall_hybrid';
 
-    IF _nargs = 10 THEN
-        RAISE NOTICE 'A1 PASS: recall_hybrid has 10 parameters (p_content_types added)';
+    IF _nargs = 11 THEN
+        RAISE NOTICE 'A1 PASS: recall_hybrid has 11 parameters (p_content_types + p_min_score added)';
     ELSE
-        RAISE EXCEPTION 'A1 FAIL: expected 10 params, got %', _nargs;
+        RAISE EXCEPTION 'A1 FAIL: expected 11 params, got %', _nargs;
     END IF;
 END;
 $$;

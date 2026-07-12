@@ -15,6 +15,82 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.13.0] — 2026-07-11
+
+### Changed — Outcome Loop v2 (PGMNEMO-0130-1)
+
+**Posterior confidence replaces additive delta scheme.**
+The v0.7.0–0.12.x additive delta approach (OL-260605 verdict: r_pb = −0.05, p = 0.66,
+statistically DEAD) is superseded by a Bayesian Beta posterior mean:
+
+```
+confidence = (success_count + α) / (success_count + fail_count + α + β)
+```
+
+Where `α = pgmnemo.confidence_prior_alpha` (default 1.0) and
+`β = pgmnemo.confidence_prior_beta` (default 1.0) are Beta distribution
+hyperparameters. Beta(1,1) is the uniform (non-informative) prior.
+
+- **New GUC `pgmnemo.confidence_prior_alpha`** (DOUBLE PRECISION, default 1.0, range [0.01, 100.0])
+- **New GUC `pgmnemo.confidence_prior_beta`** (DOUBLE PRECISION, default 1.0, range [0.01, 100.0])
+- **New GUC `pgmnemo.confidence_mode`** (`'posterior'` default | `'additive'` legacy) — enables
+  switching back to additive delta behavior for A/B comparison.
+- **Deprecated GUCs** `pgmnemo.reinforce_success_delta` and `pgmnemo.reinforce_fail_delta` remain
+  functional when `confidence_mode = 'additive'` but are ignored in posterior mode.
+
+### Added — Use-attribution (p_used parameter)
+
+- **`reinforce(BIGINT, TEXT, BOOLEAN)` — new 3-param scalar overload.**
+  `p_used = FALSE`: lesson was shown but not used — no count/confidence change.
+  `p_used = TRUE` or `NULL`: lesson counted (backward compat: NULL → TRUE).
+- **`reinforce(BIGINT[], TEXT, BOOLEAN)` — new 3-param batch overload.**
+  Applies same `p_used` to all ids; delegates to scalar form.
+- **New column `pgmnemo.agent_lesson.use_count INT NOT NULL DEFAULT 0`.**
+  Tracks confirmed attribution separately from `recall_count` (shown) and
+  `success_count + fail_count` (outcome trials).
+- Old 2-param overloads kept as deprecated shims that delegate to 3-param form.
+
+### Added — Selectivity gate (p_min_score)
+
+- **`recall_hybrid(... p_min_score REAL DEFAULT NULL)`** — 11th parameter.
+  Filters rows where `match_confidence < p_min_score` before ORDER BY/LIMIT.
+  Ghost-lesson NOTICE only fires when `p_min_score IS NULL`.
+- **`recall_fast(... p_min_score REAL DEFAULT NULL)`** — 7th parameter.
+- **`recall_lessons(... p_min_score REAL DEFAULT NULL)`** — 9th parameter.
+  Forwarded to `recall_hybrid` on hybrid path; applied as WHERE filter on vector-only path.
+- **`recall_lessons_pooled(... p_min_score REAL DEFAULT NULL)`** — 4th parameter.
+- All changes are **additive with DEFAULT NULL** — zero call-site changes required.
+- Recommended value: `p_min_score => 0.40` (MEM_AB v2 TOT cosine > 0.4: turns −34%).
+
+### Migration: 0.12.2 → 0.13.0
+
+```sql
+ALTER EXTENSION pgmnemo UPDATE TO '0.13.0';
+```
+
+The upgrade script (`pgmnemo--0.12.2--0.13.0.sql`):
+1. Adds `use_count` column (backfill: `success_count + fail_count`).
+2. Recomputes `confidence` via Beta(1,1) posterior for all lessons with observations.
+3. Resets `confidence = 0.5` for zero-observation lessons (prior mean).
+4. Replaces `reinforce` with posterior-aware forms.
+5. Updates all recall functions with `p_min_score` parameter.
+
+### Tests
+
+5 new pg_regress test files (total: 45 tests):
+- `t_posterior_confidence` — Beta posterior formula verification (T1–T4)
+- `t_use_attribution` — p_used=FALSE/TRUE/NULL semantics (T1–T4)
+- `t_class_imbalance` — **MANDATORY** 85%-base-rate discrimination proof (T1–T3):
+  good lessons (17/3) → 0.818; bad lessons (8/12) → 0.409; gap = 0.409 >> 0.30
+- `t_confidence_mode_switch` — posterior/additive mode switching (T1–T4)
+- `t_backward_compat` — 2-param reinforce, param counts, use_count column (T1–T6)
+
+### Gate status
+
+**GATE_POSTERIOR_CONFIDENCE: PENDING** (requires ≥200 runs with `p_used=TRUE`).
+`pgmnemo.confidence_boost_weight` remains 0.0 (OFF) until gate PASS.
+Posterior confidence is computed and stored but does not affect ranking until gate PASS.
+
 ## [Unreleased]
 
 ### Fixed
