@@ -116,7 +116,20 @@ echo "[build]   bundled $SQL_COPIED production SQL files"
 cp Makefile README.md LICENSE CHANGELOG.md META.json "$BUNDLE_DIR/"
 
 echo "[build] creating zip..."
-zip -rq "$BUNDLE_ZIP" "$BUNDLE_DIR/"
+if command -v zip >/dev/null 2>&1; then
+    zip -rq "$BUNDLE_ZIP" "$BUNDLE_DIR/"
+else
+    # zip(1) is absent in minimal containers — python3 zipfile is always there.
+    python3 - "$BUNDLE_ZIP" "$BUNDLE_DIR" <<'ZIPEOF'
+import os, sys, zipfile
+dst, src = sys.argv[1], sys.argv[2]
+with zipfile.ZipFile(dst, "w", zipfile.ZIP_DEFLATED) as z:
+    for root, _dirs, files in os.walk(src):
+        for f in sorted(files):
+            p = os.path.join(root, f)
+            z.write(p, p)
+ZIPEOF
+fi
 
 echo "[build] post-build verification + dist-shape guard..."
 python3 - <<PYEOF || exit 1
