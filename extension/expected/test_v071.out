@@ -19,8 +19,10 @@
 -- Prerequisites: pgmnemo 0.7.1 installed.
 -- gate_strict=off: insert test rows without commit_sha/artifact_hash.
 -- include_unverified=on: recall unverified test rows.
+-- v0.13.0: confidence_mode defaults to 'posterior'; set 'additive' to preserve test semantics.
 SET pgmnemo.gate_strict = 'off';
 SET pgmnemo.include_unverified = 'on';
+SET pgmnemo.confidence_mode = 'additive';
 -- =============================================================================
 -- T1: BUG-1 — match_confidence ≈ vec_score (cosine), not final_score/1.5
 --

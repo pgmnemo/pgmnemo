@@ -33,7 +33,7 @@ FROM pg_proc p
 JOIN pg_namespace n ON n.oid = p.pronamespace
 WHERE n.nspname = 'pgmnemo'
   AND p.proname = 'recall_fast'
-  AND pronargs = 5;
+  AND pronargs = 7;
 
 -- ============================================================================
 -- T2: Parameter names match published API
@@ -46,7 +46,7 @@ FROM pg_proc p
 JOIN pg_namespace n ON n.oid = p.pronamespace
 WHERE n.nspname = 'pgmnemo'
   AND p.proname = 'recall_fast'
-  AND pronargs = 5;
+  AND pronargs = 7;
 
 -- ============================================================================
 -- T3: Returns 0 rows when no embedded rows in corpus

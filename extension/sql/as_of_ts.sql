@@ -16,7 +16,7 @@ WHERE  n.nspname = 'pgmnemo'
 ORDER  BY pronargs DESC
 LIMIT  1;
 
--- recall_hybrid() still has 8 parameters (signature unchanged)
+-- recall_hybrid() arg count (11 as of v0.13.0: +p_min_score)
 SELECT pronargs AS recall_hybrid_arg_count
 FROM   pg_proc p
 JOIN   pg_namespace n ON n.oid = p.pronamespace
@@ -111,4 +111,4 @@ FROM   pg_proc p
 JOIN   pg_namespace n ON n.oid = p.pronamespace
 WHERE  n.nspname = 'pgmnemo'
   AND  p.proname = 'recall_lessons_pooled'
-  AND  pronargs  = 3;
+  AND  pronargs  = 4;

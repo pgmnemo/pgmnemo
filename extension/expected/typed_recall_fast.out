@@ -24,7 +24,7 @@ SET pgmnemo.disable_hybrid = 'on';   -- force vector-only path in recall_lessons
 ALTER EXTENSION pgmnemo UPDATE TO '0.13.0';
 NOTICE:  version "0.13.0" of extension "pgmnemo" is already installed
 -- ─────────────────────────────────────────────────────────────────────────────
--- T1: recall_fast has 7 parameters
+-- T1: recall_fast has 6 parameters
 -- ─────────────────────────────────────────────────────────────────────────────
 SELECT pronargs = 7 AS recall_fast_has_seven_params
 FROM pg_proc p
@@ -33,12 +33,12 @@ WHERE n.nspname = 'pgmnemo'
   AND p.proname = 'recall_fast'
   AND p.pronargs = 7;
  recall_fast_has_seven_params 
-----------------------------
+------------------------------
  t
 (1 row)
 
 -- ─────────────────────────────────────────────────────────────────────────────
--- T2: recall_lessons has 9 parameters
+-- T2: recall_lessons has 8 parameters
 -- ─────────────────────────────────────────────────────────────────────────────
 SELECT pronargs = 9 AS recall_lessons_has_nine_params
 FROM pg_proc p
@@ -47,7 +47,7 @@ WHERE n.nspname = 'pgmnemo'
   AND p.proname = 'recall_lessons'
   AND p.pronargs = 9;
  recall_lessons_has_nine_params 
----------------------------------
+--------------------------------
  t
 (1 row)
 

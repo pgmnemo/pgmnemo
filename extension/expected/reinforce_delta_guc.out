@@ -10,8 +10,10 @@
 --   G6: Regression — after transaction RESET, defaults restore to 0.02/0.12
 -- Prerequisites: pgmnemo 0.9.3 installed.
 -- gate_strict=off: insert test rows without commit_sha/artifact_hash.
+-- v0.13.0: confidence_mode defaults to 'posterior'; explicitly set 'additive' to keep test semantics.
 SET pgmnemo.gate_strict = 'off';
 SET pgmnemo.include_unverified = 'on';
+SET pgmnemo.confidence_mode = 'additive';
 -- =============================================================================
 -- G1: Default deltas: success +0.02, failure -0.12
 -- =============================================================================

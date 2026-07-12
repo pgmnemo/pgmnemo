@@ -10332,7 +10332,12 @@ BEGIN
     FOREACH _id IN ARRAY p_lesson_ids LOOP
         BEGIN
             PERFORM pgmnemo.reinforce(_id, p_outcome, _effective_used);
-            _count := _count + 1;
+            -- v0.7.1 contract: return value counts confidence-updated lessons.
+            -- Neutral outcomes are stamped (last_outcome, use attribution) but
+            -- do not change confidence, so they are not counted.
+            IF p_outcome <> 'neutral' THEN
+                _count := _count + 1;
+            END IF;
         EXCEPTION WHEN OTHERS THEN
             -- Skip missing lesson_ids silently (batch contract)
             NULL;
@@ -10345,7 +10350,7 @@ $func$;
 
 COMMENT ON FUNCTION pgmnemo.reinforce(BIGINT[], TEXT, BOOLEAN) IS
     'v0.13.0 batch reinforce. Delegates to scalar form per id. '
-    'Skips missing/errored ids silently. Returns count updated.';
+    'Skips missing/errored ids silently. Returns count of confidence-updated lessons; neutral outcomes are stamped for attribution but not counted (v0.7.1 contract).';
 
 -- §5: Update 2-param scalar reinforce to delegate to 3-param (backward compat)
 CREATE OR REPLACE FUNCTION pgmnemo.reinforce(
@@ -10759,6 +10764,7 @@ COMMENT ON FUNCTION pgmnemo.recall_hybrid(vector, TEXT, INT, TEXT, INT, DOUBLE P
     'Inherits v0.11.0 (RFC-001 §D2 / P0.2: typed recall) and v0.10.1 (#87) fixes: '
     'query_text cap, indexed full_text BM25, bm25_budget_ms timeout, simple tsconfig. '
     'match_confidence: vec_score (cosine similarity, [0,1]). '
+    'RRF fusion is sparse-safe per Cormack 2009: unmatched candidates rank n_candidates+1. '
     'graph_proximity via mem_edge causal/temporal walk (depth ≤5). '
     'VOLATILE (side-effects: recency stamp, temp table _pgmnemo_bm25_work).';
 

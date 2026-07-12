@@ -18,6 +18,8 @@
 -- v0.13.0: confidence_mode defaults to 'posterior'; explicitly set 'additive' to keep test semantics.
 SET pgmnemo.gate_strict = 'off';
 SET pgmnemo.include_unverified = 'on';
+-- v0.13.0: confidence_mode defaults to 'posterior'; this test validates legacy additive semantics.
+SET pgmnemo.confidence_mode = 'additive';
 SET pgmnemo.confidence_mode = 'additive';
 
 -- =============================================================================
@@ -137,15 +139,18 @@ VALUES ('tc_v070', 'recall_confidence_low',
         'confidence ranking recall test low confidence lesson text', 0.1);
 
 -- The NOTICE fires because query_embedding IS NULL.
--- High-confidence (0.9) scores +0.135 vs low-confidence (0.1) +0.015 in confidence term.
-SELECT confidence > 0.5 AS top_result_is_high_confidence
-FROM pgmnemo.recall_lessons(
+-- The confidence aux term (0.025 * confidence) lives in recall_hybrid()'s
+-- scoring. recall_lessons()' text-only fallback does NOT apply it (identical
+-- BM25 texts tie at equal score, order arbitrary — true on 0.12.x as well),
+-- so this test must exercise recall_hybrid() directly.
+-- High-confidence (0.9) gets +0.0225 vs low-confidence (0.1) +0.0025 aux.
+SELECT r.confidence > 0.5 AS top_result_is_high_confidence
+FROM pgmnemo.recall_hybrid(
     NULL::vector(1024),
+    'confidence ranking recall test',
     1,
-    'tc_v070',
-    NULL,
-    'confidence ranking recall test'
-)
+    'tc_v070'
+) r
 LIMIT 1;
 
 -- =============================================================================

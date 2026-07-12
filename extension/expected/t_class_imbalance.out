@@ -17,8 +17,8 @@
 -- T2: Bad  avg confidence ∈ [0.400, 0.420] (expected 0.409)
 -- T3: good_avg − bad_avg > 0.30 (discrimination gate)
 -- SPDX-License-Identifier: Apache-2.0
-SET
-SET
+SET pgmnemo.gate_strict = 'off';
+SET pgmnemo.include_unverified = 'on';
 -- ─────────────────────────────────────────────────────────────────────────────
 -- Setup: 10 good lessons (17 success, 3 failure each)
 --        10 bad  lessons  (8 success, 12 failure each)
@@ -34,8 +34,7 @@ BEGIN
         SELECT pgmnemo.ingest(
             'test_role', 999, 'imbalance_test',
             format('good lesson %s test class imbalance posterior confidence v0130', _i),
-            3, NULL,
-            format('sha_ci_good_%s', _i)
+            p_commit_sha => format('sha_ci_good_%s', _i)
         ) INTO _id;
         FOR _j IN 1..17 LOOP
             PERFORM pgmnemo.reinforce(_id, 'success', TRUE);
@@ -50,8 +49,7 @@ BEGIN
         SELECT pgmnemo.ingest(
             'test_role', 999, 'imbalance_test',
             format('bad lesson %s test class imbalance posterior confidence v0130', _i),
-            3, NULL,
-            format('sha_ci_bad_%s', _i)
+            p_commit_sha => format('sha_ci_bad_%s', _i)
         ) INTO _id;
         FOR _j IN 1..8 LOOP
             PERFORM pgmnemo.reinforce(_id, 'success', TRUE);
@@ -62,7 +60,6 @@ BEGIN
     END LOOP;
 END;
 $setup$;
-DO
 -- ─────────────────────────────────────────────────────────────────────────────
 -- T1: Good lessons avg confidence = 18/22 ≈ 0.818 (Beta(1,1) posterior)
 -- ─────────────────────────────────────────────────────────────────────────────
@@ -71,8 +68,8 @@ SELECT
     round(avg(confidence)::numeric, 3) BETWEEN 0.810 AND 0.825 AS t1_good_range
 FROM pgmnemo.agent_lesson
 WHERE topic = 'imbalance_test' AND commit_sha LIKE 'sha_ci_good_%';
- good_avg | t1_good_range
-----------+--------------
+ good_avg | t1_good_range 
+----------+---------------
     0.818 | t
 (1 row)
 
@@ -84,8 +81,8 @@ SELECT
     round(avg(confidence)::numeric, 3) BETWEEN 0.400 AND 0.420 AS t2_bad_range
 FROM pgmnemo.agent_lesson
 WHERE topic = 'imbalance_test' AND commit_sha LIKE 'sha_ci_bad_%';
- bad_avg | t2_bad_range
----------+-------------
+ bad_avg | t2_bad_range 
+---------+--------------
    0.409 | t
 (1 row)
 
@@ -99,11 +96,10 @@ SELECT
   - (SELECT avg(confidence) FROM pgmnemo.agent_lesson
      WHERE topic = 'imbalance_test' AND commit_sha LIKE 'sha_ci_bad_%')
   > 0.30 AS t3_discrimination_gate;
- t3_discrimination_gate
+ t3_discrimination_gate 
 ------------------------
  t
 (1 row)
 
 -- Cleanup
 DELETE FROM pgmnemo.agent_lesson WHERE topic = 'imbalance_test';
-DELETE 20

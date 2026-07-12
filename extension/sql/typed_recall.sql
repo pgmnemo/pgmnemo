@@ -27,12 +27,12 @@ ALTER EXTENSION pgmnemo UPDATE TO '0.13.0';
 -- T1: Function signature — 10 parameters including p_content_types
 -- ─────────────────────────────────────────────────────────────────────────────
 
-SELECT pronargs = 10 AS has_ten_params
+SELECT pronargs = 11 AS has_eleven_params
 FROM pg_proc p
 JOIN pg_namespace n ON n.oid = p.pronamespace
 WHERE n.nspname = 'pgmnemo'
   AND p.proname = 'recall_hybrid'
-  AND p.pronargs = 10;
+  AND p.pronargs = 11;
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- Setup: insert typed lessons in isolated role 'tc_p02'
