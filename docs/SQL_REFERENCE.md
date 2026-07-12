@@ -714,10 +714,10 @@ Where `α = pgmnemo.confidence_prior_alpha` (default 1.0) and `β = pgmnemo.conf
 |---|---|---|
 | ≥ 0.85 | Strong semantic match | Always include |
 | 0.65 – 0.85 | Moderate match | Include if budget allows |
-| 0.40 – 0.65 | Weak match | MEM_AB v2 TOT: cosine > 0.4 → turns −34% |
+| 0.40 – 0.65 | Weak match | production A/B, high-relevance subgroup (cosine > 0.4): turns −34% |
 | < 0.40 | Near-random similarity | Exclude (noise > signal) |
 
-Recommended default: `p_min_score => 0.40` based on MEM_AB v2 TOT results.
+Recommended default: `p_min_score => 0.40` based on production A/B results (high-relevance subgroup).
 
 #### Overload resolution
 

@@ -20,7 +20,7 @@ Versions follow [Semantic Versioning](https://semver.org/).
 ### Changed — Outcome Loop v2 (PGMNEMO-0130-1)
 
 **Posterior confidence replaces additive delta scheme.**
-The v0.7.0–0.12.x additive delta approach (OL-260605 verdict: r_pb = −0.05, p = 0.66,
+The v0.7.0–0.12.x additive delta approach (retrospective validation on production outcome data, June 2026: r_pb = −0.05, p = 0.66,
 statistically DEAD) is superseded by a Bayesian Beta posterior mean:
 
 ```
@@ -60,7 +60,7 @@ hyperparameters. Beta(1,1) is the uniform (non-informative) prior.
   Forwarded to `recall_hybrid` on hybrid path; applied as WHERE filter on vector-only path.
 - **`recall_lessons_pooled(... p_min_score REAL DEFAULT NULL)`** — 4th parameter.
 - All changes are **additive with DEFAULT NULL** — zero call-site changes required.
-- Recommended value: `p_min_score => 0.40` (MEM_AB v2 TOT cosine > 0.4: turns −34%).
+- Recommended value: `p_min_score => 0.40` (production A/B, high-relevance subgroup cosine > 0.4: turns −34%).
 
 ### Migration: 0.12.2 → 0.13.0
 

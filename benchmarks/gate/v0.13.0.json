@@ -5,7 +5,7 @@
   "gate_status": "PASS",
   "gate_type": "pre_registered_rct",
   "significance_required": true,
-  "scope": "Outcome-Loop v2: Beta posterior confidence replaces additive delta (OL-260605 verdict: r_pb=-0.05, p=0.66, DEAD). Pre-registered validation on 468 qualifying production runs. New: use-attribution p_used param (use_count column), selectivity gate p_min_score on all recall functions, match_confidence calibration guidance.",
+  "scope": "Outcome-Loop v2: Beta posterior confidence replaces additive delta (prior retrospective validation: r_pb=-0.05, p=0.66, DEAD). Pre-registered validation on 468 qualifying production runs. New: use-attribution p_used param (use_count column), selectivity gate p_min_score on all recall functions, match_confidence calibration guidance.",
   "justification": "Pre-registered gate PASSED on production data (r_pb=+0.20, p=0.008, held-out test set 45/423). Base-rate-adjusted scheme: r_pb=+0.277, p=0.0003, chi²=0.008 (all gates PASS). Caveats per pre-registration: chi² median-split NS (p=0.47), power=29% at test-set size. Evidence grade: MODERATE. Temporal confound (run_order→outcome) p=0.055 NS — no longer dominant. Default pgmnemo.confidence_boost_weight remains 0.0 (conservative for external adopters); activation guide in USAGE.md.",
   "schema_change": true,
   "schema_change_detail": "New column agent_lesson.use_count INT NOT NULL DEFAULT 0 (backfill: success_count+fail_count). New GUCs: pgmnemo.confidence_mode ('posterior'|'additive'), pgmnemo.confidence_prior_alpha (default 1.0), pgmnemo.confidence_prior_beta (default 1.0). New reinforce() 3-param overloads (p_used BOOLEAN). p_min_score REAL DEFAULT NULL added as last param to recall_hybrid (11th), recall_fast (7th), recall_lessons (9th), recall_lessons_pooled (4th). All additive with DEFAULT NULL — zero call-site changes required.",
@@ -44,7 +44,7 @@
     "caveats": [
       "chi² median-split NS (p=0.47) — primary scheme passes r_pb and p gates",
       "power=29% at test-set size — larger test set would reduce uncertainty",
-      "temporal confound run_order→outcome p=0.055 NS (was p<0.01 in OL-260605)"
+      "temporal confound run_order→outcome p=0.055 NS (was p<0.01 in the prior retrospective validation)"
     ],
     "evidence_grade": "MODERATE",
     "release_decision": "SHIP with conservative default (confidence_boost_weight=0.0); activation guide in USAGE.md"

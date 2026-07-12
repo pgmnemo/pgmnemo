@@ -844,7 +844,7 @@ the clamped cosine similarity of the lesson embedding to the query. It is **not*
 |-----------------|----------------|--------------------|
 | ≥ 0.85 | Strong semantic match | Always include |
 | 0.65 – 0.85 | Moderate match | Include if token budget allows |
-| 0.40 – 0.65 | Weak match — may be tangentially relevant | MEM_AB v2 TOT: turns −34% with threshold 0.40 |
+| 0.40 – 0.65 | Weak match — may be tangentially relevant | production A/B (high-relevance subgroup): turns −34% with threshold 0.40 |
 | < 0.40 | Near-random similarity | Exclude (noise > signal) |
 
 Use `p_min_score` (see below) to apply this threshold at SQL level. Thresholds above

@@ -71,3 +71,4 @@ site-internal/
 scripts/.internal-leak-patterns
 docs/POSITIONING_DELTA_v010.md
 docs/RELEASE_NARRATIVE_v010.md
+/results/
