@@ -87,9 +87,21 @@ The upgrade script (`pgmnemo--0.12.2--0.13.0.sql`):
 
 ### Gate status
 
-**GATE_POSTERIOR_CONFIDENCE: PENDING** (requires ≥200 runs with `p_used=TRUE`).
-`pgmnemo.confidence_boost_weight` remains 0.0 (OFF) until gate PASS.
-Posterior confidence is computed and stored but does not affect ranking until gate PASS.
+**GATE_POSTERIOR_CONFIDENCE: PASS** — pre-registered validation on 468 qualifying production
+runs (held-out test set: 45 failures / 423 successes).
+
+| Scheme | r_pb | p (1-sided) | chi² p | Decision |
+|--------|------|-------------|--------|----------|
+| Shipped delta (+0.10/−0.15) | +0.220 | 0.004 | 0.227 | PASS (r, p) |
+| Base-rate-adjusted (+0.02/−0.12) | +0.277 | 0.0003 | **0.008** | PASS (all gates) |
+| **Posterior 0.13.0 Beta(1,1)** | **+0.200** | **0.008** | 0.465 | **PASS (r, p)** |
+
+Caveats (documented per pre-registration protocol): chi² median-split NS (p = 0.47),
+power 29% at test-set size. Evidence grade: MODERATE.
+
+**Default remains `pgmnemo.confidence_boost_weight = 0.0` (OFF)** — conservative for external
+adopters without their own outcome signal. To activate, see `USAGE.md §Activating confidence
+weighting` — recommended for deployments that call `reinforce()` with own outcome data.
 
 ## [Unreleased]
 

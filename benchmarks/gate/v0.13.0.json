@@ -1,0 +1,53 @@
+{
+  "version": "v0.13.0",
+  "date": "2026-07-12",
+  "pgmnemo_version": "0.13.0",
+  "gate_status": "PASS",
+  "gate_type": "pre_registered_rct",
+  "significance_required": true,
+  "scope": "Outcome-Loop v2: Beta posterior confidence replaces additive delta (OL-260605 verdict: r_pb=-0.05, p=0.66, DEAD). Pre-registered validation on 468 qualifying production runs. New: use-attribution p_used param (use_count column), selectivity gate p_min_score on all recall functions, match_confidence calibration guidance.",
+  "justification": "Pre-registered gate PASSED on production data (r_pb=+0.20, p=0.008, held-out test set 45/423). Base-rate-adjusted scheme: r_pb=+0.277, p=0.0003, chi²=0.008 (all gates PASS). Caveats per pre-registration: chi² median-split NS (p=0.47), power=29% at test-set size. Evidence grade: MODERATE. Temporal confound (run_order→outcome) p=0.055 NS — no longer dominant. Default pgmnemo.confidence_boost_weight remains 0.0 (conservative for external adopters); activation guide in USAGE.md.",
+  "schema_change": true,
+  "schema_change_detail": "New column agent_lesson.use_count INT NOT NULL DEFAULT 0 (backfill: success_count+fail_count). New GUCs: pgmnemo.confidence_mode ('posterior'|'additive'), pgmnemo.confidence_prior_alpha (default 1.0), pgmnemo.confidence_prior_beta (default 1.0). New reinforce() 3-param overloads (p_used BOOLEAN). p_min_score REAL DEFAULT NULL added as last param to recall_hybrid (11th), recall_fast (7th), recall_lessons (9th), recall_lessons_pooled (4th). All additive with DEFAULT NULL — zero call-site changes required.",
+  "scoring_impact": "p_min_score: no impact when NULL (default, backward-compatible). When set, filters rows where match_confidence < threshold before ORDER BY/LIMIT — reduces result set size without reordering survivors. confidence_boost_weight default 0.0 unchanged — no ranking change for default installs.",
+  "recall_ranking_impact": "none for default installs (confidence_boost_weight=0.0, p_min_score=NULL). p_min_score filtering is caller opt-in and does not change ORDER BY key for retained rows.",
+  "backward_compat_proof": "t_backward_compat pg_regress test (T1-T6): 2-param reinforce() shims delegate to 3-param form (p_used=NULL→TRUE); param counts verified; use_count column present and backfilled. p_min_score NULL-default verified bit-identical to 0.12.x recall paths.",
+  "new_regress_tests": [
+    "t_posterior_confidence",
+    "t_use_attribution",
+    "t_class_imbalance",
+    "t_confidence_mode_switch",
+    "t_backward_compat",
+    "add_edge_idempotent",
+    "guc_guard_threshold"
+  ],
+  "new_regress_test_count": 7,
+  "installcheck": {
+    "harness": "pg_regress — extension/Makefile (--load-extension=vector --load-extension=pgmnemo)",
+    "postgres": "17",
+    "pgvector": "0.8+",
+    "result": "PASS — 45/45",
+    "tests_run": 45,
+    "tests_passed": 45,
+    "date_run": "2026-07-12"
+  },
+  "pre_registered_validation": {
+    "protocol": "spec/v3/memory-era/0.13_VALIDATION_RESULT.md",
+    "n_qualifying_runs": 468,
+    "test_set_successes": 423,
+    "test_set_failures": 45,
+    "schemes": {
+      "shipped_delta": {"r_pb": 0.220, "p_one_sided": 0.004, "chi2_p": 0.227, "verdict": "PASS (r, p)"},
+      "base_rate_adjusted": {"r_pb": 0.277, "p_one_sided": 0.0003, "chi2_p": 0.008, "verdict": "PASS (all)"},
+      "posterior_0130_beta11": {"r_pb": 0.200, "p_one_sided": 0.008, "chi2_p": 0.465, "verdict": "PASS (r, p)"}
+    },
+    "caveats": [
+      "chi² median-split NS (p=0.47) — primary scheme passes r_pb and p gates",
+      "power=29% at test-set size — larger test set would reduce uncertainty",
+      "temporal confound run_order→outcome p=0.055 NS (was p<0.01 in OL-260605)"
+    ],
+    "evidence_grade": "MODERATE",
+    "release_decision": "SHIP with conservative default (confidence_boost_weight=0.0); activation guide in USAGE.md"
+  },
+  "leak_scan": "PASS — scripts/check_no_internal_leak.sh exit 0 (2026-07-12)"
+}
