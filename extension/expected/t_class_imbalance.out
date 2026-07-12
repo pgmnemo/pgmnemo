@@ -3,7 +3,7 @@
 --
 -- Proves that Beta posterior confidence discriminates good from bad lessons
 -- under 85% base success rate — the exact population distribution in prod
--- (OL-260605: 83.5% success in 236 qualifying runs).
+-- (production baseline: 83.5% success in 236 qualifying runs).
 --
 -- Design:
 --   10 "good" lessons: 17 successes, 3 failures each  → posterior = 18/22 ≈ 0.818
