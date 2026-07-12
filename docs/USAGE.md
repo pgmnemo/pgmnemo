@@ -265,30 +265,39 @@ keyword-match queries appear alongside semantic queries (LoCoMo-style mixed corp
 pgmnemo.recall_hybrid(
     query_embedding   vector(1024),
     query_text        TEXT,
-    k                 INT     DEFAULT 10,
-    role_filter       TEXT    DEFAULT NULL,
-    project_id_filter INT     DEFAULT NULL,
-    vec_weight        FLOAT   DEFAULT 0.4,
-    bm25_weight       FLOAT   DEFAULT 0.4,
-    rrf_k             INT     DEFAULT 60
+    k                 INT              DEFAULT 10,
+    role_filter       TEXT             DEFAULT NULL,
+    project_id_filter INT              DEFAULT NULL,
+    vec_weight        DOUBLE PRECISION DEFAULT 0.4,
+    bm25_weight       DOUBLE PRECISION DEFAULT 0.4,
+    rrf_k             INT              DEFAULT 60,
+    exclude_dag_id    TEXT             DEFAULT NULL,   -- v0.9+
+    p_content_types   TEXT[]           DEFAULT NULL,   -- v0.11.1+
+    p_min_score       REAL             DEFAULT NULL    -- v0.13.0: filter match_confidence < threshold
 ) RETURNS TABLE (
-    lesson_id     BIGINT,
-    score         DOUBLE PRECISION,   -- weighted hybrid combination (sort key)
-    vec_score     DOUBLE PRECISION,   -- diagnostic: cosine similarity component
-    bm25_score    DOUBLE PRECISION,   -- diagnostic: ts_rank_cd component
-    rrf_score     DOUBLE PRECISION,   -- diagnostic: 1/(rrf_k+vec_rank) + 1/(rrf_k+bm25_rank)
-    role          TEXT,
-    project_id    INT,
-    topic         TEXT,
-    lesson_text   TEXT,
-    importance    SMALLINT,
-    metadata      JSONB,
-    commit_sha    TEXT,
-    artifact_hash TEXT,
-    verified_at   TIMESTAMPTZ,
-    created_at    TIMESTAMPTZ
+    lesson_id        BIGINT,
+    score            DOUBLE PRECISION,   -- weighted hybrid combination (sort key)
+    vec_score        DOUBLE PRECISION,   -- diagnostic: cosine similarity component
+    bm25_score       DOUBLE PRECISION,   -- diagnostic: ts_rank_cd component
+    rrf_score        DOUBLE PRECISION,   -- diagnostic: RRF contribution
+    role             TEXT,
+    project_id       INT,
+    topic            TEXT,
+    lesson_text      TEXT,
+    importance       SMALLINT,
+    metadata         JSONB,
+    commit_sha       TEXT,
+    artifact_hash    TEXT,
+    verified_at      TIMESTAMPTZ,
+    created_at       TIMESTAMPTZ,
+    confidence       REAL,              -- v0.7.0+: outcome track record [0,1]
+    match_confidence REAL               -- v0.7.1+: clamped cosine similarity [0,1]
 )
 ```
+
+**`p_min_score` (v0.13.0):** filters rows where `match_confidence < p_min_score` BEFORE the
+final ORDER BY / LIMIT. `NULL` = no filter (backward-compatible). Empty result is NORMAL
+with `p_min_score`; no NOTICE is emitted. Recommended: `p_min_score => 0.40`.
 
 > **Note:** The sort column is `score`, not `hybrid_score`. The name `hybrid_score`
 > appeared in pre-release drafts and is incorrect — sort by `score`.
@@ -753,49 +762,99 @@ neighbors (entity, semantic, causal, temporal — all edge kinds).
 
 ---
 
-## Outcome-learning — `reinforce()` (v0.7.0)
+## Outcome-learning — `reinforce()` (v0.7.0, updated v0.13.0)
 
 Record what happened after a lesson was used. Confidence feeds back into recall
 scoring and is returned as `match_confidence` in `recall_hybrid()` output.
 
+**v0.13.0:** Confidence is now a **Bayesian Beta posterior** (`(success + α) / (success + fail + α + β)`, default α=β=1.0). A lesson at the population base-rate (~85% success) gets confidence ≈ 0.84; a coin-flip lesson (50/50) correctly stays at 0.50.
+
+### reinforce() — v0.13.0 signature with use-attribution
+
 ```sql
--- Single lesson — returns new confidence REAL [0,1]
+-- 3-param form (v0.13.0): with explicit use-attribution
 SELECT pgmnemo.reinforce(
     p_lesson_id := 42,
-    p_outcome   := 'success'   -- 'success' | 'failure' | 'neutral'
+    p_outcome   := 'success',   -- 'success' | 'failure' | 'neutral'
+    p_used      := TRUE         -- TRUE = confirmed used; FALSE = shown but not used; NULL = legacy (treated as TRUE)
 );
--- 'success' → confidence += 0.02 (clamped 1.0); increments success_count
--- 'failure' → confidence -= 0.12 (clamped 0.0); increments fail_count
--- 'neutral' → no-op; returns current confidence
 
--- Batch (v0.7.1) — returns count of rows updated
+-- p_used = FALSE: lesson was recalled but the agent did NOT act on it.
+-- Counts are NOT incremented — avoids diluting signal with observations
+-- where the lesson was never tested against reality.
+SELECT pgmnemo.reinforce(42, 'success', FALSE);  -- no-op on counts
+
+-- Batch (v0.7.1, updated v0.13.0) — returns count of confidence-updated lessons
 SELECT pgmnemo.reinforce(
     p_lesson_ids := ARRAY[42, 99, 137]::BIGINT[],
-    p_outcome    := 'failure'
+    p_outcome    := 'failure',
+    p_used       := TRUE
 );
 -- Missing IDs skipped silently. Unknown outcome string RAISES EXCEPTION.
+
+-- 2-param forms still work (p_used = NULL → backward compat):
+SELECT pgmnemo.reinforce(42, 'success');              -- scalar shim
+SELECT pgmnemo.reinforce(ARRAY[42, 99]::BIGINT[], 'failure');  -- batch shim
 ```
 
-**Deltas are GUC-configurable (v0.9.3+).** Default `+0.02` / `−0.12` are base-rate-adjusted
-(slow reward, faster penalty). Override per-session or at DB/role level:
+**Recommended attribution pattern:** pass `p_used = TRUE` only for lessons the agent
+explicitly cited or applied in its reasoning. Pass `p_used = FALSE` for lessons that
+were in the context window but ignored. This requires identifying which lessons were
+actually referenced — the signal quality depends on this.
+
+**`use_count` column (v0.13.0):** `agent_lesson.use_count` tracks confirmed-used calls
+separately from `recall_count` (shown in context) and `success_count + fail_count`
+(reinforced trials). Diagnostic query:
 
 ```sql
-SET pgmnemo.reinforce_success_delta = '0.05';
-SET pgmnemo.reinforce_fail_delta    = '0.08';
+SELECT
+    COUNT(*) FILTER (WHERE success_count + fail_count > 0) AS observed,
+    COUNT(*) FILTER (WHERE recall_count > 0)                AS recalled,
+    ROUND(
+        COUNT(*) FILTER (WHERE success_count + fail_count > 0)::NUMERIC
+        / NULLIF(COUNT(*) FILTER (WHERE recall_count > 0), 0), 3
+    ) AS use_rate  -- target ≥ 0.30; < 0.10 = p_used not being passed
+FROM pgmnemo.agent_lesson
+WHERE is_active AND t_valid_to = 'infinity'::TIMESTAMPTZ;
+```
+
+**Posterior mode GUCs (v0.13.0):**
+```sql
+SET pgmnemo.confidence_mode         = 'posterior';  -- default; 'additive' = legacy delta scheme
+SET pgmnemo.confidence_prior_alpha  = '1.0';        -- Beta(α, β) prior; default 1.0/1.0 = uniform
+SET pgmnemo.confidence_prior_beta   = '1.0';
+```
+
+**Deprecated (still functional in v0.13.0, removed v0.14.0):**
+```sql
+SET pgmnemo.reinforce_success_delta = '0.02';  -- ignored in 'posterior' mode
+SET pgmnemo.reinforce_fail_delta    = '0.12';
 ```
 
 Full reference: [`docs/SQL_REFERENCE.md §3.3`](SQL_REFERENCE.md#33-outcome-learning-gucs-used-by-reinforce-v093).
 
 **Outcome string values are exact:** `'success'`, `'failure'`, `'neutral'`.
 
-**`match_confidence` in `recall_hybrid()` output:** After calling `reinforce()`,
-`recall_hybrid()` returns a `match_confidence REAL [0,1]` column that reflects the
-calibrated cosine similarity of the top result. Use it as a quality gate:
+**`match_confidence` — calibrated cosine similarity [0,1]:**
+`recall_hybrid()` and `recall_lessons()` return `match_confidence REAL [0,1]`, which is
+the clamped cosine similarity of the lesson embedding to the query. It is **not** the
+`confidence` column (outcome track record) and **not** the final composite `score`.
+
+| match_confidence | Interpretation | Recommended action |
+|-----------------|----------------|--------------------|
+| ≥ 0.85 | Strong semantic match | Always include |
+| 0.65 – 0.85 | Moderate match | Include if token budget allows |
+| 0.40 – 0.65 | Weak match — may be tangentially relevant | MEM_AB v2 TOT: turns −34% with threshold 0.40 |
+| < 0.40 | Near-random similarity | Exclude (noise > signal) |
+
+Use `p_min_score` (see below) to apply this threshold at SQL level. Thresholds above
+apply to nomic-embed-text 1024d; recalibrate after any embedding model change.
 
 ```sql
+-- Use p_min_score to pre-filter low-confidence matches:
 SELECT lesson_id, score, match_confidence, lesson_text
-FROM pgmnemo.recall_hybrid($1, 'JWT rotation', 5)
-WHERE match_confidence > 0.35   -- filter low-signal results
+FROM pgmnemo.recall_hybrid($1, 'JWT rotation', 5,
+    p_min_score := 0.40)   -- filter out near-random results
 ORDER BY score DESC;
 ```
 
@@ -1055,7 +1114,7 @@ WHERE is_active;
 
 ---
 
-## Outcome-learning — `reinforce()` + `confidence_boost_weight` (v0.7.0+, guide v0.10.0)
+## Outcome-learning — `reinforce()` + `confidence_boost_weight` (v0.7.0+, updated v0.13.0)
 
 pgmnemo tracks which memories actually helped an agent succeed.  Two components
 work together: `reinforce()` updates per-lesson confidence, and the
@@ -1068,31 +1127,36 @@ Without feedback, all lessons start at `confidence = 0.5` and stay there.
 A high-quality lesson written last year competes equally with a noisy one
 written yesterday — both have `confidence = 0.5`.
 
-After a few `reinforce()` calls, proven lessons rise above `0.5` and noise
+**v0.13.0:** Confidence is now a Bayesian Beta posterior (see [§Outcome-learning reinforce()](#outcome-learning--reinforce-v070-updated-v0130) above).
+At the ~85% population base rate, well-performing lessons reach ≈ 0.84 while
+coin-flip lessons sit at 0.50 — clear separation without needing >100 observations.
+
+After `reinforce()` calls, proven lessons rise above `0.5` and noise
 falls below.  Enabling `confidence_boost_weight > 0` makes those scores
 drive ranking.
 
 ### Step 1 — call `reinforce()` after agent runs
 
 ```sql
--- Single lesson that contributed to a successful outcome:
-SELECT pgmnemo.reinforce(42, 'success');   -- confidence +0.02
+-- v0.13.0: use p_used=TRUE to attribute only lessons the agent acted on
+SELECT pgmnemo.reinforce(42, 'success', TRUE);   -- confirmed used
 
--- Batch (v0.7.1+): multiple lessons, skips missing IDs silently:
-SELECT pgmnemo.reinforce(ARRAY[10, 20, 30], 'success');
+-- Lesson recalled but not actually applied by the agent:
+SELECT pgmnemo.reinforce(17, 'success', FALSE);  -- no-op on counts
+
+-- Batch: lessons 10,20 used; 30 not used → two calls
+SELECT pgmnemo.reinforce(ARRAY[10, 20]::BIGINT[], 'success', TRUE);
+SELECT pgmnemo.reinforce(ARRAY[30]::BIGINT[], 'success', FALSE);
 
 -- Lesson that produced a wrong answer:
-SELECT pgmnemo.reinforce(15, 'failure');   -- confidence −0.12
+SELECT pgmnemo.reinforce(15, 'failure', TRUE);
 
--- Neutral — no update (useful as a no-op placeholder):
-SELECT pgmnemo.reinforce(99, 'neutral');
-```
+-- Neutral — stamps last_outcome, increments use_count, no confidence change:
+SELECT pgmnemo.reinforce(99, 'neutral', TRUE);
 
-Deltas are configurable per-session:
-
-```sql
-SET pgmnemo.reinforce_success_delta = '0.05';  -- faster convergence
-SET pgmnemo.reinforce_fail_delta    = '0.10';  -- lighter penalty
+-- 2-param shims still work (p_used=NULL → legacy: treated as TRUE):
+SELECT pgmnemo.reinforce(42, 'success');
+SELECT pgmnemo.reinforce(ARRAY[10, 20, 30], 'success');
 ```
 
 ### Step 2 — check confidence distribution
