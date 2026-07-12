@@ -32,14 +32,29 @@
     "date_run": "2026-07-12"
   },
   "pre_registered_validation": {
-    "protocol": "spec/v3/memory-era/0.13_VALIDATION_RESULT.md",
+    "protocol": "pre-registered held-out validation (gate: r_pb >= 0.10 AND p < 0.05); full scheme-level results below",
     "n_qualifying_runs": 468,
     "test_set_successes": 423,
     "test_set_failures": 45,
     "schemes": {
-      "shipped_delta": {"r_pb": 0.220, "p_one_sided": 0.004, "chi2_p": 0.227, "verdict": "PASS (r, p)"},
-      "base_rate_adjusted": {"r_pb": 0.277, "p_one_sided": 0.0003, "chi2_p": 0.008, "verdict": "PASS (all)"},
-      "posterior_0130_beta11": {"r_pb": 0.200, "p_one_sided": 0.008, "chi2_p": 0.465, "verdict": "PASS (r, p)"}
+      "shipped_delta": {
+        "r_pb": 0.22,
+        "p_one_sided": 0.004,
+        "chi2_p": 0.227,
+        "verdict": "PASS (r, p)"
+      },
+      "base_rate_adjusted": {
+        "r_pb": 0.277,
+        "p_one_sided": 0.0003,
+        "chi2_p": 0.008,
+        "verdict": "PASS (all)"
+      },
+      "posterior_0130_beta11": {
+        "r_pb": 0.2,
+        "p_one_sided": 0.008,
+        "chi2_p": 0.465,
+        "verdict": "PASS (r, p)"
+      }
     },
     "caveats": [
       "chi² median-split NS (p=0.47) — primary scheme passes r_pb and p gates",
@@ -49,5 +64,11 @@
     "evidence_grade": "MODERATE",
     "release_decision": "SHIP with conservative default (confidence_boost_weight=0.0); activation guide in USAGE.md"
   },
-  "leak_scan": "PASS — scripts/check_no_internal_leak.sh exit 0 (2026-07-12)"
+  "leak_scan": "PASS — scripts/check_no_internal_leak.sh exit 0 (2026-07-12)",
+  "measured_pgmnemo_version": "0.13.0",
+  "corpus": {
+    "database": "pgmnemo_bench",
+    "pgmnemo_version": "0.13.0",
+    "note": "pre-registered validation ran against pgmnemo 0.13.0 installed from the release branch on a dedicated bench database; 468 qualifying production outcome records exported read-only"
+  }
 }
