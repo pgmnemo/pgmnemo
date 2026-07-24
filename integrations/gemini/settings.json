@@ -1,0 +1,29 @@
+{
+  "_comment": "pgmnemo cross-model hook pack — Gemini CLI event mapping. Copy to <project>/.gemini/settings.json (merge with existing hooks if present). All commands invoke the shared pgmnemo_mcp.hooks.* scripts. Gemini uses renamed events (BeforeAgent/AfterTool/PreCompress/SessionEnd) and millisecond timeouts.",
+  "hooks": {
+    "BeforeAgent": [
+      {
+        "command": "python -m pgmnemo_mcp.hooks.session_recall",
+        "timeoutMs": 10000
+      }
+    ],
+    "AfterTool": [
+      {
+        "command": "python -m pgmnemo_mcp.hooks.session_recall",
+        "timeoutMs": 5000
+      }
+    ],
+    "PreCompress": [
+      {
+        "command": "python -m pgmnemo_mcp.hooks.session_backup",
+        "timeoutMs": 10000
+      }
+    ],
+    "SessionEnd": [
+      {
+        "command": "python -m pgmnemo_mcp.hooks.session_capture",
+        "timeoutMs": 15000
+      }
+    ]
+  }
+}
