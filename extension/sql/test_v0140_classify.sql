@@ -146,35 +146,48 @@ JOIN pg_namespace n ON n.oid = p.pronamespace
 WHERE n.nspname = 'pgmnemo' AND p.proname = 'ingest';
 
 -- E2: auto-fill — 9-arg call (no p_content_type) → classifier derives 'procedure'
-SELECT lesson.content_type AS e2_autofill
-FROM pgmnemo.ingest(
-    'tc_cls'::text,
-    -1400::int,
-    'deploy-test'::text,
-    'When running the deploy script, always check that environment variables are set first.'::text,
-    3::smallint,
-    NULL::vector,
-    NULL::text,
-    'deadbeef0000000000000000000000000000000000000000000000000000001a'::text,
-    '{}'::jsonb
-) AS new_id
-JOIN pgmnemo.agent_lesson lesson ON lesson.id = new_id;
+-- Note: DO block required — FROM ingest() AS id JOIN agent_lesson cannot see
+--       rows inserted by the same command (PostgreSQL intra-command snapshot).
+DO $$
+DECLARE v_id BIGINT; v_ct TEXT;
+BEGIN
+    v_id := pgmnemo.ingest(
+        'tc_cls'::text,
+        -1400::int,
+        'deploy-test'::text,
+        'When running the deploy script, always check that environment variables are set first.'::text,
+        3::smallint,
+        NULL::vector,
+        NULL::text,
+        'deadbeef0000000000000000000000000000000000000000000000000000001a'::text,
+        '{}'::jsonb
+    );
+    SELECT content_type INTO v_ct FROM pgmnemo.agent_lesson WHERE id = v_id;
+    RAISE NOTICE 'e2_autofill: %', v_ct;
+END;
+$$;
 
 -- E3: explicit content_type wins over classifier (procedure text → decision explicit)
-SELECT lesson.content_type AS e3_explicit_wins
-FROM pgmnemo.ingest(
-    'tc_cls'::text,
-    -1400::int,
-    'explicit-type-test'::text,
-    'When running the deploy script, always check that environment variables are set.'::text,
-    3::smallint,
-    NULL::vector,
-    NULL::text,
-    'deadbeef0000000000000000000000000000000000000000000000000000002b'::text,
-    '{}'::jsonb,
-    'decision'::text
-) AS new_id
-JOIN pgmnemo.agent_lesson lesson ON lesson.id = new_id;
+-- Note: DO block required — same PostgreSQL intra-command snapshot rule.
+DO $$
+DECLARE v_id BIGINT; v_ct TEXT;
+BEGIN
+    v_id := pgmnemo.ingest(
+        'tc_cls'::text,
+        -1400::int,
+        'explicit-type-test'::text,
+        'When running the deploy script, always check that environment variables are set.'::text,
+        3::smallint,
+        NULL::vector,
+        NULL::text,
+        'deadbeef0000000000000000000000000000000000000000000000000000002b'::text,
+        '{}'::jsonb,
+        'decision'::text
+    );
+    SELECT content_type INTO v_ct FROM pgmnemo.agent_lesson WHERE id = v_id;
+    RAISE NOTICE 'e3_explicit_wins: %', v_ct;
+END;
+$$;
 
 -- Cleanup ingest test rows
 DELETE FROM pgmnemo.agent_lesson
