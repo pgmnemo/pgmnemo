@@ -15,6 +15,46 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.14.0] — 2026-07-24
+
+### Added — Corpus self-maintenance (PGMNEMO-0140-1)
+
+**Automatic content-type classification and near-duplicate consolidation.**
+Three new SQL functions implement in-database corpus housekeeping — no external LLM required.
+
+- **`pgmnemo.classify_content_type(p_text TEXT) → TEXT`** — deterministic keyword/regex classifier.
+  Categories (priority order, first match wins): `incident`, `decision`, `entity`, `fact`, `procedure`, `NULL`.
+  `IMMUTABLE STRICT` — safe for index expressions and batch updates. Returns `NULL` when no category
+  matches with sufficient confidence (caller may keep existing label).
+
+- **`pgmnemo.ingest(...)` — updated 7-arg overload** now auto-classifies `content_type` if the caller
+  passes `NULL` (default). Calls `classify_content_type()` internally; the label is written only when
+  the classifier returns non-NULL. Fully backward-compatible: existing callers passing an explicit
+  `content_type` are unaffected.
+
+- **`pgmnemo.reclassify_corpus(p_role TEXT DEFAULT NULL, p_dry_run BOOLEAN DEFAULT TRUE) → SETOF RECORD`**
+  — batch reclassification of existing lessons. Iterates lessons where `content_type IS NULL` (or all,
+  when `p_force = TRUE`), applies `classify_content_type()`, and writes the result.
+  **DRY-RUN by default** (`p_dry_run = TRUE`): returns `(lesson_id, old_type, new_type)` rows without
+  committing any writes. Opt-in write mode: `SELECT * FROM pgmnemo.reclassify_corpus(p_dry_run := FALSE)`.
+
+- **`pgmnemo.consolidate(p_role TEXT DEFAULT NULL, p_threshold REAL DEFAULT 0.92, p_dry_run BOOLEAN DEFAULT TRUE, p_limit INT DEFAULT 100) → SETOF RECORD`**
+  — near-duplicate collapsing via union-find over cosine similarity clusters.
+  Canonical lesson elected by `recall_count DESC, confidence DESC, importance DESC, created_at ASC`.
+  Non-canonical members: `state = 'superseded'`, `is_active = FALSE`; `SUPERSEDED_BY` edge written via
+  `pgmnemo.add_edge()`. **DRY-RUN by default** (`p_dry_run = TRUE`): returns cluster report without
+  writes. All writes in caller's transaction — atomic rollback on error.
+  Guards: never self-supersedes; never collapses across different roles.
+
+### Backward compatibility
+
+No schema changes. No column additions. No GUC additions. The new ingest overload is additive
+(`content_type` parameter was already present; auto-classify is a behaviour change only when the
+caller passes `NULL`, which previously wrote `NULL` to the column). All new functions are additive.
+Upgrade path: install `pgmnemo--0.13.0--0.14.0.sql` or fresh-install from `pgmnemo--0.14.0.sql`.
+
+---
+
 ## [0.13.0] — 2026-07-11
 
 ### Changed — Outcome Loop v2 (PGMNEMO-0130-1)

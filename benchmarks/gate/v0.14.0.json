@@ -1,0 +1,36 @@
+{
+  "version": "v0.14.0",
+  "date": "2026-07-24",
+  "pgmnemo_version": "0.14.0",
+  "gate_status": "PASS",
+  "gate_type": "functional",
+  "significance_required": false,
+  "scope": "Corpus self-maintenance: classify_content_type() deterministic keyword classifier, ingest() auto-typing when content_type=NULL, reclassify_corpus() batch backfill, consolidate() near-duplicate collapsing via union-find. All functions DRY-RUN by default. No schema changes, no GUC additions, no ranking algorithm changes.",
+  "justification": "Feature gate only — no learning-algorithm change, no confidence model change, no recall ranking change. Functional correctness verified by pg_regress 47/47 (test_v0140_classify, consolidate). consolidate() guards verified: never self-supersede, never cross-role collapse. reclassify_corpus dry-run verified: no writes emitted when p_dry_run=TRUE. ingest auto-classify verified: existing callers with explicit content_type unaffected. No statistical pre-registration required for pure housekeeping functions.",
+  "schema_change": false,
+  "schema_change_detail": "None — additive function overloads only. ingest() content_type parameter was already present; auto-classify is a NULL-input behaviour change only.",
+  "scoring_impact": "none — no change to recall ranking, confidence, or reinforce() paths",
+  "recall_ranking_impact": "none — consolidate() and reclassify_corpus() are housekeeping functions; they do not modify the recall query plan",
+  "backward_compat_proof": "pg_regress consolidate + test_v0140_classify verify backward-compat. All existing callers passing explicit content_type to ingest() are unaffected (function signature additive with DEFAULT NULL). Upgrade path is incremental (0.13.0→0.14.0) or fresh-install.",
+  "new_regress_tests": [
+    "test_v0140_classify",
+    "consolidate"
+  ],
+  "new_regress_test_count": 2,
+  "installcheck": {
+    "harness": "pg_regress — extension/Makefile (--load-extension=vector --load-extension=pgmnemo)",
+    "postgres": "17",
+    "pgvector": "0.8+",
+    "result": "PASS — 47/47",
+    "tests_run": 47,
+    "tests_passed": 47,
+    "date_run": "2026-07-24"
+  },
+  "leak_scan": "PASS — scripts/check_no_internal_leak.sh exit 0 (2026-07-24)",
+  "measured_pgmnemo_version": "0.14.0",
+  "corpus": {
+    "database": "pgmnemo_bench",
+    "pgmnemo_version": "0.14.0",
+    "note": "functional gate only; no statistical validation required for housekeeping functions"
+  }
+}
