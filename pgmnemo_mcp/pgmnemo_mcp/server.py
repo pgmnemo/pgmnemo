@@ -103,6 +103,7 @@ def recall(
     project_id_filter: int | None = None,
     exclude_dag_id: str | None = None,
     deep: bool = False,
+    content_types: list[str] | None = None,
 ) -> list[dict[str, Any]]:
     """Return up to top_k lessons whose text matches query.
 
@@ -118,6 +119,8 @@ def recall(
     exclude_dag_id: suppress lessons whose source_dag_id matches — prevents a workflow
       from recalling its own in-flight outputs (v0.9.6+)
     deep: when True, use recall_hybrid() for BM25 + graph fusion (v0.10.0+)
+    content_types: optional list of content_type values to filter results — e.g.
+      ['fact', 'event', 'relation']. NULL = all types (v0.11.1+)
     """
     query_vec = to_pgvector(embed(query))
     p = get_pool()
@@ -125,29 +128,29 @@ def recall(
     try:
         with conn.cursor() as cur:
             if deep:
-                # recall_hybrid v0.9.6: (query_embedding, query_text, k,
+                # recall_hybrid v0.11.1: (query_embedding, query_text, k,
                 #   role_filter, project_id_filter, vec_weight, bm25_weight,
-                #   rrf_k, exclude_dag_id)
+                #   rrf_k, exclude_dag_id, content_types)
                 cur.execute(
                     """
                     SELECT lesson_id, role, topic, lesson_text, importance, created_at
                     FROM pgmnemo.recall_hybrid(
-                        %s::vector(1024), %s, %s, %s, %s, 0.4, 0.4, 60, %s
+                        %s::vector(1024), %s, %s, %s, %s, 0.4, 0.4, 60, %s, %s
                     )
                     """,
-                    (query_vec, query, top_k, role_filter, project_id_filter, exclude_dag_id),
+                    (query_vec, query, top_k, role_filter, project_id_filter, exclude_dag_id, content_types),
                 )
             else:
-                # recall_fast v0.10.0: (query_embedding, k,
-                #   role_filter, project_id_filter, exclude_dag_id)
+                # recall_fast v0.11.1: (query_embedding, k,
+                #   role_filter, project_id_filter, exclude_dag_id, content_types)
                 cur.execute(
                     """
                     SELECT lesson_id, role, topic, lesson_text, importance, created_at
                     FROM pgmnemo.recall_fast(
-                        %s::vector(1024), %s, %s, %s, %s
+                        %s::vector(1024), %s, %s, %s, %s, %s
                     )
                     """,
-                    (query_vec, top_k, role_filter, project_id_filter, exclude_dag_id),
+                    (query_vec, top_k, role_filter, project_id_filter, exclude_dag_id, content_types),
                 )
             cols = [d[0] for d in cur.description]
             return [dict(zip(cols, row)) for row in cur.fetchall()]
@@ -185,6 +188,253 @@ def patch(lesson_id: int, lesson_text: str) -> dict[str, Any]:
                 raise ValueError(f"lesson_id {lesson_id} not found")
             conn.commit()
         return {"id": row[0], "version_n": row[1], "patch_count": row[2]}
+    finally:
+        p.putconn(conn)
+
+
+@mcp.tool(
+    name="pgmnemo.remember_fact",
+    description=(
+        "Store a typed fact about an entity — property-value pair with bitemporal "
+        "supersession. Wraps pgmnemo.remember_fact() SP."
+    ),
+)
+def remember_fact(
+    role: str,
+    entity_key: str,
+    property: str,
+    value: str,
+    confidence: float = 0.7,
+    has_contact_pii: bool | None = None,
+    source_type: str | None = None,
+    project_id: int | None = None,
+    commit_sha: str | None = None,
+    artifact_hash: str | None = None,
+) -> dict[str, Any]:
+    """Write a typed fact with PII-aware state routing and bitemporal supersession.
+
+    entity_key: canonical slug e.g. 'person:ada_lovelace', 'org:openai'
+    property: property name e.g. 'affiliation', 'email'
+    value: the asserted value
+    confidence: [0.0, 1.0]; default 0.7
+    has_contact_pii: explicit PII override; NULL = auto-detect from property name
+    source_type: 'system'|'agent_authored'|'auto_captured'|'imported'; NULL = agent_authored
+    project_id: tenant scoping key
+    commit_sha / artifact_hash: provenance — at least one recommended
+
+    Returns: {id, final_state} — final_state is 'validated' or 'candidate'.
+    Candidate rows are invisible to default recall until promoted via trust_record().
+    """
+    embedding = to_pgvector(embed(value))
+    p = get_pool()
+    conn = p.getconn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT id, final_state
+                FROM pgmnemo.remember_fact(
+                    %s, %s, %s, %s,
+                    %s::real,
+                    %s::boolean,
+                    %s::vector(1024),
+                    %s, %s::int,
+                    %s, %s
+                )
+                """,
+                (
+                    role,
+                    entity_key,
+                    property,
+                    value,
+                    confidence,
+                    has_contact_pii,
+                    embedding,
+                    source_type,
+                    project_id,
+                    commit_sha,
+                    artifact_hash,
+                ),
+            )
+            row = cur.fetchone()
+            conn.commit()
+        return {"id": row[0], "final_state": row[1]}
+    finally:
+        p.putconn(conn)
+
+
+@mcp.tool(
+    name="pgmnemo.remember_event",
+    description=(
+        "Record an immutable event for an entity (append-only). "
+        "Wraps pgmnemo.remember_event() SP."
+    ),
+)
+def remember_event(
+    role: str,
+    entity_key: str,
+    event_label: str,
+    event_body: str,
+    occurred_at: str | None = None,
+    confidence: float = 0.8,
+    source_type: str | None = None,
+    project_id: int | None = None,
+    commit_sha: str | None = None,
+    artifact_hash: str | None = None,
+) -> dict[str, Any]:
+    """Append an immutable event record. No dedup or supersession — each call creates a row.
+
+    entity_key: canonical slug e.g. 'person:ada_lovelace'
+    event_label: slug within entity scope e.g. 'joined_project'
+    event_body: human-readable event description
+    occurred_at: ISO-8601 timestamp string; NULL = NOW()
+    confidence: [0.0, 1.0]; default 0.8
+    source_type: 'system'|'agent_authored'|'auto_captured'|'imported'
+    project_id: tenant scoping key
+    commit_sha / artifact_hash: provenance
+
+    Returns: {id} of the new lesson row.
+    """
+    embedding = to_pgvector(embed(event_body))
+    p = get_pool()
+    conn = p.getconn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT pgmnemo.remember_event(
+                    %s, %s, %s, %s,
+                    %s::timestamptz,
+                    %s::real,
+                    %s::vector(1024),
+                    %s, %s::int,
+                    %s, %s
+                )
+                """,
+                (
+                    role,
+                    entity_key,
+                    event_label,
+                    event_body,
+                    occurred_at,
+                    confidence,
+                    embedding,
+                    source_type,
+                    project_id,
+                    commit_sha,
+                    artifact_hash,
+                ),
+            )
+            new_id = cur.fetchone()[0]
+            conn.commit()
+        return {"id": new_id}
+    finally:
+        p.putconn(conn)
+
+
+@mcp.tool(
+    name="pgmnemo.remember_relation",
+    description=(
+        "Record a directed typed association between two entity slugs. "
+        "Idempotent on (from_key, relation_type, to_key). "
+        "Wraps pgmnemo.remember_relation() SP."
+    ),
+)
+def remember_relation(
+    role: str,
+    from_key: str,
+    to_key: str,
+    relation_type: str,
+    confidence: float = 0.7,
+    source_type: str | None = None,
+    project_id: int | None = None,
+    commit_sha: str | None = None,
+    artifact_hash: str | None = None,
+) -> dict[str, Any]:
+    """Write a typed directed relation between two entities.
+
+    from_key: source entity slug e.g. 'person:ada_lovelace'
+    to_key: target entity slug e.g. 'org:analytical_engine_co'
+    relation_type: e.g. 'works_for', 'depends_on'
+    confidence: [0.0, 1.0]; default 0.7
+    source_type: 'system'|'agent_authored'|'auto_captured'|'imported'
+    project_id: tenant scoping key
+    commit_sha / artifact_hash: provenance
+
+    Returns: {id} of the new or merged lesson row.
+    Idempotent: re-calling with the same triple merges confidence monotonically.
+    """
+    relation_text = f"{from_key} {relation_type} {to_key}"
+    embedding = to_pgvector(embed(relation_text))
+    p = get_pool()
+    conn = p.getconn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT pgmnemo.remember_relation(
+                    %s, %s, %s, %s,
+                    %s::real,
+                    %s::vector(1024),
+                    %s, %s::int,
+                    %s, %s
+                )
+                """,
+                (
+                    role,
+                    from_key,
+                    to_key,
+                    relation_type,
+                    confidence,
+                    embedding,
+                    source_type,
+                    project_id,
+                    commit_sha,
+                    artifact_hash,
+                ),
+            )
+            new_id = cur.fetchone()[0]
+            conn.commit()
+        return {"id": new_id}
+    finally:
+        p.putconn(conn)
+
+
+@mcp.tool(
+    name="pgmnemo.reinforce",
+    description=(
+        "Record the outcome of applying a lesson and update its posterior confidence. "
+        "Wraps pgmnemo.reinforce() SP (v0.13.0 scalar form)."
+    ),
+)
+def reinforce(
+    lesson_id: int,
+    outcome: str,
+    used: bool | None = None,
+) -> dict[str, Any]:
+    """Provide outcome feedback for a recalled lesson and recompute its confidence.
+
+    lesson_id: the id of the lesson to reinforce
+    outcome: 'success' | 'failure' | 'neutral'
+    used: True = lesson was applied; False = shown but not used (no count change);
+          None = backward-compat (treated as True)
+
+    Returns: {lesson_id, confidence} where confidence is the updated posterior value.
+    Posterior formula (v0.13.0): (success_count + α) / (success_count + fail_count + α + β).
+    """
+    p = get_pool()
+    conn = p.getconn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT pgmnemo.reinforce(%s::bigint, %s, %s::boolean)
+                """,
+                (lesson_id, outcome, used),
+            )
+            new_confidence = cur.fetchone()[0]
+            conn.commit()
+        return {"lesson_id": lesson_id, "confidence": new_confidence}
     finally:
         p.putconn(conn)
 

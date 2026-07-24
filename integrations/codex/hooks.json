@@ -1,0 +1,29 @@
+{
+  "_comment": "pgmnemo cross-model hook pack — Codex event mapping. Copy to <project>/.codex/hooks.json (merge with existing hooks if present). All commands invoke the shared pgmnemo_mcp.hooks.* scripts. No PreCompact event in Codex. Timeouts are in seconds.",
+  "hooks": {
+    "SessionStart": [
+      {
+        "command": "python -m pgmnemo_mcp.hooks.session_recall",
+        "timeout": 10
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "command": "python -m pgmnemo_mcp.hooks.session_recall",
+        "timeout": 10
+      }
+    ],
+    "PostToolUse": [
+      {
+        "command": "python -m pgmnemo_mcp.hooks.session_recall",
+        "timeout": 5
+      }
+    ],
+    "Stop": [
+      {
+        "command": "python -m pgmnemo_mcp.hooks.session_capture",
+        "timeout": 15
+      }
+    ]
+  }
+}

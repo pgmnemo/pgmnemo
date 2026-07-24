@@ -1,0 +1,65 @@
+{
+  "_comment": "pgmnemo cross-model hook pack — Claude Code event mapping. Copy to <project>/.claude/settings.json (merge with existing hooks if present). All commands invoke the shared pgmnemo_mcp.hooks.* scripts. Timeouts are in seconds.",
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python -m pgmnemo_mcp.hooks.session_recall",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python -m pgmnemo_mcp.hooks.session_recall",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python -m pgmnemo_mcp.hooks.session_recall",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "PreCompact": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python -m pgmnemo_mcp.hooks.session_backup",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python -m pgmnemo_mcp.hooks.session_capture",
+            "timeout": 15
+          }
+        ]
+      }
+    ]
+  }
+}
