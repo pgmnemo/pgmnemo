@@ -1,4 +1,4 @@
-"""python -m pgmnemo_mcp — CLI entry point with --smoke flag."""
+"""python -m pgmnemo_mcp — CLI entry point with --smoke flag and export subcommand."""
 
 import argparse
 import sys
@@ -11,10 +11,20 @@ def main() -> None:
         action="store_true",
         help="Run a connectivity smoke test: connect to DB and call recall_lessons().",
     )
-    args = parser.parse_args()
+    subparsers = parser.add_subparsers(dest="command")
+    # Register the `export` subcommand (args parsed inside main_export)
+    subparsers.add_parser(
+        "export",
+        help="Export pgmnemo corpus to human-readable markdown.",
+        add_help=False,
+    )
+    args, remaining = parser.parse_known_args()
 
     if args.smoke:
         _run_smoke()
+    elif args.command == "export":
+        from .export import main_export
+        main_export(remaining)
     else:
         from .server import run
         run()
