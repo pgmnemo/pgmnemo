@@ -18,7 +18,7 @@
 SET pgmnemo.gate_strict = 'off';
 SET pgmnemo.include_unverified = 'on';
 
-ALTER EXTENSION pgmnemo UPDATE TO '0.13.0';
+ALTER EXTENSION pgmnemo UPDATE TO '0.14.0';
 
 -- ============================================================================
 -- T1: navigate_locate_dispatch exists with 6-arg signature
