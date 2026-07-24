@@ -243,5 +243,295 @@ class TestRecall(unittest.TestCase):
         pool.putconn.assert_called_once_with(conn)
 
 
+# ---------------------------------------------------------------------------
+# recall() content_types tests
+# ---------------------------------------------------------------------------
+
+class TestRecallContentTypes(unittest.TestCase):
+
+    def test_fast_path_passes_content_types_as_6th_arg(self):
+        """recall_fast: content_types is the 6th positional arg (after exclude_dag_id)."""
+        pool, conn, cur = _make_pool(rows=[], description=["lesson_id"])
+        with patch.object(server, "get_pool", return_value=pool):
+            server.recall(query="q", content_types=["fact", "event"])
+        args = cur.execute.call_args[0][1]
+        # args: (query_vec, top_k, role_filter, project_id_filter, exclude_dag_id, content_types)
+        self.assertEqual(args[5], ["fact", "event"])
+
+    def test_fast_path_none_content_types_passed_as_none(self):
+        """recall_fast: omitting content_types passes None (no filtering)."""
+        pool, conn, cur = _make_pool(rows=[], description=["lesson_id"])
+        with patch.object(server, "get_pool", return_value=pool):
+            server.recall(query="q")
+        args = cur.execute.call_args[0][1]
+        self.assertIsNone(args[5])
+
+    def test_deep_path_passes_content_types_as_7th_arg(self):
+        """recall_hybrid: content_types is 7th positional arg (after exclude_dag_id)."""
+        pool, conn, cur = _make_pool(rows=[], description=["lesson_id"])
+        with patch.object(server, "get_pool", return_value=pool):
+            server.recall(query="q", deep=True, content_types=["relation"])
+        args = cur.execute.call_args[0][1]
+        # args: (query_vec, query_text, k, role_filter, project_id_filter, exclude_dag_id, content_types)
+        self.assertEqual(args[6], ["relation"])
+
+    def test_deep_path_sql_includes_recall_hybrid(self):
+        """deep=True + content_types still calls recall_hybrid."""
+        pool, conn, cur = _make_pool(rows=[], description=["lesson_id"])
+        with patch.object(server, "get_pool", return_value=pool):
+            server.recall(query="q", deep=True, content_types=["fact"])
+        sql = cur.execute.call_args[0][0]
+        self.assertIn("recall_hybrid", sql)
+
+
+# ---------------------------------------------------------------------------
+# remember_fact() tests
+# ---------------------------------------------------------------------------
+
+class TestRememberFact(unittest.TestCase):
+
+    def test_registered_as_mcp_tool(self):
+        """remember_fact function is accessible on the server module."""
+        self.assertTrue(callable(server.remember_fact))
+
+    def test_returns_id_and_final_state(self):
+        pool, conn, cur = _make_pool()
+        cur.fetchone.return_value = (99, "validated")
+        with patch.object(server, "get_pool", return_value=pool):
+            result = server.remember_fact(
+                role="agent",
+                entity_key="person:ada_lovelace",
+                property="affiliation",
+                value="Analytical Engine Co.",
+            )
+        self.assertEqual(result["id"], 99)
+        self.assertEqual(result["final_state"], "validated")
+
+    def test_calls_remember_fact_sp(self):
+        """Must call pgmnemo.remember_fact(), not raw INSERT."""
+        pool, conn, cur = _make_pool()
+        cur.fetchone.return_value = (1, "candidate")
+        with patch.object(server, "get_pool", return_value=pool):
+            server.remember_fact(
+                role="agent",
+                entity_key="person:ada_lovelace",
+                property="email",
+                value="ada@example.com",
+            )
+        sql = cur.execute.call_args[0][0]
+        self.assertIn("pgmnemo.remember_fact", sql)
+        self.assertNotIn("INSERT INTO", sql)
+
+    def test_positional_args_order(self):
+        """role, entity_key, property, value at positions 0-3."""
+        pool, conn, cur = _make_pool()
+        cur.fetchone.return_value = (5, "candidate")
+        with patch.object(server, "get_pool", return_value=pool):
+            server.remember_fact(
+                role="mcp_agent",
+                entity_key="org:openai",
+                property="founded",
+                value="2015",
+                confidence=0.9,
+            )
+        args = cur.execute.call_args[0][1]
+        self.assertEqual(args[0], "mcp_agent")
+        self.assertEqual(args[1], "org:openai")
+        self.assertEqual(args[2], "founded")
+        self.assertEqual(args[3], "2015")
+        self.assertEqual(args[4], 0.9)
+
+    def test_conn_returned_to_pool(self):
+        pool, conn, cur = _make_pool()
+        cur.fetchone.return_value = (1, "candidate")
+        with patch.object(server, "get_pool", return_value=pool):
+            server.remember_fact(role="r", entity_key="person:x", property="p", value="v")
+        pool.putconn.assert_called_once_with(conn)
+
+
+# ---------------------------------------------------------------------------
+# remember_event() tests
+# ---------------------------------------------------------------------------
+
+class TestRememberEvent(unittest.TestCase):
+
+    def test_registered_as_mcp_tool(self):
+        self.assertTrue(callable(server.remember_event))
+
+    def test_returns_id(self):
+        pool, conn, cur = _make_pool()
+        cur.fetchone.return_value = (42,)
+        with patch.object(server, "get_pool", return_value=pool):
+            result = server.remember_event(
+                role="agent",
+                entity_key="person:ada_lovelace",
+                event_label="joined_project",
+                event_body="Ada joined the Analytical Engine project in 1842.",
+            )
+        self.assertEqual(result["id"], 42)
+
+    def test_calls_remember_event_sp(self):
+        pool, conn, cur = _make_pool()
+        cur.fetchone.return_value = (7,)
+        with patch.object(server, "get_pool", return_value=pool):
+            server.remember_event(
+                role="agent",
+                entity_key="person:ada_lovelace",
+                event_label="published_notes",
+                event_body="Ada published her notes on the Analytical Engine.",
+            )
+        sql = cur.execute.call_args[0][0]
+        self.assertIn("pgmnemo.remember_event", sql)
+        self.assertNotIn("INSERT INTO", sql)
+
+    def test_positional_args_order(self):
+        pool, conn, cur = _make_pool()
+        cur.fetchone.return_value = (3,)
+        with patch.object(server, "get_pool", return_value=pool):
+            server.remember_event(
+                role="mcp_agent",
+                entity_key="org:openai",
+                event_label="launched_gpt4",
+                event_body="GPT-4 launched in March 2023.",
+                occurred_at="2023-03-14T00:00:00Z",
+                confidence=0.95,
+            )
+        args = cur.execute.call_args[0][1]
+        self.assertEqual(args[0], "mcp_agent")
+        self.assertEqual(args[1], "org:openai")
+        self.assertEqual(args[2], "launched_gpt4")
+        self.assertEqual(args[3], "GPT-4 launched in March 2023.")
+        self.assertEqual(args[4], "2023-03-14T00:00:00Z")
+        self.assertEqual(args[5], 0.95)
+
+    def test_conn_returned_to_pool(self):
+        pool, conn, cur = _make_pool()
+        cur.fetchone.return_value = (1,)
+        with patch.object(server, "get_pool", return_value=pool):
+            server.remember_event(role="r", entity_key="person:x", event_label="e", event_body="b")
+        pool.putconn.assert_called_once_with(conn)
+
+
+# ---------------------------------------------------------------------------
+# remember_relation() tests
+# ---------------------------------------------------------------------------
+
+class TestRememberRelation(unittest.TestCase):
+
+    def test_registered_as_mcp_tool(self):
+        self.assertTrue(callable(server.remember_relation))
+
+    def test_returns_id(self):
+        pool, conn, cur = _make_pool()
+        cur.fetchone.return_value = (55,)
+        with patch.object(server, "get_pool", return_value=pool):
+            result = server.remember_relation(
+                role="agent",
+                from_key="person:ada_lovelace",
+                to_key="org:analytical_engine_co",
+                relation_type="works_for",
+            )
+        self.assertEqual(result["id"], 55)
+
+    def test_calls_remember_relation_sp(self):
+        pool, conn, cur = _make_pool()
+        cur.fetchone.return_value = (10,)
+        with patch.object(server, "get_pool", return_value=pool):
+            server.remember_relation(
+                role="agent",
+                from_key="person:ada_lovelace",
+                to_key="org:analytical_engine_co",
+                relation_type="works_for",
+            )
+        sql = cur.execute.call_args[0][0]
+        self.assertIn("pgmnemo.remember_relation", sql)
+        self.assertNotIn("INSERT INTO", sql)
+
+    def test_positional_args_order(self):
+        pool, conn, cur = _make_pool()
+        cur.fetchone.return_value = (8,)
+        with patch.object(server, "get_pool", return_value=pool):
+            server.remember_relation(
+                role="mcp_agent",
+                from_key="person:ada_lovelace",
+                to_key="org:analytical_engine_co",
+                relation_type="works_for",
+                confidence=0.85,
+            )
+        args = cur.execute.call_args[0][1]
+        self.assertEqual(args[0], "mcp_agent")
+        self.assertEqual(args[1], "person:ada_lovelace")
+        self.assertEqual(args[2], "org:analytical_engine_co")
+        self.assertEqual(args[3], "works_for")
+        self.assertEqual(args[4], 0.85)
+
+    def test_conn_returned_to_pool(self):
+        pool, conn, cur = _make_pool()
+        cur.fetchone.return_value = (1,)
+        with patch.object(server, "get_pool", return_value=pool):
+            server.remember_relation(
+                role="r", from_key="person:x", to_key="org:y", relation_type="rel"
+            )
+        pool.putconn.assert_called_once_with(conn)
+
+
+# ---------------------------------------------------------------------------
+# reinforce() tests
+# ---------------------------------------------------------------------------
+
+class TestReinforce(unittest.TestCase):
+
+    def test_registered_as_mcp_tool(self):
+        self.assertTrue(callable(server.reinforce))
+
+    def test_returns_lesson_id_and_confidence(self):
+        pool, conn, cur = _make_pool()
+        cur.fetchone.return_value = (0.75,)
+        with patch.object(server, "get_pool", return_value=pool):
+            result = server.reinforce(lesson_id=42, outcome="success")
+        self.assertEqual(result["lesson_id"], 42)
+        self.assertAlmostEqual(result["confidence"], 0.75)
+
+    def test_calls_reinforce_sp(self):
+        pool, conn, cur = _make_pool()
+        cur.fetchone.return_value = (0.5,)
+        with patch.object(server, "get_pool", return_value=pool):
+            server.reinforce(lesson_id=1, outcome="success")
+        sql = cur.execute.call_args[0][0]
+        self.assertIn("pgmnemo.reinforce", sql)
+
+    def test_outcome_and_used_passed_through(self):
+        pool, conn, cur = _make_pool()
+        cur.fetchone.return_value = (0.6,)
+        with patch.object(server, "get_pool", return_value=pool):
+            server.reinforce(lesson_id=7, outcome="failure", used=True)
+        args = cur.execute.call_args[0][1]
+        self.assertEqual(args[0], 7)        # lesson_id
+        self.assertEqual(args[1], "failure")  # outcome
+        self.assertEqual(args[2], True)       # used
+
+    def test_used_none_by_default(self):
+        pool, conn, cur = _make_pool()
+        cur.fetchone.return_value = (0.5,)
+        with patch.object(server, "get_pool", return_value=pool):
+            server.reinforce(lesson_id=3, outcome="neutral")
+        args = cur.execute.call_args[0][1]
+        self.assertIsNone(args[2])
+
+    def test_conn_returned_to_pool(self):
+        pool, conn, cur = _make_pool()
+        cur.fetchone.return_value = (0.5,)
+        with patch.object(server, "get_pool", return_value=pool):
+            server.reinforce(lesson_id=1, outcome="success")
+        pool.putconn.assert_called_once_with(conn)
+
+    def test_outcome_failure_accepted(self):
+        pool, conn, cur = _make_pool()
+        cur.fetchone.return_value = (0.3,)
+        with patch.object(server, "get_pool", return_value=pool):
+            result = server.reinforce(lesson_id=5, outcome="failure", used=False)
+        self.assertAlmostEqual(result["confidence"], 0.3)
+
+
 if __name__ == "__main__":
     unittest.main()
