@@ -11319,7 +11319,10 @@ AS $func$
               AND p_text ~* '\m(caused|because of|due to|led to|resulted?|triggered?)\M')
           -- Specific bug-report language
           OR p_text ~* '\mthe (bug|error|issue|failure) (was|is)\M'
-          OR p_text ~* '\mbugfix\M'
+          -- NOTE: \mbugfix\M removed in v0.14.1 — caused false-positives on process
+          -- text like "When submitting a bugfix PR, always …" (should be 'procedure').
+          -- Genuine bugfix incidents still fire via root.?cause / postmortem / outage /
+          -- regression / hotfix or the failure+causation compound above.
         THEN 'incident'
 
         -- ── DECISION ────────────────────────────────────────────────────────
@@ -11765,7 +11768,8 @@ BEGIN
                 c.recall_count DESC,
                 c.confidence   DESC,
                 c.importance   DESC,
-                c.created_at   ASC
+                c.created_at   ASC,
+                c.id           ASC   -- stable tiebreaker: lowest id wins on tie (P1-4)
             )            AS members,
             count(*)::INT AS sz
         FROM _con_uf u
@@ -11847,7 +11851,7 @@ COMMENT ON FUNCTION pgmnemo.consolidate(REAL, BOOLEAN, TEXT, INT) IS
     'p_limit INT DEFAULT 100: max clusters to return / process per call. '
     'Returns: (canonical_id BIGINT, member_ids BIGINT[], size INT, mean_similarity REAL). '
     'Algorithm: union-find over all-pairs cosine similarity within each role. '
-    'Canonical election: recall_count DESC, confidence DESC, importance DESC, created_at ASC. '
+    'Canonical election: recall_count DESC, confidence DESC, importance DESC, created_at ASC, id ASC (stable tiebreaker). '
     'Apply (p_dry_run=FALSE): canonical.evidence_count=cluster_size; '
     'non-canonical members: state=superseded, is_active=FALSE, state_changed_at=NOW(); '
     'SUPERSEDED_BY edge (semantic) via add_edge() from each member to canonical. '

@@ -446,3 +446,264 @@ COMMENT ON FUNCTION pgmnemo.recall_hybrid(vector, TEXT, INT, TEXT, INT, DOUBLE P
     'RRF fusion is sparse-safe per Cormack 2009: unmatched candidates rank n_candidates+1. '
     'graph_proximity via mem_edge causal/temporal walk (depth ≤5). '
     'VOLATILE (side-effects: recency stamp, temp tables _pgmnemo_bm25_work, _pgmnemo_vc).';
+
+-- =============================================================================
+-- P1-2  classify_content_type() — remove bare \mbugfix\M incident trigger
+-- =============================================================================
+-- Root cause: the pattern OR p_text ~* '\mbugfix\M' fires on ordinary process
+-- text like "When submitting a bugfix PR, always …" which should be 'procedure'.
+-- Fix: drop the bare \mbugfix\M arm.  Genuine bugfix incidents are still caught
+-- by the remaining arms (root.?cause, postmortem, outage, incident, regression,
+-- rollback, hotfix, stacktrace, failure+causation pattern).
+-- =============================================================================
+
+CREATE OR REPLACE FUNCTION pgmnemo.classify_content_type(p_text text)
+RETURNS text
+LANGUAGE sql
+IMMUTABLE
+STRICT
+AS $func$
+    SELECT CASE
+
+        -- ── INCIDENT (highest priority) ────────────────────────────────────
+        WHEN p_text ~* '\m(root.?cause|postmortem|outage|incident|hotfix|regression|rollback|revert)\M'
+          OR p_text ~* '\m(stacktrace|traceback|segfault|oom.?kill)\M'
+          OR (p_text ~* '\m(crashed?|broken|corrupted?|panicked?|failed)\M'
+              AND p_text ~* '\m(caused|because of|due to|led to|resulted?|triggered?)\M')
+          OR p_text ~* '\mthe (bug|error|issue|failure) (was|is)\M'
+          -- NOTE: \mbugfix\M removed in v0.14.1 — caused false-positives on process
+          -- text like "When submitting a bugfix PR, always …" (should be 'procedure').
+          -- Genuine bugfix incidents still fire via root.?cause / postmortem / outage /
+          -- regression / hotfix or the failure+causation compound above.
+        THEN 'incident'
+
+        -- ── DECISION ────────────────────────────────────────────────────────
+        WHEN p_text ~* '\mADR[-\s]?\d'
+          OR p_text ~* '\m(decided|decision|verdict|approved|rejected|chosen)\M'
+          OR p_text ~* 'we (chose|selected|adopted|agreed|preferred?|decided)\M'
+          OR (p_text ~* '\m(chose|selected|adopted)\M'
+              AND p_text ~* '\m(instead|over|rather than|in favor of)\M')
+        THEN 'decision'
+
+        -- ── ENTITY ──────────────────────────────────────────────────────────
+        WHEN p_text ~* '\mis (?:a|the)(?:\s+\w+){0,2}\s+(?:service|tool|library|module|package|repo|repository|component|system|project)\M'
+          OR p_text ~* '\mis (?:the)(?:\s+\w+){0,1}\s+(?:lead|owner|author|contact|maintainer|engineer|manager|architect|operator|po)\M'
+          OR p_text ~* '\m(owns?|maintains?|is responsible for)\M'
+        THEN 'entity'
+
+        -- ── FACT ────────────────────────────────────────────────────────────
+        WHEN (   p_text ~* '\m(defaults? to|default (value |port |behavior )?is)\M'
+              OR p_text ~* '\malways returns?\M'
+              OR p_text ~* '\m(is always|is set to|is stored in|is fixed at|is never)\M'
+              OR p_text ~* '\mversion (is|was)\M'
+              OR p_text ~* '\m(schema|table|column|port|endpoint) (is|has|was|uses?|contains?)\M'
+             )
+          AND p_text !~* '\mwhen\M'
+          AND p_text !~* '\m(run|install|deploy|configure|restart|use)\M'
+        THEN 'fact'
+
+        -- ── PROCEDURE (catch-all) ────────────────────────────────────────────
+        WHEN p_text ~* '\mwhen\M'
+          OR p_text ~* '\m(must|should|always|never|avoid|prefer|recommend)\M'
+          OR p_text ~* '\m(run|execute|install|deploy|configure|restart|use)\M'
+          OR p_text ~* '\m(command|script|workflow|pattern|approach|method)\M'
+          OR p_text ~* '\mhow to\M'
+        THEN 'procedure'
+
+        ELSE NULL
+    END
+$func$;
+
+COMMENT ON FUNCTION pgmnemo.classify_content_type(text) IS
+    'Deterministic keyword/regex content-type classifier (v0.14.1). No LLM. '
+    'Returns: procedure | incident | decision | fact | entity | NULL. '
+    'Priority: incident > decision > entity > fact > procedure > NULL. '
+    'IMMUTABLE + STRICT: NULL input → NULL output; result is purely a function of the text. '
+    'v0.14.1: removed bare \mbugfix\M arm — caused false-positives on process text. '
+    'Used by ingest() auto-fill and reclassify_corpus().';
+
+-- =============================================================================
+-- P1-4  consolidate() — deterministic canonical election (id ASC tiebreaker)
+-- =============================================================================
+-- Root cause: array_agg(... ORDER BY recall_count DESC, confidence DESC,
+--   importance DESC, created_at ASC) is non-deterministic when candidates share
+--   identical values for all four columns (common with bulk-ingested lessons).
+-- Fix: append c.id ASC as the final ORDER BY key — lower id always wins on a tie.
+-- =============================================================================
+
+CREATE OR REPLACE FUNCTION pgmnemo.consolidate(
+    p_similarity REAL    DEFAULT 0.92,
+    p_dry_run    BOOLEAN DEFAULT TRUE,
+    p_role       TEXT    DEFAULT NULL,
+    p_limit      INT     DEFAULT 100
+)
+RETURNS TABLE (
+    canonical_id    BIGINT,
+    member_ids      BIGINT[],
+    size            INT,
+    mean_similarity REAL
+)
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    _pair     RECORD;
+    _cluster  RECORD;
+    _root_a   BIGINT;
+    _root_b   BIGINT;
+    _new_root BIGINT;
+    _old_root BIGINT;
+    _mbr      BIGINT;
+BEGIN
+    DROP TABLE IF EXISTS _con_candidates;
+    DROP TABLE IF EXISTS _con_pairs;
+    DROP TABLE IF EXISTS _con_uf;
+    DROP TABLE IF EXISTS _con_clusters;
+
+    -- ── 1. Candidate pool ─────────────────────────────────────────────────
+    CREATE TEMP TABLE _con_candidates ON COMMIT DROP AS
+    SELECT id, role, recall_count, confidence, importance, created_at, embedding
+    FROM pgmnemo.agent_lesson
+    WHERE is_active
+      AND state NOT IN ('superseded', 'archived', 'rejected')
+      AND embedding IS NOT NULL
+      AND (p_role IS NULL OR role = p_role)
+    ORDER BY recall_count DESC, confidence DESC, importance DESC, created_at ASC
+    LIMIT p_limit * 20;
+
+    -- ── 2. All-pairs cosine similarity above threshold ────────────────────
+    CREATE TEMP TABLE _con_pairs ON COMMIT DROP AS
+    SELECT
+        a.id                                         AS id_a,
+        b.id                                         AS id_b,
+        (1.0 - (a.embedding <=> b.embedding))::REAL  AS sim
+    FROM _con_candidates a
+    JOIN _con_candidates b ON b.id > a.id
+                          AND a.role = b.role
+    WHERE (1.0 - (a.embedding <=> b.embedding)) >= p_similarity;
+
+    -- ── 3. Union-Find: initialise each paired node as its own root ────────
+    CREATE TEMP TABLE _con_uf (id BIGINT PRIMARY KEY, root BIGINT NOT NULL)
+    ON COMMIT DROP;
+
+    INSERT INTO _con_uf (id, root)
+    SELECT DISTINCT id_a, id_a FROM _con_pairs
+    UNION
+    SELECT DISTINCT id_b, id_b FROM _con_pairs;
+
+    -- ── 4. Union-Find: unite connected components ─────────────────────────
+    FOR _pair IN SELECT id_a, id_b FROM _con_pairs LOOP
+        SELECT root INTO _root_a FROM _con_uf WHERE id = _pair.id_a;
+        SELECT root INTO _root_b FROM _con_uf WHERE id = _pair.id_b;
+        IF _root_a IS DISTINCT FROM _root_b THEN
+            _new_root := LEAST(_root_a, _root_b);
+            _old_root := GREATEST(_root_a, _root_b);
+            UPDATE _con_uf SET root = _new_root WHERE root = _old_root;
+        END IF;
+    END LOOP;
+
+    -- ── 5. Path compression ───────────────────────────────────────────────
+    LOOP
+        UPDATE _con_uf u
+        SET root = p.root
+        FROM _con_uf p
+        WHERE p.id = u.root AND p.root <> u.root;
+        EXIT WHEN NOT FOUND;
+    END LOOP;
+
+    -- ── 6. Materialise cluster results ────────────────────────────────────
+    -- Canonical = members[1].  ORDER BY: recall_count DESC, confidence DESC,
+    -- importance DESC, created_at ASC, id ASC (stable tiebreaker — P1-4 fix).
+    CREATE TEMP TABLE _con_clusters ON COMMIT DROP AS
+    WITH cluster_agg AS (
+        SELECT
+            u.root,
+            array_agg(u.id ORDER BY
+                c.recall_count DESC,
+                c.confidence   DESC,
+                c.importance   DESC,
+                c.created_at   ASC,
+                c.id           ASC   -- stable tiebreaker: lowest id wins on tie
+            )            AS members,
+            count(*)::INT AS sz
+        FROM _con_uf u
+        JOIN _con_candidates c ON c.id = u.id
+        GROUP BY u.root
+        HAVING count(*) > 1
+    ),
+    cluster_sim AS (
+        SELECT
+            ca.root,
+            ca.members,
+            ca.sz,
+            (SELECT avg(p.sim)::REAL
+             FROM _con_pairs p
+             WHERE p.id_a = ANY(ca.members)
+               AND p.id_b = ANY(ca.members)
+            ) AS mean_sim
+        FROM cluster_agg ca
+    )
+    SELECT
+        members[1]                       AS canonical_id,
+        members                          AS all_members,
+        sz,
+        coalesce(mean_sim, p_similarity) AS mean_sim
+    FROM cluster_sim
+    ORDER BY sz DESC, members[1]
+    LIMIT p_limit;
+
+    -- ── 7. Apply (p_dry_run=FALSE only) ──────────────────────────────────
+    IF NOT p_dry_run THEN
+        FOR _cluster IN SELECT * FROM _con_clusters LOOP
+
+            UPDATE pgmnemo.agent_lesson
+            SET evidence_count = _cluster.sz
+            WHERE id = _cluster.canonical_id;
+
+            FOREACH _mbr IN ARRAY _cluster.all_members LOOP
+                CONTINUE WHEN _mbr = _cluster.canonical_id;
+
+                UPDATE pgmnemo.agent_lesson
+                SET state            = 'superseded',
+                    is_active        = FALSE,
+                    state_changed_at = NOW()
+                WHERE id = _mbr;
+
+                PERFORM pgmnemo.add_edge(
+                    _mbr,
+                    _cluster.canonical_id,
+                    'SUPERSEDED_BY',
+                    _cluster.mean_sim::FLOAT8,
+                    jsonb_build_object(
+                        'consolidation', TRUE,
+                        'cluster_size',  _cluster.sz
+                    ),
+                    'max'
+                );
+            END LOOP;
+        END LOOP;
+    END IF;
+
+    -- ── 8. Return cluster summary ─────────────────────────────────────────
+    RETURN QUERY
+    SELECT c.canonical_id, c.all_members, c.sz, c.mean_sim
+    FROM _con_clusters c
+    ORDER BY c.sz DESC, c.canonical_id;
+END;
+$$;
+
+COMMENT ON FUNCTION pgmnemo.consolidate(REAL, BOOLEAN, TEXT, INT) IS
+    'Cluster near-duplicate ACTIVE lessons by cosine similarity and collapse them. '
+    'p_similarity REAL DEFAULT 0.92: cosine similarity threshold for grouping. '
+    'p_dry_run BOOLEAN DEFAULT TRUE: when TRUE, return proposed clusters without any writes. '
+    'p_role TEXT DEFAULT NULL: restrict to a single role (NULL = all roles). '
+    'p_limit INT DEFAULT 100: max clusters to return / process per call. '
+    'Returns: (canonical_id BIGINT, member_ids BIGINT[], size INT, mean_similarity REAL). '
+    'Algorithm: union-find over all-pairs cosine similarity within each role. '
+    'Canonical election: recall_count DESC, confidence DESC, importance DESC, '
+    'created_at ASC, id ASC (stable tiebreaker — P1-4 v0.14.1 fix). '
+    'Apply (p_dry_run=FALSE): canonical.evidence_count=cluster_size; '
+    'non-canonical members: state=superseded, is_active=FALSE, state_changed_at=NOW(); '
+    'SUPERSEDED_BY edge (semantic) via add_edge() from each member to canonical. '
+    'All writes in the caller''s transaction — roll back on error. '
+    'Guards: never self-supersedes; never collapses across different roles. '
+    'Added in v0.14.0; tiebreaker fix in v0.14.1.';
