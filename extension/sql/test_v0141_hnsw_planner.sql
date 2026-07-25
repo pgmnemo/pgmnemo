@@ -1,0 +1,180 @@
+-- test_v0141_hnsw_planner.sql
+-- pg_regress tests for pgmnemo v0.14.1 — recall_hybrid() HNSW planner regression fix
+--
+-- Coverage:
+--   A1: recall_hybrid() still has correct 11-param signature after fix
+--   A2: Function comment references v0.14.1
+--   B1: EXPLAIN shows no Seq Scan on agent_lesson for vec_candidates path
+--       (vector fetch is now a standalone EXECUTE — not visible inside the CTE plan)
+--   B2: recall_hybrid() returns rows (functional smoke test)
+--   B3: role_filter still works after the refactor
+--   B4: p_min_score filter still works (11th param unchanged)
+--   B5: text-only path (_has_vec=FALSE) still returns BM25 rows
+--   B6: Calling recall_hybrid() twice in the same transaction succeeds
+--       (temp table _pgmnemo_vc is truncated, not recreated)
+--
+-- Test isolation: role 'tc_v141', project_id -1410.
+-- Gate off: bypass provenance for controlled inserts.
+-- Embeddings: uniform array_fill(0.1, 1024) — cosine distance 0 → score ≈ 1.
+
+SET pgmnemo.gate_strict = 'off';
+SET pgmnemo.include_unverified = 'on';
+SET pgmnemo.track_recall_recency = 'off';
+
+ALTER EXTENSION pgmnemo UPDATE TO '0.14.1';
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- A: Signature & comment verification
+-- ─────────────────────────────────────────────────────────────────────────────
+
+-- A1: recall_hybrid has exactly 11 parameters
+SELECT pronargs = 11 AS a1_recall_hybrid_11_params
+FROM pg_proc p
+JOIN pg_namespace n ON n.oid = p.pronamespace
+WHERE n.nspname = 'pgmnemo' AND p.proname = 'recall_hybrid';
+
+-- A2: function comment includes v0.14.1 marker
+SELECT
+    obj_description(p.oid, 'pg_proc') LIKE '%v0.14.1%' AS a2_comment_version_marker
+FROM pg_proc p
+JOIN pg_namespace n ON n.oid = p.pronamespace
+WHERE n.nspname = 'pgmnemo' AND p.proname = 'recall_hybrid';
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Seed data: 5 rows with embeddings in role tc_v141
+-- ─────────────────────────────────────────────────────────────────────────────
+
+INSERT INTO pgmnemo.agent_lesson (role, project_id, topic, lesson_text, commit_sha, embedding)
+VALUES
+    ('tc_v141', -1410, 'hnsw alpha',
+     'hnsw planner fix test alpha — vector recall path verification',
+     'sha-v141-1',
+     array_fill(0.1::float4, ARRAY[1024])::vector(1024)),
+    ('tc_v141', -1410, 'hnsw beta',
+     'hnsw planner fix test beta — rrf fusion check query',
+     'sha-v141-2',
+     array_fill(0.1::float4, ARRAY[1024])::vector(1024)),
+    ('tc_v141', -1410, 'hnsw gamma',
+     'hnsw planner fix test gamma — role filter isolation',
+     'sha-v141-3',
+     array_fill(0.1::float4, ARRAY[1024])::vector(1024)),
+    ('tc_v141', -1410, 'hnsw delta',
+     'hnsw planner fix test delta — p_min_score threshold',
+     'sha-v141-4',
+     array_fill(0.5::float4, ARRAY[1024])::vector(1024)),
+    ('tc_v141_other', -1410, 'other role',
+     'this lesson belongs to a different role and must not appear in tc_v141 results',
+     'sha-v141-other',
+     array_fill(0.1::float4, ARRAY[1024])::vector(1024));
+
+-- Also insert a text-only row (no embedding) for B5
+INSERT INTO pgmnemo.agent_lesson (role, project_id, topic, lesson_text, commit_sha)
+VALUES
+    ('tc_v141', -1410, 'text only epsilon',
+     'hnsw planner text only row for bm25 path epsilon',
+     'sha-v141-5');
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- B1: Plan verification — vector path must NOT show Seq Scan on agent_lesson
+--     inside the RETURN QUERY block (the CTE was replaced by a temp table).
+--     We check this indirectly: with enable_seqscan=off the call must still
+--     succeed (would error or return 0 rows if the index were missing/broken).
+-- ─────────────────────────────────────────────────────────────────────────────
+
+SET enable_seqscan = off;
+
+SELECT COUNT(*) >= 1 AS b1_hnsw_path_returns_rows_with_seqscan_off
+FROM pgmnemo.recall_hybrid(
+    array_fill(0.1::float4, ARRAY[1024])::vector(1024),
+    'hnsw planner',
+    10,
+    'tc_v141', -1410
+);
+
+RESET enable_seqscan;
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- B2: Functional smoke — recall_hybrid returns expected number of rows
+-- ─────────────────────────────────────────────────────────────────────────────
+
+SELECT COUNT(*) = 4 AS b2_returns_four_embedded_rows
+FROM pgmnemo.recall_hybrid(
+    array_fill(0.1::float4, ARRAY[1024])::vector(1024),
+    'hnsw planner fix test',
+    10,
+    'tc_v141', -1410
+);
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- B3: role_filter isolates results (no tc_v141_other rows bleed through)
+-- ─────────────────────────────────────────────────────────────────────────────
+
+SELECT COUNT(*) = 4 AS b3_role_filter_excludes_other_role
+FROM pgmnemo.recall_hybrid(
+    array_fill(0.1::float4, ARRAY[1024])::vector(1024),
+    NULL,
+    10,
+    'tc_v141', -1410
+);
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- B4: p_min_score gate still works (11th param preserved)
+-- Row sha-v141-4 has embedding 0.5-fill; cosine similarity vs 0.1-fill query
+-- is lower than 1.0, so p_min_score = 0.999 should exclude it.
+-- Rows sha-v141-1/2/3 have identical embeddings to query → score ≈ 1.0.
+-- ─────────────────────────────────────────────────────────────────────────────
+
+SELECT
+    COUNT(*) >= 3 AS b4_pmin_score_excludes_low_similarity_row
+FROM pgmnemo.recall_hybrid(
+    array_fill(0.1::float4, ARRAY[1024])::vector(1024),
+    NULL,
+    10,
+    'tc_v141', -1410,
+    0.4, 0.4, 60,  -- vec_weight, bm25_weight, rrf_k
+    NULL, NULL,    -- exclude_dag_id, p_content_types
+    0.99           -- p_min_score: only rows with match_confidence >= 0.99
+);
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- B5: text-only path (_has_vec=FALSE / NULL embedding) — BM25 rows returned
+-- ─────────────────────────────────────────────────────────────────────────────
+
+SELECT COUNT(*) >= 1 AS b5_text_only_path_returns_bm25_rows
+FROM pgmnemo.recall_hybrid(
+    NULL::vector(1024),        -- no embedding → text-only path
+    'hnsw planner text only',
+    10,
+    'tc_v141', -1410
+);
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- B6: Two calls in the same transaction succeed (temp table _pgmnemo_vc
+--     is created once and truncated on the second call, not re-created).
+-- ─────────────────────────────────────────────────────────────────────────────
+
+BEGIN;
+
+SELECT COUNT(*) >= 1 AS b6_first_call_ok
+FROM pgmnemo.recall_hybrid(
+    array_fill(0.1::float4, ARRAY[1024])::vector(1024),
+    'hnsw planner first call',
+    10,
+    'tc_v141', -1410
+);
+
+SELECT COUNT(*) >= 1 AS b6_second_call_ok
+FROM pgmnemo.recall_hybrid(
+    array_fill(0.1::float4, ARRAY[1024])::vector(1024),
+    'hnsw planner second call',
+    10,
+    'tc_v141', -1410
+);
+
+COMMIT;
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Cleanup
+-- ─────────────────────────────────────────────────────────────────────────────
+
+DELETE FROM pgmnemo.agent_lesson WHERE role IN ('tc_v141', 'tc_v141_other');

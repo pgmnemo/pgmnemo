@@ -14,7 +14,7 @@
 -- The v0.12.0 guard had a hardcoded project_id <= 100 check; v0.12.1+ reads the GUC.
 -- SPDX-License-Identifier: Apache-2.0
 
-ALTER EXTENSION pgmnemo UPDATE TO '0.14.0';
+ALTER EXTENSION pgmnemo UPDATE TO '0.14.1';
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- G1: Exactly one guard function; no 0-arg overload
