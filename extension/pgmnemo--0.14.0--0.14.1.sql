@@ -707,3 +707,282 @@ COMMENT ON FUNCTION pgmnemo.consolidate(REAL, BOOLEAN, TEXT, INT) IS
     'All writes in the caller''s transaction — roll back on error. '
     'Guards: never self-supersedes; never collapses across different roles. '
     'Added in v0.14.0; tiebreaker fix in v0.14.1.';
+
+-- =============================================================================
+-- P1-A  consolidate() — record prior_state in edge metadata for undo support
+-- =============================================================================
+-- v0.14.1 P1-4 already fixed the canonical-election tiebreaker.
+-- This pass adds capture of the member's pre-superseded state (prior_state) to
+-- the SUPERSEDED_BY edge metadata so that undo_consolidate() can invert exactly.
+-- All other logic is identical to the P1-4 version above.
+-- =============================================================================
+
+CREATE OR REPLACE FUNCTION pgmnemo.consolidate(
+    p_similarity REAL    DEFAULT 0.92,
+    p_dry_run    BOOLEAN DEFAULT TRUE,
+    p_role       TEXT    DEFAULT NULL,
+    p_limit      INT     DEFAULT 100
+)
+RETURNS TABLE (
+    canonical_id    BIGINT,
+    member_ids      BIGINT[],
+    size            INT,
+    mean_similarity REAL
+)
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    _pair        RECORD;
+    _cluster     RECORD;
+    _root_a      BIGINT;
+    _root_b      BIGINT;
+    _new_root    BIGINT;
+    _old_root    BIGINT;
+    _mbr         BIGINT;
+    _prior_state TEXT;           -- v0.14.1 P1-A: captured before superseding for undo
+BEGIN
+    DROP TABLE IF EXISTS _con_candidates;
+    DROP TABLE IF EXISTS _con_pairs;
+    DROP TABLE IF EXISTS _con_uf;
+    DROP TABLE IF EXISTS _con_clusters;
+
+    CREATE TEMP TABLE _con_candidates ON COMMIT DROP AS
+    SELECT id, role, recall_count, confidence, importance, created_at, embedding
+    FROM pgmnemo.agent_lesson
+    WHERE is_active
+      AND state NOT IN ('superseded', 'archived', 'rejected')
+      AND embedding IS NOT NULL
+      AND (p_role IS NULL OR role = p_role)
+    ORDER BY recall_count DESC, confidence DESC, importance DESC, created_at ASC
+    LIMIT p_limit * 20;
+
+    CREATE TEMP TABLE _con_pairs ON COMMIT DROP AS
+    SELECT
+        a.id                                         AS id_a,
+        b.id                                         AS id_b,
+        (1.0 - (a.embedding <=> b.embedding))::REAL  AS sim
+    FROM _con_candidates a
+    JOIN _con_candidates b ON b.id > a.id
+                          AND a.role = b.role
+    WHERE (1.0 - (a.embedding <=> b.embedding)) >= p_similarity;
+
+    CREATE TEMP TABLE _con_uf (id BIGINT PRIMARY KEY, root BIGINT NOT NULL)
+    ON COMMIT DROP;
+
+    INSERT INTO _con_uf (id, root)
+    SELECT DISTINCT id_a, id_a FROM _con_pairs
+    UNION
+    SELECT DISTINCT id_b, id_b FROM _con_pairs;
+
+    FOR _pair IN SELECT id_a, id_b FROM _con_pairs LOOP
+        SELECT root INTO _root_a FROM _con_uf WHERE id = _pair.id_a;
+        SELECT root INTO _root_b FROM _con_uf WHERE id = _pair.id_b;
+        IF _root_a IS DISTINCT FROM _root_b THEN
+            _new_root := LEAST(_root_a, _root_b);
+            _old_root := GREATEST(_root_a, _root_b);
+            UPDATE _con_uf SET root = _new_root WHERE root = _old_root;
+        END IF;
+    END LOOP;
+
+    LOOP
+        UPDATE _con_uf u
+        SET root = p.root
+        FROM _con_uf p
+        WHERE p.id = u.root AND p.root <> u.root;
+        EXIT WHEN NOT FOUND;
+    END LOOP;
+
+    CREATE TEMP TABLE _con_clusters ON COMMIT DROP AS
+    WITH cluster_agg AS (
+        SELECT
+            u.root,
+            array_agg(u.id ORDER BY
+                c.recall_count DESC,
+                c.confidence   DESC,
+                c.importance   DESC,
+                c.created_at   ASC,
+                c.id           ASC
+            )            AS members,
+            count(*)::INT AS sz
+        FROM _con_uf u
+        JOIN _con_candidates c ON c.id = u.id
+        GROUP BY u.root
+        HAVING count(*) > 1
+    ),
+    cluster_sim AS (
+        SELECT
+            ca.root,
+            ca.members,
+            ca.sz,
+            (SELECT avg(p.sim)::REAL
+             FROM _con_pairs p
+             WHERE p.id_a = ANY(ca.members)
+               AND p.id_b = ANY(ca.members)
+            ) AS mean_sim
+        FROM cluster_agg ca
+    )
+    SELECT
+        members[1]                       AS canonical_id,
+        members                          AS all_members,
+        sz,
+        coalesce(mean_sim, p_similarity) AS mean_sim
+    FROM cluster_sim
+    ORDER BY sz DESC, members[1]
+    LIMIT p_limit;
+
+    IF NOT p_dry_run THEN
+        FOR _cluster IN SELECT * FROM _con_clusters LOOP
+
+            UPDATE pgmnemo.agent_lesson
+            SET evidence_count = _cluster.sz
+            WHERE id = _cluster.canonical_id;
+
+            FOREACH _mbr IN ARRAY _cluster.all_members LOOP
+                CONTINUE WHEN _mbr = _cluster.canonical_id;
+
+                -- v0.14.1 P1-A: read prior state before superseding
+                SELECT state INTO _prior_state
+                FROM pgmnemo.agent_lesson WHERE id = _mbr;
+
+                UPDATE pgmnemo.agent_lesson
+                SET state            = 'superseded',
+                    is_active        = FALSE,
+                    state_changed_at = NOW()
+                WHERE id = _mbr;
+
+                PERFORM pgmnemo.add_edge(
+                    _mbr,
+                    _cluster.canonical_id,
+                    'SUPERSEDED_BY',
+                    _cluster.mean_sim::FLOAT8,
+                    jsonb_build_object(
+                        'consolidation', TRUE,
+                        'cluster_size',  _cluster.sz,
+                        'prior_state',   _prior_state   -- v0.14.1 P1-A: for undo_consolidate()
+                    ),
+                    'max'
+                );
+            END LOOP;
+        END LOOP;
+    END IF;
+
+    RETURN QUERY
+    SELECT c.canonical_id, c.all_members, c.sz, c.mean_sim
+    FROM _con_clusters c
+    ORDER BY c.sz DESC, c.canonical_id;
+END;
+$$;
+
+COMMENT ON FUNCTION pgmnemo.consolidate(REAL, BOOLEAN, TEXT, INT) IS
+    'Cluster near-duplicate ACTIVE lessons by cosine similarity and collapse them. '
+    'p_similarity REAL DEFAULT 0.92: cosine similarity threshold for grouping. '
+    'p_dry_run BOOLEAN DEFAULT TRUE: when TRUE, return proposed clusters without any writes. '
+    'p_role TEXT DEFAULT NULL: restrict to a single role (NULL = all roles). '
+    'p_limit INT DEFAULT 100: max clusters to return / process per call. '
+    'Returns: (canonical_id BIGINT, member_ids BIGINT[], size INT, mean_similarity REAL). '
+    'Algorithm: union-find over all-pairs cosine similarity within each role. '
+    'Canonical election: recall_count DESC, confidence DESC, importance DESC, '
+    'created_at ASC, id ASC (stable tiebreaker — P1-4 v0.14.1 fix). '
+    'Apply (p_dry_run=FALSE): canonical.evidence_count=cluster_size; '
+    'non-canonical members: state=superseded, is_active=FALSE, state_changed_at=NOW(); '
+    'SUPERSEDED_BY edge (semantic) via add_edge() from each member to canonical; '
+    'edge metadata includes prior_state for undo_consolidate() (v0.14.1 P1-A). '
+    'All writes in the caller''s transaction — roll back on error. '
+    'Guards: never self-supersedes; never collapses across different roles. '
+    'Added in v0.14.0; tiebreaker fix v0.14.1 P1-4; prior_state recording v0.14.1 P1-A.';
+
+
+-- =============================================================================
+-- P1-A  pgmnemo.undo_consolidate() — exact inverse of consolidate() apply
+-- =============================================================================
+-- Restores lessons that consolidate() moved to 'superseded' back to their
+-- pre-consolidation state, removes the SUPERSEDED_BY consolidation edges, and
+-- resets the canonical's evidence_count to 1.
+--
+-- DATA MODEL NOTE:
+--   consolidate() in v0.14.0 did NOT record prior_state in edge metadata.
+--   undo_consolidate() therefore cannot restore the exact pre-consolidation state
+--   for edges created by v0.14.0 consolidate() — it falls back to 'candidate'
+--   (the ingest() default and the most common active state in practice).
+--   Edges created by v0.14.1+ consolidate() carry prior_state and are exactly
+--   invertible.  This limitation is documented; no silent lossy approximation.
+-- =============================================================================
+
+CREATE OR REPLACE FUNCTION pgmnemo.undo_consolidate(
+    p_canonical_id  BIGINT  DEFAULT NULL,
+    p_dry_run       BOOLEAN DEFAULT TRUE
+)
+RETURNS TABLE (
+    canonical_id    BIGINT,
+    restored_ids    BIGINT[],
+    restored_count  INT
+)
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    _cluster RECORD;
+BEGIN
+    -- One RECORD per canonical that has active SUPERSEDED_BY consolidation edges.
+    FOR _cluster IN
+        SELECT
+            me.target_id                                                AS cid,
+            array_agg(me.source_id          ORDER BY me.source_id)     AS member_ids,
+            -- prior_state recorded by v0.14.1+ consolidate(); 'candidate' for older edges
+            array_agg(
+                COALESCE(me.metadata->>'prior_state', 'candidate')
+                ORDER BY me.source_id
+            )                                                           AS prior_states,
+            count(*)::INT                                               AS sz,
+            array_agg(me.id                 ORDER BY me.source_id)     AS edge_ids
+        FROM pgmnemo.mem_edge me
+        WHERE me.relation_type = 'SUPERSEDED_BY'
+          AND me.valid_until   IS NULL
+          AND me.metadata @> '{"consolidation":true}'::jsonb
+          AND (p_canonical_id IS NULL OR me.target_id = p_canonical_id)
+        GROUP BY me.target_id
+    LOOP
+        IF NOT p_dry_run THEN
+            -- Restore each superseded member to its prior state.
+            -- UNNEST parallel arrays pairs member_id with its recorded prior_state.
+            UPDATE pgmnemo.agent_lesson al
+            SET state            = u.prior_state,
+                is_active        = TRUE,
+                state_changed_at = NOW()
+            FROM (
+                SELECT mid, prior_state
+                FROM unnest(_cluster.member_ids, _cluster.prior_states) AS t(mid, prior_state)
+            ) u
+            WHERE al.id    = u.mid
+              AND al.state = 'superseded';   -- guard: skip if already re-activated
+
+            -- Remove the SUPERSEDED_BY consolidation edges.
+            DELETE FROM pgmnemo.mem_edge
+            WHERE id = ANY(_cluster.edge_ids);
+
+            -- Reset canonical's evidence_count to standalone (1).
+            UPDATE pgmnemo.agent_lesson
+            SET evidence_count = 1
+            WHERE id = _cluster.cid;
+        END IF;
+
+        canonical_id    := _cluster.cid;
+        restored_ids    := _cluster.member_ids;
+        restored_count  := _cluster.sz;
+        RETURN NEXT;
+    END LOOP;
+END;
+$$;
+
+COMMENT ON FUNCTION pgmnemo.undo_consolidate(BIGINT, BOOLEAN) IS
+    'Exact inverse of pgmnemo.consolidate() apply path (v0.14.1 P1-A). '
+    'p_canonical_id BIGINT DEFAULT NULL: NULL=undo all clusters; value=undo that canonical only. '
+    'p_dry_run BOOLEAN DEFAULT TRUE: when TRUE, returns planned restoration without any writes. '
+    'Returns: (canonical_id BIGINT, restored_ids BIGINT[], restored_count INT). '
+    'Per-cluster: restores member state from SUPERSEDED_BY edge metadata field prior_state '
+    '(recorded by consolidate() v0.14.1+; falls back to ''candidate'' for pre-0.14.1 edges — '
+    'pre-0.14.1 consolidation edges lack prior_state and cannot be exactly inverted; '
+    'members are restored to ''candidate'' as the safest active default); '
+    'sets is_active=TRUE; deletes the SUPERSEDED_BY consolidation edges; '
+    'resets canonical.evidence_count=1. '
+    'Guard: only updates members still in state=''superseded'' — safe to call twice. '
+    'All writes in the caller''s transaction — roll back on error.';
