@@ -12,7 +12,8 @@
 --   T8: canonical.evidence_count set to 3
 --   T9: 2 SUPERSEDED_BY edges exist pointing to canonical
 --   T10: second apply is idempotent (0 clusters, members already excluded)
---   T11: role boundary guard — outlier in different role not collapsed
+--   T11: cross-role boundary — highly-similar embeddings in different roles not collapsed
+--        (P2-E: rewritten to actually exercise the role guard, not just orthogonal embeddings)
 -- SPDX-License-Identifier: Apache-2.0
 
 -- ── Upgrade to 0.14.0 ────────────────────────────────────────────────────────
@@ -152,12 +153,49 @@ WHERE tgt.role     = 'tc_consolidate'
 SELECT count(*) = 0 AS t10_no_clusters_second_run
 FROM pgmnemo.consolidate(0.92, false, 'tc_consolidate');
 
--- ── T11: role boundary — outlier alone in its role-slot, no cross-role cluster
--- All 4 lessons share the same role 'tc_consolidate'.
--- L4 forms no cluster because its embedding is perpendicular to L1/L2/L3.
-SELECT count(*) = 1 AS t11_outlier_still_active
+-- ── T11: cross-role boundary — highly-similar embeddings in different roles ──
+-- P2-E: Rewrite — seeds L5 in 'tc_con_ra' and L6 in 'tc_con_rb' with embeddings
+-- nearly identical to L1/L2 (cosine sim ≈ 0.9998 > threshold 0.92).  If the role
+-- guard were absent, L5–L6 would form a cluster.  With the guard active, zero
+-- clusters are returned.  This actually exercises the cross-role guard; the prior
+-- design relied on orthogonal embeddings and never triggered the guard at all.
+DO $$
+DECLARE _l5 BIGINT; _l6 BIGINT;
+BEGIN
+    _l5 := pgmnemo.ingest('tc_con_ra', 99994, 'cross-role',
+        'When running deploy always run alembic upgrade head first',
+        p_commit_sha => 'sha_cr_l5');
+    _l6 := pgmnemo.ingest('tc_con_rb', 99995, 'cross-role',
+        'When running deploy always run alembic upgrade head first',
+        p_commit_sha => 'sha_cr_l6');
+
+    -- Near-identical embeddings: cosine sim ≈ 0.9998 > threshold 0.92.
+    -- Would cluster if in the same role — different roles must block it.
+    UPDATE pgmnemo.agent_lesson
+    SET embedding    = ('[1.0' || repeat(',0.0', 1023) || ']')::vector(1024),
+        recall_count = 3, confidence = 0.7
+    WHERE commit_sha = 'sha_cr_l5';
+
+    UPDATE pgmnemo.agent_lesson
+    SET embedding    = ('[0.9998,0.02' || repeat(',0.0', 1022) || ']')::vector(1024),
+        recall_count = 1, confidence = 0.5
+    WHERE commit_sha = 'sha_cr_l6';
+END;
+$$;
+
+-- No cluster formed across different roles — 0 rows returned by consolidate
+SELECT count(*) = 0 AS t11_cross_role_no_cluster
+FROM pgmnemo.consolidate(0.92, false, NULL);
+
+-- Both lessons untouched — confirms the role guard is actively enforced
+SELECT count(*) = 1 AS t11_role_a_still_active
 FROM pgmnemo.agent_lesson
-WHERE role = 'tc_consolidate' AND commit_sha = 'sha_tc_con_l4' AND is_active;
+WHERE role = 'tc_con_ra' AND commit_sha = 'sha_cr_l5' AND is_active;
+
+SELECT count(*) = 1 AS t11_role_b_still_active
+FROM pgmnemo.agent_lesson
+WHERE role = 'tc_con_rb' AND commit_sha = 'sha_cr_l6' AND is_active;
 
 -- ── Cleanup ───────────────────────────────────────────────────────────────────
+DELETE FROM pgmnemo.agent_lesson WHERE role IN ('tc_con_ra', 'tc_con_rb');
 DELETE FROM pgmnemo.agent_lesson WHERE role = 'tc_consolidate';

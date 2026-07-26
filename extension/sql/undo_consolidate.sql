@@ -7,7 +7,7 @@
 --   T3:  2 members superseded after consolidation
 --   T4:  canonical evidence_count = 3
 --   T5:  2 SUPERSEDED_BY consolidation edges exist
---   T6:  edges carry prior_state='candidate' (v0.14.1 P1-A recording)
+--   T6:  edges carry prior_state='draft' (v0.14.1 P1-A recording)
 --   T7:  dry-run undo reports 1 cluster (2 would-be-restored members)
 --   T8:  dry-run is provably non-mutating — state unchanged
 --   T9:  dry-run non-mutating — edges unchanged
@@ -15,7 +15,7 @@
 --   T11: after undo, 0 superseded in role
 --   T12: after undo, all 4 lessons active
 --   T13: canonical evidence_count reset to 1
---   T14: members restored to exact prior state 'candidate'
+--   T14: members restored to exact prior state 'draft'
 --   T15: 0 consolidation edges remain
 --   T16: second undo is idempotent (no-op for this role)
 -- SPDX-License-Identifier: Apache-2.0
@@ -177,3 +177,89 @@ WHERE al.role = 'tc_undo_con';
 
 -- ── Cleanup ───────────────────────────────────────────────────────────────────
 DELETE FROM pgmnemo.agent_lesson WHERE role = 'tc_undo_con';
+
+-- ════════════════════════════════════════════════════════════════════════════
+-- P2-C: multi-canonical undo — undo_consolidate() must restore ALL clusters
+-- ════════════════════════════════════════════════════════════════════════════
+--   T17: consolidate 'tc_undo_multi' → 2 clusters formed
+--   T18: 2 members superseded (one per cluster)
+--   T19: undo_consolidate(NULL, FALSE) returns 2 clusters
+--   T20: 0 superseded after multi-undo
+--   T21: all 4 lessons active
+--   T22: all evidence counts reset to 1
+
+-- Setup: two independent clusters in 'tc_undo_multi', project_id 99990.
+-- Cluster A embeddings → e1-direction [1, 0, …]; Cluster B → e2-direction [0, 1, 0, …].
+-- Cross-cluster cosine similarity ≈ 0 (orthogonal) — clusters are independent.
+DO $$
+DECLARE _l1 BIGINT; _l2 BIGINT; _l3 BIGINT; _l4 BIGINT;
+BEGIN
+    _l1 := pgmnemo.ingest('tc_undo_multi', 99990, 'cluster-a',
+        'When deploying always run alembic upgrade head first',
+        p_commit_sha => 'sha_um_l1');
+    _l2 := pgmnemo.ingest('tc_undo_multi', 99990, 'cluster-a',
+        'When deploying always run alembic upgrade head before starting',
+        p_commit_sha => 'sha_um_l2');
+    _l3 := pgmnemo.ingest('tc_undo_multi', 99990, 'cluster-b',
+        'When psycopg2 errors occur check connection pooling configuration',
+        p_commit_sha => 'sha_um_l3');
+    _l4 := pgmnemo.ingest('tc_undo_multi', 99990, 'cluster-b',
+        'When psycopg2 connection errors occur always check pool settings',
+        p_commit_sha => 'sha_um_l4');
+
+    -- Cluster A: e1-direction, cosine sim ≈ 0.9998 (above threshold 0.92)
+    UPDATE pgmnemo.agent_lesson
+    SET embedding    = ('[1.0' || repeat(',0.0', 1023) || ']')::vector(1024),
+        recall_count = 5, confidence = 0.8
+    WHERE commit_sha = 'sha_um_l1';
+
+    UPDATE pgmnemo.agent_lesson
+    SET embedding    = ('[0.9998,0.02' || repeat(',0.0', 1022) || ']')::vector(1024),
+        recall_count = 1, confidence = 0.5
+    WHERE commit_sha = 'sha_um_l2';
+
+    -- Cluster B: e2-direction, cosine sim ≈ 0.9998; orthogonal to Cluster A
+    UPDATE pgmnemo.agent_lesson
+    SET embedding    = ('[0.0,1.0' || repeat(',0.0', 1022) || ']')::vector(1024),
+        recall_count = 5, confidence = 0.8
+    WHERE commit_sha = 'sha_um_l3';
+
+    UPDATE pgmnemo.agent_lesson
+    SET embedding    = ('[0.02,0.9998' || repeat(',0.0', 1022) || ']')::vector(1024),
+        recall_count = 1, confidence = 0.5
+    WHERE commit_sha = 'sha_um_l4';
+END;
+$$;
+
+-- ── T17: consolidate → 2 independent clusters ────────────────────────────────
+SELECT count(*) = 2 AS t17_two_clusters_consolidated
+FROM pgmnemo.consolidate(0.92, false, 'tc_undo_multi');
+
+-- ── T18: 2 members superseded (l2 from A, l4 from B) ────────────────────────
+SELECT count(*) = 2 AS t18_two_superseded
+FROM pgmnemo.agent_lesson
+WHERE role = 'tc_undo_multi' AND state = 'superseded';
+
+-- ── T19: undo with no canonical filter restores both clusters ────────────────
+SELECT count(*) = 2 AS t19_multi_undo_two_clusters
+FROM pgmnemo.undo_consolidate(NULL, FALSE) u
+JOIN pgmnemo.agent_lesson al ON al.id = u.canonical_id
+WHERE al.role = 'tc_undo_multi';
+
+-- ── T20: 0 superseded after multi-undo ───────────────────────────────────────
+SELECT count(*) = 0 AS t20_no_superseded_after_multi_undo
+FROM pgmnemo.agent_lesson
+WHERE role = 'tc_undo_multi' AND state = 'superseded';
+
+-- ── T21: all 4 lessons active ────────────────────────────────────────────────
+SELECT count(*) = 4 AS t21_all_four_active
+FROM pgmnemo.agent_lesson
+WHERE role = 'tc_undo_multi' AND is_active;
+
+-- ── T22: all evidence counts reset to 1 ──────────────────────────────────────
+SELECT count(*) = 0 AS t22_no_inflated_evidence_count
+FROM pgmnemo.agent_lesson
+WHERE role = 'tc_undo_multi' AND evidence_count > 1;
+
+-- ── Cleanup ───────────────────────────────────────────────────────────────────
+DELETE FROM pgmnemo.agent_lesson WHERE role = 'tc_undo_multi';

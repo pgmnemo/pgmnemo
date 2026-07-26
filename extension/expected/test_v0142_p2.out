@@ -1,0 +1,149 @@
+-- test_v0142_p2.sql
+-- pg_regress tests for pgmnemo v0.14.2 — deferred P2 findings
+--
+-- Coverage:
+--   P2-A: evidence_count accumulation across multiple consolidate() runs
+--     A1: first consolidate() → evidence_count = 3 (1 + cluster_size-1 = 1+2)
+--     A2: seed a 4th near-duplicate in the same role
+--     A3: second consolidate() → evidence_count = 4 (3 + 2-1 = 3+1)
+--     A4: evidence_count = 4, not 2 (proves accumulation, not overwrite)
+--
+--   P2-D: classify_content_type() 'rejected' false-positive fix
+--     D1: operational sentence with 'rejected' alone → NULL (not 'decision')
+--     D2: genuine rejection decision via 'decided' → 'decision'
+--
+-- Test isolation: role 'tc_p2a_accum' project_id 99989 (P2-A).
+-- SPDX-License-Identifier: Apache-2.0
+ALTER EXTENSION pgmnemo UPDATE TO '0.14.2';
+SET pgmnemo.gate_strict           = 'off';
+SET pgmnemo.include_unverified    = 'on';
+SET pgmnemo.track_recall_recency  = 'off';
+-- ═════════════════════════════════════════════════════════════════════════════
+-- P2-A: evidence_count accumulates across multiple consolidate() passes
+-- ═════════════════════════════════════════════════════════════════════════════
+-- After the first consolidation the collapsed members become is_active=FALSE
+-- (state='superseded') and are excluded from the candidate scan.  A second run
+-- therefore cannot re-collect them, so accumulation cannot double-count.
+-- Initial evidence_count = 1 (DEFAULT).  After pass 1 (cluster size 3):
+--   evidence_count = 1 + (3-1) = 3.
+-- After seeding one more near-duplicate and pass 2 (cluster size 2: canonical + new):
+--   evidence_count = 3 + (2-1) = 4.
+-- Old SET behaviour would give 2 after pass 2, proving the regression.
+-- ── Setup: 3 near-duplicate lessons in 'tc_p2a_accum' ───────────────────────
+DO $$
+DECLARE _l1 BIGINT; _l2 BIGINT; _l3 BIGINT;
+BEGIN
+    _l1 := pgmnemo.ingest('tc_p2a_accum', 99989, 'accum-test',
+        'When deploying always run alembic upgrade head first',
+        p_commit_sha => 'sha_p2a_l1');
+    _l2 := pgmnemo.ingest('tc_p2a_accum', 99989, 'accum-test',
+        'When deploying always run alembic upgrade head before starting',
+        p_commit_sha => 'sha_p2a_l2');
+    _l3 := pgmnemo.ingest('tc_p2a_accum', 99989, 'accum-test',
+        'When deploying always run alembic upgrade head beforehand',
+        p_commit_sha => 'sha_p2a_l3');
+
+    -- L1: canonical (highest recall_count=5)
+    UPDATE pgmnemo.agent_lesson
+    SET embedding    = ('[1.0' || repeat(',0.0', 1023) || ']')::vector(1024),
+        recall_count = 5, confidence = 0.8
+    WHERE commit_sha = 'sha_p2a_l1';
+
+    -- L2, L3: near-duplicates — cosine sim ≈ 0.9998 / 0.9999
+    UPDATE pgmnemo.agent_lesson
+    SET embedding    = ('[0.9998,0.02' || repeat(',0.0', 1022) || ']')::vector(1024),
+        recall_count = 2, confidence = 0.5
+    WHERE commit_sha = 'sha_p2a_l2';
+
+    UPDATE pgmnemo.agent_lesson
+    SET embedding    = ('[0.9999,0.01414' || repeat(',0.0', 1022) || ']')::vector(1024),
+        recall_count = 1, confidence = 0.5
+    WHERE commit_sha = 'sha_p2a_l3';
+END;
+$$;
+-- ── A1: first consolidate() → 1 cluster of size 3 ───────────────────────────
+SELECT count(*) = 1 AS a1_first_consolidate_one_cluster
+FROM pgmnemo.consolidate(0.92, false, 'tc_p2a_accum');
+NOTICE:  table "_con_candidates" does not exist, skipping
+NOTICE:  table "_con_pairs" does not exist, skipping
+NOTICE:  table "_con_uf" does not exist, skipping
+NOTICE:  table "_con_clusters" does not exist, skipping
+ a1_first_consolidate_one_cluster 
+----------------------------------
+ t
+(1 row)
+
+-- ── A2: evidence_count = 3 after first pass (1 + (3-1)) ─────────────────────
+SELECT evidence_count = 3 AS a2_evidence_count_three_first_pass
+FROM pgmnemo.agent_lesson
+WHERE role = 'tc_p2a_accum' AND is_active AND evidence_count > 1;
+ a2_evidence_count_three_first_pass 
+------------------------------------
+ t
+(1 row)
+
+-- ── Seed L4: another near-duplicate for second consolidation pass ─────────────
+DO $$
+DECLARE _l4 BIGINT;
+BEGIN
+    _l4 := pgmnemo.ingest('tc_p2a_accum', 99989, 'accum-test',
+        'When deploying always run alembic upgrade head to apply migrations',
+        p_commit_sha => 'sha_p2a_l4');
+
+    -- Near-duplicate of L1: cosine sim ≈ 0.9997
+    UPDATE pgmnemo.agent_lesson
+    SET embedding    = ('[0.9997,0.02449' || repeat(',0.0', 1022) || ']')::vector(1024),
+        recall_count = 1, confidence = 0.5
+    WHERE commit_sha = 'sha_p2a_l4';
+END;
+$$;
+-- ── A3: second consolidate() → 1 new cluster (canonical + L4) ───────────────
+-- L2 and L3 are superseded (is_active=FALSE) and excluded — cannot double-count.
+SELECT count(*) = 1 AS a3_second_consolidate_one_cluster
+FROM pgmnemo.consolidate(0.92, false, 'tc_p2a_accum');
+NOTICE:  table "_con_candidates" does not exist, skipping
+NOTICE:  table "_con_pairs" does not exist, skipping
+NOTICE:  table "_con_uf" does not exist, skipping
+NOTICE:  table "_con_clusters" does not exist, skipping
+ a3_second_consolidate_one_cluster 
+-----------------------------------
+ t
+(1 row)
+
+-- ── A4: evidence_count = 4 (accumulated, not overwritten) ────────────────────
+-- Overwrite (old SET behaviour) would give 2 (cluster size 2 from pass 2).
+-- Accumulation gives 3 + (2-1) = 4.
+SELECT evidence_count = 4 AS a4_evidence_count_accumulated_to_four
+FROM pgmnemo.agent_lesson
+WHERE role = 'tc_p2a_accum' AND is_active AND evidence_count > 1;
+ a4_evidence_count_accumulated_to_four 
+---------------------------------------
+ t
+(1 row)
+
+-- ── Cleanup P2-A ─────────────────────────────────────────────────────────────
+DELETE FROM pgmnemo.agent_lesson WHERE role = 'tc_p2a_accum';
+-- ═════════════════════════════════════════════════════════════════════════════
+-- P2-D: classify_content_type() 'rejected' false-positive fix (v0.14.2)
+-- ═════════════════════════════════════════════════════════════════════════════
+-- The bare \mrejected\M arm was removed from the decision branch in v0.14.2.
+-- Genuine rejection decisions are still caught via 'decided', 'decision',
+-- 'verdict', 'approved', 'chosen', or compound selection patterns.
+-- ── D1: false-positive — 'rejected' alone must NOT yield 'decision' ──────────
+SELECT pgmnemo.classify_content_type(
+    'The PR was rejected for having typos and style violations.'
+) AS d1_rejected_fp_is_null;
+ d1_rejected_fp_is_null 
+------------------------
+ 
+(1 row)
+
+-- ── D2: true decision — 'decided' verb fires regardless of 'reject' ──────────
+SELECT pgmnemo.classify_content_type(
+    'We decided to reject the RFC because the proposed approach is flawed.'
+) AS d2_decided_to_reject_is_decision;
+ d2_decided_to_reject_is_decision 
+----------------------------------
+ decision
+(1 row)
+
