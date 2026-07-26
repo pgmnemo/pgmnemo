@@ -1,0 +1,251 @@
+-- test_v0142_curation_honesty.sql
+-- pg_regress tests for pgmnemo v0.14.2 — Curation-honesty fix
+--
+-- Ensures reclassify_corpus() never clobbers content_type values set by
+-- curator verbs (remember_event, remember_relation, or any future typed verb).
+--
+-- Coverage:
+--   F1: classifier_owned_types() helper exists (returns text[])
+--   F2: classifier_owned_types() returns exactly the 5 classifier categories
+--   G1: dry-run — 'event' rows absent from 'before' phase (not candidates)
+--   G2: dry-run — 'event' rows absent from 'after' phase (not proposed)
+--   G3: live-run — event row count unchanged after reclassify_corpus(false)
+--   G4: live-run — event rows byte-identical (content_type='event') after apply
+--   G5: live-run — classifier-owned rows with wrong type DID change
+--   H1: ingest() with explicit content_type='event' preserves it (no auto-override)
+--
+-- Test role 'tc_v0142' and project_id -1420 isolate data from all other tests.
+-- gate_strict off: bypass provenance gate for testing.
+-- SPDX-License-Identifier: Apache-2.0
+SET pgmnemo.gate_strict = 'off';
+SET pgmnemo.include_unverified = 'on';
+SET pgmnemo.track_recall_recency = 'off';
+ALTER EXTENSION pgmnemo UPDATE TO '0.14.2';
+-- =============================================================================
+-- F: classifier_owned_types() — helper function
+-- =============================================================================
+-- F1: classifier_owned_types() exists and returns text[]
+DO $$
+DECLARE
+    _rettype TEXT;
+BEGIN
+    SELECT pg_catalog.format_type(p.prorettype, NULL)
+    INTO _rettype
+    FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+    WHERE n.nspname = 'pgmnemo' AND p.proname = 'classifier_owned_types';
+
+    IF _rettype = 'text[]' THEN
+        RAISE NOTICE 'F1 PASS: classifier_owned_types() exists, returns text[]';
+    ELSE
+        RAISE EXCEPTION 'F1 FAIL: expected text[], got %', _rettype;
+    END IF;
+END;
+$$;
+NOTICE:  F1 PASS: classifier_owned_types() exists, returns text[]
+-- F2: returns exactly the 5 classifier categories (no more, no less)
+DO $$
+DECLARE
+    _owned  text[];
+    _sorted text;
+BEGIN
+    SELECT pgmnemo.classifier_owned_types() INTO _owned;
+    SELECT array_to_string(ARRAY(SELECT unnest(_owned) ORDER BY 1), ',') INTO _sorted;
+
+    IF _sorted = 'decision,entity,fact,incident,procedure' THEN
+        RAISE NOTICE 'F2 PASS: classifier_owned_types() = {decision,entity,fact,incident,procedure}';
+    ELSE
+        RAISE EXCEPTION 'F2 FAIL: expected 5 canonical types, got: %', _sorted;
+    END IF;
+END;
+$$;
+NOTICE:  F2 PASS: classifier_owned_types() = {decision,entity,fact,incident,procedure}
+-- =============================================================================
+-- Setup: seed isolated test rows
+-- =============================================================================
+-- 3 event rows (curator-owned, must never be reclassified)
+-- Text is deliberately ambiguous — classifier returns NULL for these,
+-- but that is irrelevant: exclusion is based on current content_type, not text.
+INSERT INTO pgmnemo.agent_lesson
+    (role, project_id, topic, lesson_text, importance, content_type, source_type)
+VALUES
+    ('tc_v0142', -1420, 'v0142-evt',
+     'Deployment of release 1.4.2 completed at 14:00 UTC without issues on 2026-07-25.',
+     3, 'event', 'system'),
+    ('tc_v0142', -1420, 'v0142-evt',
+     'Team standup occurred; sprint-3 blockers reviewed and three items moved to backlog.',
+     3, 'event', 'system'),
+    ('tc_v0142', -1420, 'v0142-evt',
+     'Q3 planning session concluded with budget targets set for the next two quarters.',
+     3, 'event', 'system');
+-- 2 classifier-owned rows stored as 'procedure' but classify as 'incident'
+-- These SHOULD be reclassified by reclassify_corpus().
+INSERT INTO pgmnemo.agent_lesson
+    (role, project_id, topic, lesson_text, importance, content_type, source_type)
+VALUES
+    ('tc_v0142', -1420, 'v0142-wrong',
+     'The root cause of the outage was a misconfigured load balancer that failed silently.',
+     3, 'procedure', 'system'),
+    ('tc_v0142', -1420, 'v0142-wrong',
+     'Incident root cause: the database crashed because of an OOM kill during peak traffic.',
+     3, 'procedure', 'system');
+-- =============================================================================
+-- G1: dry-run — 'event' absent from 'before' phase
+-- =============================================================================
+-- p_limit=50 caps the scan to our seeded rows + any existing test data.
+-- We assert that 'event' does NOT appear in phase='before'.
+DO $$
+DECLARE
+    _event_in_before BIGINT;
+BEGIN
+    SELECT COALESCE(SUM(cnt), 0) INTO _event_in_before
+    FROM pgmnemo.reclassify_corpus(p_dry_run => true, p_limit => 50)
+    WHERE phase = 'before' AND content_type = 'event';
+
+    IF _event_in_before = 0 THEN
+        RAISE NOTICE 'G1 PASS: event rows absent from dry-run ''before'' phase (cnt=0)';
+    ELSE
+        RAISE EXCEPTION 'G1 FAIL: ''event'' appeared in ''before'' phase with cnt=%'
+            ' — reclassify_corpus() is treating event rows as candidates',
+            _event_in_before;
+    END IF;
+END;
+$$;
+NOTICE:  G1 PASS: event rows absent from dry-run 'before' phase (cnt=0)
+-- =============================================================================
+-- G2: dry-run — 'event' absent from 'after' phase
+-- =============================================================================
+DO $$
+DECLARE
+    _event_in_after BIGINT;
+BEGIN
+    SELECT COALESCE(SUM(cnt), 0) INTO _event_in_after
+    FROM pgmnemo.reclassify_corpus(p_dry_run => true, p_limit => 50)
+    WHERE phase = 'after' AND content_type = 'event';
+
+    IF _event_in_after = 0 THEN
+        RAISE NOTICE 'G2 PASS: event rows absent from dry-run ''after'' phase (cnt=0)';
+    ELSE
+        RAISE EXCEPTION 'G2 FAIL: ''event'' appeared in ''after'' phase with cnt=%'
+            ' — dry-run is proposing to reclassify event rows',
+            _event_in_after;
+    END IF;
+END;
+$$;
+NOTICE:  G2 PASS: event rows absent from dry-run 'after' phase (cnt=0)
+-- =============================================================================
+-- G3 + G4: live-run — event rows preserved byte-identical
+-- =============================================================================
+DO $$
+DECLARE
+    _evt_ids       BIGINT[];
+    _before_cts    TEXT[];
+    _after_cts     TEXT[];
+    _all_event     BOOLEAN;
+    _before_count  INT;
+    _after_count   INT;
+BEGIN
+    -- Capture event row ids and content_types before live run
+    SELECT ARRAY_AGG(id ORDER BY id),
+           ARRAY_AGG(content_type ORDER BY id)
+    INTO _evt_ids, _before_cts
+    FROM pgmnemo.agent_lesson
+    WHERE project_id = -1420 AND topic = 'v0142-evt' AND is_active;
+
+    _before_count := array_length(_evt_ids, 1);
+
+    -- Run live reclassify (scoped to our test rows + a small window)
+    PERFORM pgmnemo.reclassify_corpus(p_dry_run => false, p_limit => 50);
+
+    -- Capture content_types after live run
+    SELECT ARRAY_AGG(content_type ORDER BY id)
+    INTO _after_cts
+    FROM pgmnemo.agent_lesson
+    WHERE id = ANY(_evt_ids);
+
+    _after_count := array_length(_after_cts, 1);
+
+    -- G3: count unchanged
+    IF _before_count = _after_count AND _after_count = 3 THEN
+        RAISE NOTICE 'G3 PASS: event row count unchanged (before=%, after=%)',
+            _before_count, _after_count;
+    ELSE
+        RAISE EXCEPTION 'G3 FAIL: event count changed — before=%, after=%',
+            _before_count, _after_count;
+    END IF;
+
+    -- G4: all still 'event'
+    SELECT bool_and(ct = 'event') INTO _all_event
+    FROM unnest(_after_cts) AS ct;
+
+    IF _all_event IS TRUE THEN
+        RAISE NOTICE 'G4 PASS: all % event rows still have content_type=''event'' after live reclassify',
+            _after_count;
+    ELSE
+        RAISE EXCEPTION 'G4 FAIL: at least one event row had its content_type changed — after types: %',
+            array_to_string(_after_cts, ',');
+    END IF;
+END;
+$$;
+NOTICE:  G3 PASS: event row count unchanged (before=3, after=3)
+NOTICE:  G4 PASS: all 3 event rows still have content_type='event' after live reclassify
+-- =============================================================================
+-- G5: live-run — classifier-owned rows with wrong type DID change
+-- =============================================================================
+DO $$
+DECLARE
+    _changed INT;
+BEGIN
+    -- After the live run above, 'procedure' rows with root-cause text → 'incident'
+    SELECT COUNT(*) INTO _changed
+    FROM pgmnemo.agent_lesson
+    WHERE project_id = -1420
+      AND topic = 'v0142-wrong'
+      AND is_active
+      AND content_type = 'incident';  -- expected reclassified label
+
+    IF _changed = 2 THEN
+        RAISE NOTICE 'G5 PASS: % classifier-owned rows reclassified procedure→incident', _changed;
+    ELSE
+        RAISE EXCEPTION 'G5 FAIL: expected 2 rows reclassified to incident, got %', _changed;
+    END IF;
+END;
+$$;
+NOTICE:  G5 PASS: 2 classifier-owned rows reclassified procedure→incident
+-- =============================================================================
+-- H1: ingest() — explicit content_type='event' is preserved by auto-classify
+-- =============================================================================
+DO $$
+DECLARE
+    _id BIGINT;
+    _ct TEXT;
+BEGIN
+    -- A text that would classify as 'procedure' if auto-derived,
+    -- but caller supplies content_type='event' explicitly.
+    SELECT pgmnemo.ingest(
+        'tc_v0142',
+        -1420,
+        'v0142-ingest-event',
+        'When the system alert fires, always check the monitoring dashboard for incident details.',
+        3::smallint,
+        NULL::vector(1024),
+        NULL::text,
+        'h1-curation-honesty-artifact-hash-00000000000000000000000001',
+        '{}'::jsonb,
+        'event'   -- explicit: must win over classifier
+    ) INTO _id;
+
+    SELECT content_type INTO _ct
+    FROM pgmnemo.agent_lesson WHERE id = _id;
+
+    IF _ct = 'event' THEN
+        RAISE NOTICE 'H1 PASS: ingest() with explicit content_type=''event'' preserved';
+    ELSE
+        RAISE EXCEPTION 'H1 FAIL: expected event, got % — auto-classify overrode caller value', _ct;
+    END IF;
+
+    DELETE FROM pgmnemo.agent_lesson WHERE id = _id;
+END;
+$$;
+NOTICE:  H1 PASS: ingest() with explicit content_type='event' preserved
+-- Cleanup seeded rows
+DELETE FROM pgmnemo.agent_lesson WHERE project_id = -1420 AND role = 'tc_v0142';
