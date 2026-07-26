@@ -19,7 +19,7 @@
 
 SET pgmnemo.gate_strict = 'off';
 SET pgmnemo.include_unverified = 'on';
-ALTER EXTENSION pgmnemo UPDATE TO '0.14.1';
+ALTER EXTENSION pgmnemo UPDATE TO '0.14.2';
 
 -- ============================================================================
 -- Seed data: 3 lessons with embeddings in role tc_rhb
