@@ -1,0 +1,156 @@
+-- test_v0141_p1b.sql
+-- pg_regress tests for pgmnemo v0.14.1 — P1-B findings
+--
+-- Coverage:
+--   P1-1 — reclassify_corpus() APPLY path (p_dry_run=false)
+--     R1: verify initial content_type before apply (rows seeded with wrong label)
+--     R2: apply returns 'updated' phase rows
+--     R3: seeded incident-text row reclassified to 'incident'
+--     R4: seeded decision-text row reclassified to 'decision'
+--     R5: seeded procedure-text row (initially 'fact') reclassified to 'procedure'
+--     R6: second apply is idempotent — already-correct row stays 'incident'
+--
+--   P1-2 — classify_content_type() bugfix false-positive fix
+--     B7: "When submitting a bugfix PR, always …" → 'procedure' (was 'incident')
+--     B8: true incident mentioning bugfix still → 'incident' (via postmortem+outage)
+--
+--   P1-4 — consolidate() deterministic canonical election (id ASC tiebreaker)
+--     T12: two near-dups with identical timestamps elect the lower id as canonical
+--
+-- Test isolation: roles 'tc_rcap' (project -1414), 'tc_tiebreak' (project -1441).
+-- SPDX-License-Identifier: Apache-2.0
+
+ALTER EXTENSION pgmnemo UPDATE TO '0.14.1';
+
+SET pgmnemo.gate_strict           = 'off';
+SET pgmnemo.include_unverified    = 'on';
+SET pgmnemo.track_recall_recency  = 'off';
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- P1-2: classify_content_type() — bugfix false-positive tightening
+-- ─────────────────────────────────────────────────────────────────────────────
+
+-- B7: Process text containing 'bugfix' → procedure (NOT incident)
+-- Before fix: '\mbugfix\M' triggered 'incident'.  After fix: falls to procedure.
+SELECT pgmnemo.classify_content_type(
+    'When submitting a bugfix PR, always request at least two reviewer approvals.'
+) AS b7_bugfix_pr_is_procedure;
+
+-- B8: True incident that happens to mention bugfix → incident (via postmortem+outage)
+SELECT pgmnemo.classify_content_type(
+    'The postmortem revealed the bugfix introduced a regression that caused the outage.'
+) AS b8_bugfix_incident_still_incident;
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- P1-1: reclassify_corpus() APPLY path
+-- ─────────────────────────────────────────────────────────────────────────────
+
+-- Seed: 3 lessons whose classifier output differs from their stored label.
+-- All in role 'tc_rcap', project_id -1414 for isolation.
+INSERT INTO pgmnemo.agent_lesson
+    (role, project_id, topic, lesson_text, importance, content_type, is_active, t_valid_to)
+VALUES
+    -- Incident text stored as 'procedure' → classify returns 'incident'
+    ('tc_rcap', -1414, 'rc-inc',
+     'root cause of the crash: memory corruption led to service failure and rollback.',
+     3, 'procedure', true, 'infinity'::timestamptz),
+    -- Decision text stored as 'procedure' → classify returns 'decision'
+    ('tc_rcap', -1414, 'rc-dec',
+     'We decided to adopt event-driven architecture over synchronous RPC calls.',
+     3, 'procedure', true, 'infinity'::timestamptz),
+    -- Procedure text stored as 'fact' → classify returns 'procedure'
+    ('tc_rcap', -1414, 'rc-proc',
+     'When running database migrations always back up the current schema first.',
+     3, 'fact', true, 'infinity'::timestamptz);
+
+-- R1: confirm initial (wrong) label for the incident row before apply
+SELECT content_type AS r1_before_content_type
+FROM pgmnemo.agent_lesson
+WHERE role = 'tc_rcap' AND topic = 'rc-inc';
+
+-- R2: apply returns at least one 'updated' phase row
+SELECT count(*) > 0 AS r2_apply_returns_updated_rows
+FROM pgmnemo.reclassify_corpus(p_dry_run => false, p_limit => 500)
+WHERE phase = 'updated';
+
+-- R3: incident-text row now has content_type = 'incident'
+SELECT content_type = 'incident' AS r3_incident_row_reclassified
+FROM pgmnemo.agent_lesson
+WHERE role = 'tc_rcap' AND topic = 'rc-inc';
+
+-- R4: decision-text row now has content_type = 'decision'
+SELECT content_type = 'decision' AS r4_decision_row_reclassified
+FROM pgmnemo.agent_lesson
+WHERE role = 'tc_rcap' AND topic = 'rc-dec';
+
+-- R5: procedure-text row now has content_type = 'procedure' (was 'fact')
+SELECT content_type = 'procedure' AS r5_procedure_row_reclassified
+FROM pgmnemo.agent_lesson
+WHERE role = 'tc_rcap' AND topic = 'rc-proc';
+
+-- R6: second apply is idempotent — already-correct row stays 'incident'
+-- (reclassify_corpus only updates when new_ct IS DISTINCT FROM current; same label → no-op)
+DO $$ BEGIN PERFORM pgmnemo.reclassify_corpus(p_dry_run => false, p_limit => 500); END $$;
+
+SELECT content_type = 'incident' AS r6_still_incident_after_second_apply
+FROM pgmnemo.agent_lesson
+WHERE role = 'tc_rcap' AND topic = 'rc-inc';
+
+-- Cleanup P1-1 rows
+DELETE FROM pgmnemo.agent_lesson WHERE role = 'tc_rcap' AND project_id = -1414;
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- P1-4: consolidate() — deterministic canonical election with id ASC tiebreaker
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Seed: 2 near-duplicate lessons with IDENTICAL recall_count, confidence,
+-- importance, and created_at — so only the id ASC tiebreaker can decide.
+-- The lower id must always be elected as canonical.
+
+DO $$
+DECLARE
+    _fixed_ts TIMESTAMPTZ := '2024-06-01 00:00:00+00'::timestamptz;
+BEGIN
+    PERFORM pgmnemo.ingest(
+        'tc_tiebreak', -1441, 'tie-a',
+        'When the cache warms up response latency drops below the target threshold.',
+        p_commit_sha => 'sha_tb_tie_a'
+    );
+    PERFORM pgmnemo.ingest(
+        'tc_tiebreak', -1441, 'tie-b',
+        'When the cache heats up response time drops below the configured threshold.',
+        p_commit_sha => 'sha_tb_tie_b'
+    );
+
+    -- Pin identical created_at, recall_count, confidence, importance so the
+    -- only distinguishing key in the canonical ORDER BY is id ASC.
+    UPDATE pgmnemo.agent_lesson
+    SET recall_count = 7,
+        confidence   = 0.75,
+        importance   = 3,
+        created_at   = _fixed_ts
+    WHERE role = 'tc_tiebreak' AND project_id = -1441;
+
+    -- Assign near-duplicate embeddings (cosine sim ≈ 0.9998 > 0.92 threshold)
+    UPDATE pgmnemo.agent_lesson
+    SET embedding = ('[1.0' || repeat(',0.0', 1023) || ']')::vector(1024)
+    WHERE commit_sha = 'sha_tb_tie_a';
+
+    UPDATE pgmnemo.agent_lesson
+    SET embedding = ('[0.9998,0.02' || repeat(',0.0', 1022) || ']')::vector(1024)
+    WHERE commit_sha = 'sha_tb_tie_b';
+END;
+$$;
+
+-- T12: dry-run elects the lower id as canonical (deterministic via id ASC tiebreaker)
+SELECT (
+    SELECT canonical_id
+    FROM pgmnemo.consolidate(0.92, true, 'tc_tiebreak')
+    LIMIT 1
+) = (
+    SELECT MIN(id)
+    FROM pgmnemo.agent_lesson
+    WHERE role = 'tc_tiebreak' AND project_id = -1441
+) AS t12_lower_id_is_canonical;
+
+-- Cleanup P1-4 rows
+DELETE FROM pgmnemo.agent_lesson WHERE role = 'tc_tiebreak' AND project_id = -1441;

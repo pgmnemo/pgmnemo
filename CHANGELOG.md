@@ -15,6 +15,39 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.14.1] — 2026-07-25
+
+### Fixed — recall_hybrid() HNSW planner regression (PGMNEMO-0141-1)
+
+**P0 latency regression**: `recall_hybrid()` was falling back from the HNSW index scan to
+`Seq Scan + top-N heapsort` for the vector-candidate fetch, causing p50 ≈ 114 ms and p95 outliers
+of 22–30 s on a 7440-lesson corpus (vs p50 = 11 ms / p95 = 36 ms for the hand-rolled two-phase path).
+
+**Root cause**: the vector-candidate SELECT was inside a WITH RECURSIVE CTE whose `LIMIT` clause
+used a plpgsql local variable (`_fetch_k_vec = GREATEST(k * 4, ef_search)`). PostgreSQL compiles
+`RETURN QUERY` blocks with a **generic, parameter-blind plan** that does not see the concrete
+LIMIT value at planning time. Without a small-limit hint, the cost model chose Seq Scan + top-N
+heapsort over the HNSW index scan (HNSW estimated cost 448 vs Seq Scan 413 at 3000 rows in the
+generic plan; Seq Scan wins without the concrete LIMIT, but HNSW wins when the planner can see it).
+
+**Fix**: the vector-candidate fetch is now executed as a standalone `EXECUTE format(… LIMIT %s,
+_fetch_k_vec)` statement, embedding the LIMIT value as a literal integer in the SQL text.
+The planner then sees the concrete value and reliably picks the HNSW index scan. Results are
+written to a per-transaction temp table `_pgmnemo_vc` (ON COMMIT DROP); all downstream CTEs
+(`all_candidates`, `rrf_ranked`, `scored`, `anchors`, `graph_walk`, `graph_proximity`, `final`,
+`final_results`, `_stamp`) are unchanged. Scoring, RRF weights, graph-proximity boost, recency
+stamping, and all GUC handling are identical to 0.14.0.
+
+**Upgrade path**: install `pgmnemo--0.14.0--0.14.1.sql` or fresh-install from `pgmnemo--0.14.1.sql`.
+No schema changes. No GUC additions. No API changes. Fully backward-compatible.
+
+**Proof**: EXPLAIN (ANALYZE, BUFFERS) before fix showed `Seq Scan on agent_lesson` inside
+`CTE vec_candidates`; after fix the EXECUTE is planned independently and the HNSW index scan
+is selected. pg_regress test `test_v0141_hnsw_planner` (B1) verifies the call succeeds with
+`enable_seqscan = off`, which would fail if the Seq Scan path were still taken.
+
+---
+
 ## [0.14.0] — 2026-07-24
 
 ### Added — Corpus self-maintenance (PGMNEMO-0140-1)
