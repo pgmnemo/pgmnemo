@@ -1,0 +1,33 @@
+{
+  "version": "v0.14.1",
+  "date": "2026-07-26",
+  "pgmnemo_version": "0.14.1",
+  "gate_status": "PASS",
+  "gate_type": "functional",
+  "significance_required": false,
+  "scope": "Planner regression fix in recall_hybrid() plus three correctness fixes carried over from the 0.14.0 review: undo_consolidate() (inverse of consolidate() apply), deterministic canonical election in consolidate(), and a narrowed INCIDENT arm in classify_content_type(). No ranking algorithm change, no confidence/reinforce change, no GUC additions.",
+  "justification": "Functional gate — NO recall-quality claim is made by this release, so no statistical validation is required. The recall_hybrid() change is a physical-plan fix only: the vector-candidate LIMIT was supplied from a plpgsql local variable, so PostgreSQL built a parameter-blind generic plan for RETURN QUERY, failed to recognise the small top-k pattern, and chose Seq Scan + top-N heapsort over the HNSW index scan. Passing LIMIT as a literal via EXECUTE format() restores the index scan. Result parity (identical rows, scores and ordering) was independently verified in code review — see REVIEW_0.14.1.md section 2. The improvement is in LATENCY, not in recall quality: measured on a 7440-lesson corpus, recall_hybrid() went from p50 114 ms / p95 up to 30 s (7 of 20 sample queries exceeding a 500 ms timeout) to the same order of magnitude as recall_fast(). Latency figures are engineering measurements, not a recall@k claim, and are therefore not gated on significance testing.",
+  "schema_change": false,
+  "schema_change_detail": "None — one new function (undo_consolidate) plus replacements of existing function bodies. No table, column, index or GUC changes.",
+  "scoring_impact": "none — recall ranking, confidence and reinforce() paths are untouched; the recall_hybrid() fix changes only which physical execution plan the planner selects",
+  "recall_ranking_impact": "none — result parity independently confirmed in code review (same rows, same scores, same ordering)",
+  "backward_compat_proof": "pg_regress test_v0141_hnsw_planner pins the planner fix, test_v0141_p1b pins the classifier and canonical-election behaviour, undo_consolidate pins consolidate/undo round-trip. Existing 0.14.0 fixtures continue to pass unchanged. Upgrade path is incremental (0.14.0→0.14.1) or fresh-install.",
+  "new_regress_tests": ["test_v0141_hnsw_planner", "test_v0141_p1b", "undo_consolidate"],
+  "new_regress_test_count": 3,
+  "installcheck": {
+    "harness": "pg_regress — extension/Makefile (--load-extension=vector --load-extension=pgmnemo)",
+    "postgres": "17",
+    "pgvector": "0.8.3",
+    "result": "PASS — 50/50",
+    "tests_run": 50,
+    "tests_passed": 50,
+    "date_run": "2026-07-26"
+  },
+  "leak_scan": "PASS — scripts/check_no_internal_leak.sh exit 0 (2026-07-26)",
+  "measured_pgmnemo_version": "0.14.1",
+  "corpus": {
+    "database": "pgmnemo_bench",
+    "pgmnemo_version": "0.14.1",
+    "note": "functional gate only; latency measurements were taken on a 7440-row corpus during diagnosis, but this release makes no recall-quality claim and therefore requires no statistical validation"
+  }
+}
