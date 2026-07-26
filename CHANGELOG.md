@@ -15,6 +15,57 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.14.2] — 2026-07-26
+
+### Fixed — Curation-honesty: reclassify_corpus() must not overwrite curator-owned content types
+
+**Root cause (data-destructive, P1):** `reclassify_corpus()` previously iterated over ALL active
+lessons and applied `classify_content_type()` to every row, including rows whose `content_type`
+was intentionally set by typed write verbs (`remember_event()` writes `'event'`,
+`remember_relation()` writes `'relation'`). The classifier's output domain is limited to five
+types — `incident`, `decision`, `entity`, `fact`, `procedure` — and produces `NULL` for any text
+that does not match. When `reclassify_corpus()` encountered an `'event'` row, the classifier
+returned `NULL` (no match) and the old code preserved the label; but for rows the classifier
+DID match, it unconditionally overwrote the curator-supplied label with a classifier output.
+Measured on a live corpus via dry-run: `event` rows dropped from 10 to 0 after a full reclassify pass.
+
+**Fix — three coordinated changes:**
+
+1. **`classifier_owned_types()` (new function, §1)** — canonical single source of truth for the
+   classifier's output domain. Returns `ARRAY['incident','decision','entity','fact','procedure']`.
+   `IMMUTABLE PARALLEL SAFE`. `reclassify_corpus()` derives its candidate filter from this set
+   rather than a hardcoded deny-list, so any future type written by a `remember_*` verb is
+   automatically protected without requiring a separate code change in the reclassifier.
+
+2. **`reclassify_corpus()` — restrict candidates to classifier-owned types (§2)** — the
+   `WHERE` clause on the candidate scan now reads:
+   `content_type IS NULL OR content_type = ANY(pgmnemo.classifier_owned_types())`
+   Rows whose `content_type` is not `NULL` and not in the classifier's output domain
+   (e.g. `'event'`, `'relation'`, any future curator type) are excluded from the candidate
+   set in both dry-run and live mode and are left byte-identical regardless of the classifier
+   result.
+
+3. **`consolidate()` — `evidence_count` accumulates across runs (P2-A)** — previously the
+   `UPDATE` used `SET evidence_count = cluster_size - 1`, which silently overwrote the count
+   on each `consolidate()` call. After the first pass, superseded members become `is_active=FALSE`
+   and are excluded from future candidate scans, so a second pass cannot re-collect them.
+   The accumulation `evidence_count = evidence_count + (cluster_size - 1)` is therefore
+   double-count-safe and records the running total of all near-duplicates ever collapsed into
+   this canonical across all consolidate() passes.
+
+4. **`classify_content_type()` — narrow `'rejected'` false-positive (P2-D)** — the bare
+   word-boundary pattern `\mrejected\M` was removed from the `decision` branch. It matched
+   operational text such as "The PR was rejected for having typos" and classified it as
+   `'decision'` instead of `NULL`. True rejection decisions are still caught by the remaining
+   `decision` arms: `decided`, `decision`, `verdict`, `approved`, `chosen`, and the compound
+   selection patterns. Mirrors the treatment of `\mbugfix\M` removed in v0.14.1.
+
+**No schema changes. No GUC additions. No API surface changes. Fully backward-compatible.**
+Upgrade path: `pgmnemo--0.14.1--0.14.2.sql` (incremental) or `pgmnemo--0.14.2.sql` (fresh install).
+New pg_regress test: `test_v0142_p2` (covers all four fixes above).
+
+---
+
 ## [0.14.1] — 2026-07-25
 
 ### Fixed — recall_hybrid() HNSW planner regression (PGMNEMO-0141-1)

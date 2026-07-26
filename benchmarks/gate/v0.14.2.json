@@ -1,0 +1,33 @@
+{
+  "version": "v0.14.2",
+  "date": "2026-07-26",
+  "pgmnemo_version": "0.14.2",
+  "gate_status": "PASS",
+  "gate_type": "functional",
+  "significance_required": false,
+  "scope": "Curation-honesty correctness fixes: reclassify_corpus() now restricts candidates to classifier-owned types only (protects rows written by remember_event/remember_relation); evidence_count in consolidate() accumulates across runs instead of being overwritten; classify_content_type() narrows the 'decision' branch by removing the bare \\mrejected\\M arm (false-positive on operational text); new classifier_owned_types() function as canonical output-domain source of truth. No ranking algorithm change, no confidence/reinforce change, no GUC additions, no schema change.",
+  "justification": "Functional gate — NO recall-quality claim is made by this release, so no statistical validation is required. All four changes are correctness fixes: (1) reclassify_corpus() data-destructive overwrite of curator-owned content_type values is closed by restricting candidates to NULL or classifier_owned_types(); (2) consolidate() evidence_count accumulation bug is fixed — second-pass cannot double-count because superseded rows are excluded from future scans; (3) classify_content_type() false-positive on 'rejected' removed — genuine rejection decisions still fire via 'decided'/'decision'/'verdict' arms; (4) classifier_owned_types() provides a durable single source of truth for the protection set. No performance-sensitive path was changed. All four fixes have dedicated pg_regress coverage in test_v0142_p2 (extension/ suite) and test_v0142_curation_honesty (root suite). Result parity with 0.14.1 on all pre-existing 50 tests confirmed — 51/51 in extension/ and 7/7 in root suite (updated fixture counts).",
+  "schema_change": false,
+  "schema_change_detail": "None — one new function (classifier_owned_types) plus replacements of existing function bodies (reclassify_corpus, consolidate, classify_content_type). No table, column, index or GUC changes.",
+  "scoring_impact": "none — recall ranking, confidence and reinforce() paths are untouched; no changes to recall_hybrid(), recall_fast(), or any scoring coefficient",
+  "recall_ranking_impact": "none — no change to result ordering, RRF weights, graph-proximity boost, recency stamping, or any GUC",
+  "backward_compat_proof": "pg_regress test_v0142_p2 pins all four fixes. All 50 pre-existing extension/ tests continue to pass unchanged. Upgrade path is incremental (0.14.1→0.14.2) or fresh-install. No API surface changes. No GUC additions. reclassify_corpus() signature unchanged (p_dry_run, p_limit). consolidate() signature unchanged.",
+  "new_regress_tests": ["test_v0142_p2"],
+  "new_regress_test_count": 1,
+  "installcheck": {
+    "harness": "pg_regress — extension/Makefile (--load-extension=vector --load-extension=pgmnemo) AND root Makefile (--inputdir=tests --load-extension=vector --load-extension=pgmnemo)",
+    "postgres": "17",
+    "pgvector": "0.8.3",
+    "result": "PASS — 51/51 (extension suite) and 7/7 (root suite)",
+    "tests_run": 58,
+    "tests_passed": 58,
+    "date_run": "2026-07-26"
+  },
+  "leak_scan": "PASS — scripts/check_no_internal_leak.sh exit 0 (2026-07-26)",
+  "measured_pgmnemo_version": "0.14.2",
+  "corpus": {
+    "database": "pgmnemo_bench",
+    "pgmnemo_version": "0.14.2",
+    "note": "functional gate only; no recall-quality claim is made by this release and therefore no statistical validation is required"
+  }
+}
