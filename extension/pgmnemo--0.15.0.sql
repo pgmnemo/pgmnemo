@@ -8,13 +8,13 @@
 -- Generated from: pgmnemo--0.12.2.sql + pgmnemo--0.12.2--0.13.0.sql
 -- SPDX-License-Identifier: Apache-2.0
 
--- pgmnemo--0.11.1.sql
--- Flat install: pgmnemo 0.11.1
--- Generated from pgmnemo--0.11.0.sql + pgmnemo--0.11.0--0.11.1.sql
+-- pgmnemo--0.15.0.sql
+-- Flat install: pgmnemo 0.15.0
+-- Generated from pgmnemo--0.14.2.sql + pgmnemo--0.14.2--0.15.0.sql
 -- SPDX-License-Identifier: Apache-2.0
 --
--- Install: CREATE EXTENSION pgmnemo VERSION '0.11.1';
--- Upgrade: ALTER EXTENSION pgmnemo UPDATE TO '0.11.1';
+-- Install: CREATE EXTENSION pgmnemo VERSION '0.15.0';
+-- Upgrade: ALTER EXTENSION pgmnemo UPDATE TO '0.15.0';
 --
 -- v0.11.1: typed recall on the hot path
 --   Mirrors p_content_types TEXT[] DEFAULT NULL from recall_hybrid() (0.11.0)
