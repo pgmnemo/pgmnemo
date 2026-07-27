@@ -15,6 +15,41 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.15.0] — 2026-07-27
+
+### Added
+
+- **`extract_sit_fp(topic, text)`** — IMMUTABLE SQL function that produces a normalised situation
+  fingerprint from a lesson row's topic or episode body. Two differently-worded reports of the
+  same failure class return the same fingerprint; two similarly-worded reports of different failure
+  classes return different fingerprints. Extraction rules (first match): R1 `[INCIDENT:<class>]`
+  topic prefix → `'class=<class>'`; R2 `failure_class=<WORD>` in text →
+  `'class=<WORD>[|outcome=<WORD>]'`; R3 `outcome=COMPLETED` → `'class=completed'`; else NULL.
+  Lets an agent ask "have we seen this class of situation before?" without embedding search.
+
+- **`recall_situation(p_sit_fp, p_project_id, p_role, p_k)`** — set-returning function for
+  situational recall. Returns prior lessons whose situation fingerprint matches `p_sit_fp` exactly.
+  Uses `ix_pgmnemo_sit_fp_active` (expression index on `extract_sit_fp`) for O(log n) lookup.
+  Columns: id, role, topic, lesson_text, content_type, sit_fp, created_at.
+
+- **`ix_pgmnemo_sit_fp_active`** — expression index on
+  `extract_sit_fp(topic, lesson_text)` over active, typed rows
+  (`is_active AND content_type IS NOT NULL`). Installed once at upgrade time; maintained on write.
+  No schema change, no ALTER TABLE, no AccessExclusiveLock.
+
+- **`remember_event()` now writes `sit_fp` into metadata JSONB** at record time. Callers can
+  inspect `metadata->>'sit_fp'` without re-running `extract_sit_fp()`.
+
+### Changed — RECLASSIFICATION CONTRACT documented on typed write verbs
+
+- `remember_fact()`, `remember_event()`, `remember_relation()` function comments now carry an
+  explicit **RECLASSIFICATION CONTRACT** section documenting the protection asymmetry introduced
+  in v0.14.2. `remember_fact()` writes `content_type = 'fact'`, which is inside
+  `classifier_owned_types()` and therefore subject to overwrite by `reclassify_corpus()`.
+  `remember_event()` (`'event'`) and `remember_relation()` (`'relation'`) are outside the
+  classifier output domain and are permanently protected. Previously this asymmetry was only
+  enforced in SQL with no documentation at the call site.
+
 ## [0.14.2] — 2026-07-26
 
 ### Fixed — Curation-honesty: reclassify_corpus() must not overwrite curator-owned content types

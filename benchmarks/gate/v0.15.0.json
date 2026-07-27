@@ -1,0 +1,33 @@
+{
+  "version": "v0.15.0",
+  "date": "2026-07-27",
+  "pgmnemo_version": "0.15.0",
+  "gate_status": "PASS",
+  "gate_type": "functional",
+  "significance_required": false,
+  "scope": "Episodic recall: extract_sit_fp() IMMUTABLE fingerprint extractor, recall_situation() situational recall function, ix_pgmnemo_sit_fp_active expression index on agent_lesson, remember_event() writes sit_fp into metadata JSONB at record time. RECLASSIFICATION CONTRACT comments added to all three typed write verbs (remember_fact/event/relation) documenting the protection asymmetry introduced by reclassify_corpus() in v0.14.2. No ranking algorithm change, no confidence/reinforce change, no GUC additions, no table/column/index schema change (index is expression-only).",
+  "justification": "Functional gate — NO recall-quality claim is made by this release, so no statistical validation is required. Two additions: (1) extract_sit_fp() + recall_situation() are pure lookup paths that do not touch the scoring stack (recall_hybrid, recall_fast, RRF weights, recency, confidence); the new ix_pgmnemo_sit_fp_active index is expression-only over an IMMUTABLE function and does not alter query plans for existing recall functions. (2) RECLASSIFICATION CONTRACT comments are SQL COMMENT ON FUNCTION strings — metadata only, zero runtime effect. All 16 episodic pg_regress tests pass (A1-1 through A2-6), confirming fingerprint correctness across 11 wording variants and correct exclusion of a different incident class. Both suites green: 52/52 extension suite, 8/8 root suite.",
+  "schema_change": false,
+  "schema_change_detail": "No table, column, or GUC change. One new expression index (ix_pgmnemo_sit_fp_active) on existing table agent_lesson. Two new functions (extract_sit_fp, recall_situation), one replaced function body (remember_event with sit_fp metadata write). COMMENT ON FUNCTION updates on remember_fact, remember_event, remember_relation.",
+  "scoring_impact": "none — recall ranking, confidence, and reinforce() paths are untouched; no changes to recall_hybrid(), recall_fast(), or any scoring coefficient",
+  "recall_ranking_impact": "none — no change to result ordering, RRF weights, graph-proximity boost, recency stamping, or any GUC",
+  "backward_compat_proof": "recall_situation() is a new function; no callers of existing functions are broken. remember_event() gains a new 'sit_fp' key in metadata JSONB (additive, backward-compatible). extract_sit_fp() is a new IMMUTABLE function. All 51 pre-existing extension/ tests continue to pass. Upgrade path: 0.14.2→0.15.0 (single upgrade script). Fresh-install path: pgmnemo--0.15.0.sql. No API surface changes to existing functions.",
+  "new_regress_tests": ["test_v0150_episodic"],
+  "new_regress_test_count": 1,
+  "installcheck": {
+    "harness": "pg_regress — extension/Makefile (--load-extension=vector --load-extension=pgmnemo) AND root Makefile (--inputdir=tests --load-extension=vector --load-extension=pgmnemo)",
+    "postgres": "17",
+    "pgvector": "0.8.3",
+    "result": "PASS — 52/52 (extension suite) and 8/8 (root suite)",
+    "tests_run": 60,
+    "tests_passed": 60,
+    "date_run": "2026-07-27"
+  },
+  "leak_scan": "PASS — scripts/check_no_internal_leak.sh exit 0 (2026-07-27)",
+  "measured_pgmnemo_version": "0.15.0",
+  "corpus": {
+    "database": "pgmnemo_bench",
+    "pgmnemo_version": "0.15.0",
+    "note": "functional gate only; no recall-quality claim is made by this release and therefore no statistical validation is required"
+  }
+}
