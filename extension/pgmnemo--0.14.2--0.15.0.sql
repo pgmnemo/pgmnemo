@@ -174,7 +174,8 @@ COMMENT ON FUNCTION pgmnemo.extract_sit_fp(TEXT, TEXT) IS
 
 CREATE INDEX IF NOT EXISTS ix_pgmnemo_sit_fp_active
     ON pgmnemo.agent_lesson (pgmnemo.extract_sit_fp(topic, lesson_text))
-    WHERE is_active AND content_type IS NOT NULL;
+    WHERE is_active AND content_type IS NOT NULL
+      AND t_valid_to = 'infinity'::TIMESTAMPTZ;
 
 COMMENT ON INDEX pgmnemo.ix_pgmnemo_sit_fp_active IS
     'Expression index on extract_sit_fp(topic, lesson_text) for typed active rows. '
@@ -349,6 +350,9 @@ AS $func$
     FROM pgmnemo.agent_lesson al
     WHERE al.is_active
       AND al.content_type IS NOT NULL
+      -- P1-A: same bitemporal lifecycle gate every other recall function applies —
+      -- without it recall_situation() would surface historically-superseded rows.
+      AND al.t_valid_to = 'infinity'::TIMESTAMPTZ
       AND pgmnemo.extract_sit_fp(al.topic, al.lesson_text) = p_sit_fp
       AND (p_project_id IS NULL OR al.project_id = p_project_id)
       AND (p_role IS NULL OR al.role = p_role)
@@ -357,6 +361,13 @@ AS $func$
 $func$;
 
 COMMENT ON FUNCTION pgmnemo.recall_situation(TEXT, INT, TEXT, INT) IS
+    'TRUST POSTURE (v0.15.0, differs from other recall functions — read before relying on it): '
+    'this function does NOT read pgmnemo.gate_strict or pgmnemo.include_unverified. '
+    'It filters on is_active, content_type and the bitemporal t_valid_to gate, but it does '
+    'NOT exclude unverified rows, so draft and candidate lessons ARE returned even when '
+    'gate_strict is on. Deliberate for 0.15.0: episodes are written at run closeout and are '
+    'draft by default, so a validated-only filter would return almost nothing and make the '
+    'feature silently useless. GUC-conditional filtering is deferred to a follow-up release. '
     'Situational recall: return prior lessons whose situation class matches p_sit_fp. '
     'Matches on SITUATION fingerprint, not text similarity. '
     'Two differently-worded reports of the same failure match; '
