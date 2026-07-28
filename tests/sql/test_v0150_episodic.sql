@@ -190,7 +190,7 @@ VALUES
     ('tc_v0150', -1500,
      '[INCIDENT:deploy_gap] Container code stale — 7 files behind git HEAD',
      'The deploy gap detector flagged 7 modified files in apps/v3-next that are not reflected '
-     'in the running container. Root cause: uvicorn --reload is OFF (ADR-59). '
+     'in the running container. Root cause: uvicorn --reload is OFF (deployment policy). '
      'Fix: run bash scripts/agency-restart.sh to apply the committed changes.',
      3, 'incident', 'system'),
 
