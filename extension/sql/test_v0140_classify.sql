@@ -21,7 +21,7 @@ SET pgmnemo.gate_strict = 'off';
 SET pgmnemo.include_unverified = 'on';
 SET pgmnemo.track_recall_recency = 'off';
 
-ALTER EXTENSION pgmnemo UPDATE TO '0.14.2';
+ALTER EXTENSION pgmnemo UPDATE TO '0.15.0';
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- A: classify_content_type — signature

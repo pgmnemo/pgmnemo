@@ -17,7 +17,7 @@
 -- SPDX-License-Identifier: Apache-2.0
 
 -- ── Upgrade to 0.14.0 ────────────────────────────────────────────────────────
-ALTER EXTENSION pgmnemo UPDATE TO '0.14.2';
+ALTER EXTENSION pgmnemo UPDATE TO '0.15.0';
 
 SET pgmnemo.gate_strict           = 'off';
 SET pgmnemo.include_unverified    = 'on';
