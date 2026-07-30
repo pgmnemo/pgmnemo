@@ -1,5 +1,5 @@
 EXTENSION    = pgmnemo
-EXTVERSION   = 0.15.0
+EXTVERSION   = 0.15.1
 
 DATA         = $(wildcard extension/*--*.sql)
 DOCS         =
