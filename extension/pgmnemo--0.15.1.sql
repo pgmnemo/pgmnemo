@@ -12961,7 +12961,7 @@ COMMENT ON FUNCTION pgmnemo.recall_situation(TEXT, INT, TEXT, INT) IS
 --   • Updates the COMMENT to replace the stale 'deferred' promise with a
 --     description of the actual implemented behaviour.
 --
--- Production corpus note (live agency_v3, 2026-07-30):
+-- Production corpus note (verified against a live 6k-lesson corpus, 2026-07-30):
 --   All 60 deploy_gap episode rows have verified_at IS NOT NULL.
 --   Both directions (include_unverified on and off) therefore return 60 rows
 --   for that class — no regression on the primary acceptance query.
