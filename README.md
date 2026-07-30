@@ -2,7 +2,7 @@
 
 <img src="assets/logo.svg" alt="pgmnemo" width="220">
 
-### Agent memory that learns which lessons worked — inspectable in plain SQL, in your Postgres
+### Persistent memory for your coding agents — installable in one command, in the Postgres you already run
 
 <!-- GIF: assets/demo.gif (rendered on host via vhs) -->
 
@@ -13,7 +13,7 @@
 [![PGXN](https://badge.pgxn.org/stable/pgmnemo.svg)](https://pgxn.org/dist/pgmnemo/)
 [![CI](https://github.com/pgmnemo/pgmnemo/actions/workflows/ci.yml/badge.svg)](https://github.com/pgmnemo/pgmnemo/actions/workflows/ci.yml)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-17-4169E1.svg)](https://www.postgresql.org/)
-[![Version](https://img.shields.io/badge/version-0.13.0-blue.svg)](https://github.com/pgmnemo/pgmnemo/releases/tag/v0.13.0)
+[![Version](https://img.shields.io/badge/version-0.15.0-blue.svg)](https://github.com/pgmnemo/pgmnemo/releases/tag/v0.15.0)
 [![LoCoMo recall@10](https://img.shields.io/badge/LoCoMo_recall%4010-0.8409-success.svg)](docs/img/all_metrics_history.md)
 [![LongMemEval recall@10](https://img.shields.io/badge/LongMemEval_recall%4010-0.9604-brightgreen.svg)](docs/img/all_metrics_history.md)
 <!-- [![GitHub Stars](https://img.shields.io/github/stars/pgmnemo/pgmnemo.svg?style=social)](https://github.com/pgmnemo/pgmnemo) -->
@@ -33,13 +33,13 @@
 In production at [Agency](docs/case_studies/agency.md): agents used **−68% fewer turns** on runs where memory fired a relevant hit.
 
 <details>
-<summary>Recent releases (v0.9.5, v0.9.4, v0.9.3) · <a href="CHANGELOG.md">full CHANGELOG</a></summary>
+<summary>Recent releases (v0.15.0, v0.14.2, v0.14.1) · <a href="CHANGELOG.md">full CHANGELOG</a></summary>
 
-> **v0.9.3 (2026-06-17):** **`reinforce()` delta re-tune + GUC control.** Default success delta `+0.10` → `+0.02`, failure delta `−0.15` → `−0.12` (base-rate-adjusted). Both overridable via `pgmnemo.reinforce_success_delta` / `pgmnemo.reinforce_fail_delta` GUCs per-session or at DB/role level. See [CHANGELOG.md](CHANGELOG.md).
+> **v0.15.0 (2026-07-27):** **Episodic recall — situation fingerprint index.** `extract_sit_fp(topic, text)` normalises a lesson into a situation class fingerprint; `recall_situation(sit_fp, project_id, role, k)` returns prior lessons for that situation class via O(log n) expression index — no embedding search required. Two differently-phrased reports of the same failure class return the same fingerprint; two similarly-phrased reports of different classes return different fingerprints. See [CHANGELOG.md](CHANGELOG.md).
 >
-> **v0.9.2 (2026-06-17):** **Opt-in confidence-weighted ranking GUC.** `pgmnemo.confidence_boost_weight` (default `0.0`, off) adds `w × (confidence − 0.5)` to the `recall_hybrid` score. Activate with `SET pgmnemo.confidence_boost_weight = '0.003';`. Off by default — byte-identical to 0.9.1 without the SET. See [CHANGELOG.md](CHANGELOG.md).
+> **v0.14.2 (2026-07-26):** **Curation-honesty: `reclassify_corpus()` must not overwrite curator-owned content types.** Root cause (P1 data-destructive): `reclassify_corpus()` was overwriting `'event'` and `'relation'` labels set by typed write verbs. Fixed via `classifier_owned_types()` canonical source of truth; `consolidate()` now accumulates `evidence_count` correctly across passes. See [CHANGELOG.md](CHANGELOG.md).
 >
-> **v0.9.1 (2026-06-14):** **P0 graph traversal fix.** `navigate_expand` + `navigate_locate` now traverse all edge kinds — was hardcoded to causal+temporal only, making 100% of production edges invisible. Bidirectional BFS, `relation_types` filter param, threshold 0.7→0.5. See [CHANGELOG.md](CHANGELOG.md).
+> **v0.14.1 (2026-07-25):** **P0 recall latency fix + `undo_consolidate()`.** `recall_hybrid()` was taking 22–30 s on parts of a 7,440-lesson corpus (HNSW planner regression — LIMIT via plpgsql variable caused generic plan with Seq Scan). Fixed with `EXECUTE format(... LIMIT %s)`. `undo_consolidate(canonical_id)` added — exact inverse of `consolidate()` apply; consolidation is now reversible. See [CHANGELOG.md](CHANGELOG.md).
 
 </details>
 
@@ -57,24 +57,46 @@ Full per-version history: [benchmarks/METRICS_BY_VERSION.md](benchmarks/METRICS_
 
 ## Why this exists
 
-**Single-plan multimodal fusion inside your existing Postgres.** pgmnemo ranks across four retrieval channels — HNSW vector (pgvector), graph-edge proximity (`mem_edge` BFS), JSONB metadata predicate pushdown (GIN index), and relational filters (`role`, `project_id`, `state`) — inside a **single SQL query plan**. The PostgreSQL optimizer manages the join, filter, and sort. You call one function; the database handles everything else.
+Your coding agent finishes a debugging session. It found the issue, fixed it, learned something. Next session: blank slate. Same mistakes, same debugging cycle, same cost.
 
-- **No new service.** `CREATE EXTENSION pgmnemo CASCADE` in your existing PostgreSQL — no sidecar, no API server, no vendor lock-in. `pg_dump` backs it up. Logical replication replicates it.
-- **Zero data egress.** Embeddings, graph edges, metadata, and scoring never leave your database at retrieval or ingestion time.
+pgmnemo is a PostgreSQL extension. `CREATE EXTENSION pgmnemo CASCADE` in the Postgres you already run — memory is on. No new service to deploy. No API key. No data egress. `pg_dump` backs it up; logical replication replicates it.
+
+**Wire your AI CLI in two commands:**
+
+```bash
+pip install pgmnemo-mcp
+pgmnemo init claude   # or: codex | gemini
+```
+
+Session-capture and recall hooks wire into Claude Code, Codex CLI, or Gemini CLI automatically. Memory accumulates across sessions. No manual `memory.add()` calls required.
+
+**Corpus housekeeping ships built-in — no external LLM required:**
+
+Agent memory grows without bound. `consolidate()` collapses near-duplicate lessons: on a 7,400-lesson real corpus it found 399 near-duplicate clusters — a quarter of the total, largest cluster: 55 reports of the same failure. `undo_consolidate()` inverts any merge. `classify_content_type()` labels lessons (incident / decision / entity / fact / procedure) at write time; `reclassify_corpus()` applies it to existing lessons in dry-run mode by default.
+
+**Episodic recall — match by situation class, not text:**
+
+`recall_situation()` finds prior lessons for a situation class via O(log n) fingerprint index, without embedding search. An agent that has seen a class of failure before gets the prior lessons instantly.
+
+**Provenance gate — enforced at the constraint layer:**
+
+`ingest()` blocks writes without a `commit_sha` or `artifact_hash` (default mode: `enforce`). This is a Postgres constraint — no application-layer bug can bypass it. Hallucinated lessons from failed runs don't graduate to long-term memory. No other agent memory system enforces this at the storage layer.
+
+- **No new service.** `CREATE EXTENSION pgmnemo CASCADE` in your existing PostgreSQL — no sidecar, no API server, no vendor lock-in.
+- **Zero data egress.** Embeddings, metadata, and scoring never leave your database.
 - **$0 LLM cost per write.** `ingest()` is a SQL constraint check + indexed INSERT. No model API call on the write path.
-- **EXPLAIN-able ranking.** Run `EXPLAIN (ANALYZE, BUFFERS)` on any recall query and see the full plan — impossible with any external RAG service.
-- **Provenance-gated writes.** `gate_strict = 'enforce'` blocks writes without a `commit_sha` or `artifact_hash` at the Postgres constraint layer. Hallucinated memories cannot silently accumulate.
-- **Token-economy navigation.** `navigate_locate()` returns ranked IDs within a character budget. `navigate_expand()` fetches content + graph neighbors for the IDs you choose. Locate cheaply — expand only what you need.
-- **Outcome-learning.** `reinforce(lesson_id, 'success')` or `reinforce(lesson_id, 'failure')` adjusts per-lesson confidence. `recall_hybrid()` returns `match_confidence [0,1]` as an interpretable quality signal.
-- **Role isolation built in.** First-class `role + project_id` composite scoping with optional RLS enforcement via `pgmnemo.tenant_id` GUC.
+- **EXPLAIN-able ranking.** Run `EXPLAIN (ANALYZE, BUFFERS)` on any recall query — impossible with any external memory API.
+- **Outcome-learning.** `reinforce(lesson_id, 'success' | 'failure')` adjusts per-lesson confidence via Beta posterior. `recall_hybrid()` returns `match_confidence [0,1]` as an interpretable quality signal.
+- **Role isolation built in.** First-class `role + project_id` composite scoping with optional RLS enforcement.
 
 | Aspect | pgmnemo | Generic Vector DB | Cloud Memory API |
 |---|---|---|---|
-| Single-plan multimodal recall | ✅ Vector + BM25 + graph + JSONB in one SQL plan | ❌ Vector only | ❌ Opaque service |
+| Hybrid recall (vector + BM25 + JSONB) in one SQL plan | ✅ EXPLAIN-able | ❌ Vector-only or opaque | ❌ Opaque service |
 | Zero data egress | ✅ In-database | ❌ | ❌ |
-| EXPLAIN-able ranking | ✅ Full query plan visible | ❌ | ❌ |
 | $0 LLM write cost | ✅ Pure SQL | Varies | ❌ ~$0.17–$0.36 / 1K writes |
 | Provenance enforcement | ✅ DB-layer constraint | ❌ | ❌ |
+| Near-duplicate collapsing | ✅ `consolidate()` | ❌ | ❌ |
+| Cross-model hooks | ✅ Claude Code / Codex / Gemini | ❌ | Varies |
 | Install model | `CREATE EXTENSION` | External service | SaaS API |
 | Self-hosted price | Free (Apache 2.0) | $$$$ | $$$$$ |
 
@@ -166,14 +188,17 @@ FROM pgmnemo.recall_lessons(
 
 ## Features
 
-- **Single-plan multimodal recall** — HNSW vector + BM25 full-text + graph-edge proximity + JSONB metadata pushdown, all ranked in one SQL query plan. `EXPLAIN (ANALYZE)` the full execution plan at any time.
-- **Token-economy navigation** — `navigate_locate()` returns ranked IDs within a configurable character budget; `navigate_expand()` fetches full content + graph neighbors on demand. Locate cheaply; expand only what you need.
-- **Provenance gate** — `enforce` / `warn` / `off` modes via `pgmnemo.gate_strict` GUC. `enforce` (default) rejects writes at the Postgres constraint layer when `commit_sha` and `artifact_hash` are both absent.
-- **Outcome-learning** — `reinforce(lesson_id, 'success' | 'failure' | 'neutral')` adjusts per-lesson confidence. `recall_hybrid()` returns `confidence` in scoring and `match_confidence [0,1]` as an interpretable quality signal.
-- **Hybrid RRF scoring** (Fix-A, v0.6.2) — sparse-safe Reciprocal Rank Fusion over vector + BM25; plus aux terms for importance, recency decay, and provenance strength.
+- **Cross-model hooks (Claude Code · Codex · Gemini)** — `pgmnemo init claude` / `pgmnemo init codex` / `pgmnemo init gemini` wires session-capture and recall hooks into your AI CLI configuration. Memory accumulates across sessions without manual `ingest()` calls.
+- **Near-duplicate collapsing** — `consolidate()` groups lessons by cosine similarity (default threshold 0.92) and elects a canonical; `undo_consolidate()` inverts any merge. Dry-run by default. On a 7,400-lesson real corpus: 399 clusters found, largest cluster 55 entries.
+- **Content-type classification** — `classify_content_type()` (deterministic, no LLM) labels lessons as incident / decision / entity / fact / procedure at write time. `reclassify_corpus()` applies classification to existing lessons in dry-run mode.
+- **Episodic recall** — `recall_situation(sit_fp, project_id, role, k)` returns prior lessons for a situation class via O(log n) expression index. `extract_sit_fp(topic, text)` normalises any lesson into a fingerprint — two differently-worded reports of the same failure class return the same fingerprint.
+- **Provenance gate** — `enforce` / `warn` / `off` modes via `pgmnemo.gate_strict` GUC. `enforce` (default) rejects writes at the Postgres constraint layer when `commit_sha` and `artifact_hash` are both absent. Verified: pg_regress T1–T8.
+- **Outcome-learning** — `reinforce(lesson_id, 'success' | 'failure' | 'neutral')` updates per-lesson confidence via Beta posterior (v0.13.0). `recall_hybrid()` returns `match_confidence [0,1]` as an interpretable quality signal.
+- **Hybrid RRF scoring** (Fix-A, v0.6.2) — sparse-safe Reciprocal Rank Fusion over vector + BM25; plus aux terms for importance, recency decay, and provenance strength. EXPLAIN-able at any time.
 - **Bitemporal point-in-time recall** — `recall_lessons(..., as_of_ts)` restricts to the validity window `t_valid_from ≤ as_of_ts < t_valid_to`. Time-travel your agent's memory.
+- **Corpus export** — `pgmnemo export` (CLI) produces human-readable Markdown from the lesson corpus.
 - **In-place maintenance** — `reembed()` / `reembed_batch()` refresh embeddings without new bitemporal rows; `recompute_content()` updates lesson text in-place with automatic `content_hash` + TSV cascade.
-- **Graph traversal** — `traverse_causal_chain()` and `traverse_temporal_window()` walk typed `mem_edge` relationships (edge_kind: `semantic | temporal | causal | entity`).
+- **Graph traversal (opt-in)** — `traverse_causal_chain()` and `traverse_temporal_window()` walk typed `mem_edge` relationships. Activated via `pgmnemo.graph_proximity_weight` GUC (default `0.2`; only adds signal when the graph is populated via `add_edge()`).
 - **Role scoping** — `role + project_id` composite isolation; `role_filter=NULL` pools across roles; optional RLS enforcement via `pgmnemo.tenant_id` GUC.
 - **Diagnostic observability** — `pgmnemo.stats()` (19 columns including confidence distribution); `pgmnemo.recall_stats` view for call-count tracking.
 
