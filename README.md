@@ -30,7 +30,7 @@
 > Or run [`examples/01_reinforce_ranking_flip.py`](examples/01_reinforce_ranking_flip.py) to see outcome-learning live (rank flip after 3× reinforce).
 
 **recall@10 = 0.9604 on LongMemEval-S · $0 LLM ingestion cost · `CREATE EXTENSION` install · fully `EXPLAIN`-able**  
-In production at [Agency](docs/case_studies/agency.md): agents used **−68% fewer turns** on runs where memory fired a relevant hit.
+In production at [Agency](docs/case_studies/agency.md): agents used **−68% fewer turns** on runs where memory fired a relevant hit — significant on that slice; averaged across *all* runs the effect washes out, because memory only helps when it has something relevant to say.
 
 <details>
 <summary>Recent releases (v0.15.0, v0.14.2, v0.14.1) · <a href="CHANGELOG.md">full CHANGELOG</a></summary>
