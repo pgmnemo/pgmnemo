@@ -49,7 +49,7 @@ pgmnemo is **agent memory that learns which lessons worked — ranked by outcome
 | **v0.9.6** | Community response + R11/R12/R13 plumbing | `item_kind`/`version_n`/`patch_count`; `source_dag_id` + `exclude_dag_id`; `memory_ingest_log` table | 2026-06-19 (✅ SHIPPED) |
 | **v0.9.7** | MCP params exposure + smoke-test validation | `pgmnemo.get_params` MCP tool; 7-test smoke suite; `pgmnemo_mcp` v0.9.7; no schema changes | 2026-06-20 (✅ SHIPPED) |
 | **v0.10.0** | Tiered-memory dispatch + `recall_fast()` + provenance-gate hardening + scale docs | `navigate_locate_dispatch`, `navigate_expand_typed`, `apply_selective_embedding_policy`, `recall_fast()`; MCP `deep` param; provenance-gate pg_regress (T1–T8); `AGENT_INTEGRATION.md` (#79); scale/SLO §6 (#82); `confidence_boost_weight` guide; closes #80/#81/#82/#79 | 2026-06-20 (✅ SHIPPED) |
-| **v1.0** | API freeze + stability commitment | 2 consecutive non-breaking releases; stable API contract; outcome-confidence retrieval as headline positioning | 2026-Q4 |
+| **v1.0** | API freeze + stability commitment | 2 consecutive non-breaking releases; stable API contract; outcome-confidence retrieval as headline positioning only if pre-registered gate passes (STRONG evidence grade required — current evidence: MODERATE, r_pb=+0.200 p=0.008, chi² NS p=0.47, power 29%; confidence boost weight stays `0.0` opt-in until gate clears) | 2026-Q4 |
 
 ---
 
