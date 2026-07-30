@@ -15,7 +15,7 @@
 -- Test isolation: role 'tc_p2a_accum' project_id 99989 (P2-A).
 -- SPDX-License-Identifier: Apache-2.0
 
-ALTER EXTENSION pgmnemo UPDATE TO '0.15.0';
+ALTER EXTENSION pgmnemo UPDATE TO '0.15.1';
 
 SET pgmnemo.gate_strict           = 'off';
 SET pgmnemo.include_unverified    = 'on';

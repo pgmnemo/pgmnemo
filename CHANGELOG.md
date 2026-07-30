@@ -15,6 +15,54 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.15.1] — 2026-07-30
+
+### Behaviour change (default — affects callers with unverified rows)
+
+**`recall_situation()` now returns only verified rows by default.**
+
+In `0.15.0`, `recall_situation()` returned every active row regardless of `verified_at` status —
+including draft and candidate lessons. Starting with `0.15.1`, the function applies the same
+verified-only filter as every other recall function (`recall_hybrid`, `recall_fast`,
+`recall_lessons`, `traverse_temporal_window`): when the GUC `pgmnemo.include_unverified` is
+unset (the default) or `'off'`, only rows with `verified_at IS NOT NULL` are returned.
+
+**Who is affected:** callers of `recall_situation()` whose corpus contains rows where
+`verified_at IS NULL` (draft/candidate lessons) and who did not set
+`pgmnemo.include_unverified = 'on'`. For these callers, result counts may silently decrease
+after upgrade.
+
+**How to restore 0.15.0 behaviour:** set the GUC before calling the function:
+
+```sql
+SET pgmnemo.include_unverified = 'on';
+SELECT * FROM pgmnemo.recall_situation('class=deploy_gap');
+```
+
+Or set it for the session / connection pool. The GUC is already required by all other recall
+functions; this release makes `recall_situation()` consistent with them.
+
+**Production note:** episode rows written by `remember_event()` at run closeout are typically
+verified at write time (via synthesised `artifact_hash`), so the default filter causes no
+practical regression on real corpora where all rows have `verified_at IS NOT NULL`.
+
+### Changed
+
+- **`recall_situation()`** — converted from `LANGUAGE sql` to `LANGUAGE plpgsql`; now reads
+  `pgmnemo.include_unverified` using the same EXCEPTION-safe `current_setting()` pattern as
+  `recall_hybrid()`, `recall_fast()`, and `recall_lessons()`. When the GUC is absent or false,
+  only rows with `verified_at IS NOT NULL` are returned. The explicit promise
+  ("GUC-conditional filtering is deferred to a follow-up release") carried in the 0.15.0
+  `COMMENT ON FUNCTION` is replaced by a description of the actual implemented behaviour.
+
+### Tests
+
+- Added `test_v0151_guc_situation` — pg_regress suite covering GUC filtering end-to-end
+  for `recall_situation()`: verified-only default, include_unverified='on' path,
+  and mixed-corpus discrimination.
+
+---
+
 ## [0.15.0] — 2026-07-27
 
 ### Added

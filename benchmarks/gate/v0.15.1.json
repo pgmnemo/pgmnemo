@@ -1,0 +1,33 @@
+{
+   "version": "v0.15.1",
+   "date": "2026-07-30",
+   "pgmnemo_version": "0.15.1",
+   "gate_status": "PASS",
+   "gate_type": "functional",
+   "significance_required": false,
+   "scope": "GUC-gated situational recall: recall_situation() now honours pgmnemo.include_unverified with the same EXCEPTION-safe pattern as recall_hybrid(), recall_fast(), and recall_lessons(). Function converted from LANGUAGE sql to LANGUAGE plpgsql (required for block-level EXCEPTION handler). Default behaviour change: when the GUC is unset (the default), only rows with verified_at IS NOT NULL are returned — callers relying on the 0.15.0 all-rows default must SET pgmnemo.include_unverified = 'on'. No schema change, no new index, no ranking or scoring change.",
+   "justification": "Functional gate — recall_situation() is a pure lookup function; the change gates on a GUC, not on any ranking or scoring coefficient. The GUC-read pattern (EXCEPTION-safe current_setting + COALESCE) is identical to the implementation already shipped in recall_hybrid(), recall_fast(), recall_lessons(), and traverse_temporal_window(). No statistical validation is required because no recall-quality metric is claimed. Both installcheck suites green (extension suite: 53/53, root suite: 9/9) including the test_v0151_guc_situation suite which covers the new GUC filtering path end-to-end.",
+   "schema_change": false,
+   "schema_change_detail": "No table, column, index, or GUC definition change. recall_situation() body replaced in-place (LANGUAGE sql → LANGUAGE plpgsql, GUC filtering added). COMMENT ON FUNCTION updated to describe actual behaviour. Upgrade path: pgmnemo--0.15.0--0.15.1.sql. Fresh-install path: pgmnemo--0.15.1.sql.",
+   "scoring_impact": "none — recall ranking, confidence, and reinforce() paths are untouched; no changes to recall_hybrid(), recall_fast(), or any scoring coefficient",
+   "recall_ranking_impact": "none — no change to result ordering, RRF weights, graph-proximity boost, recency stamping, or any GUC",
+   "backward_compat_proof": "Callers of recall_situation() with pgmnemo.include_unverified = 'on' (all installcheck fixtures and the standard production pattern) see no change. Callers that relied on the 0.15.0 all-rows default and have unverified rows in their corpus will silently receive fewer results; they must set the GUC or verify their rows. All 52 pre-existing extension/ tests continue to pass. test_v0151_guc_situation verifies GUC filtering end-to-end.",
+   "new_regress_tests": ["test_v0151_guc_situation"],
+   "new_regress_test_count": 1,
+   "installcheck": {
+      "harness": "pg_regress — extension/Makefile (--load-extension=vector --load-extension=pgmnemo) AND root Makefile (--inputdir=tests --load-extension=vector --load-extension=pgmnemo)",
+      "postgres": "17",
+      "pgvector": "0.8.3",
+      "result": "PASS — 53/53 (extension suite) and 9/9 (root suite)",
+      "tests_run": 62,
+      "tests_passed": 62,
+      "date_run": "2026-07-30"
+   },
+   "leak_scan": "PASS — scripts/check_no_internal_leak.sh exit 0 (2026-07-30)",
+   "measured_pgmnemo_version": "0.15.1",
+   "corpus": {
+      "database": "pgmnemo_bench",
+      "pgmnemo_version": "0.15.1",
+      "note": "functional gate only; no recall-quality claim is made by this release and therefore no statistical validation is required"
+   }
+}

@@ -22,7 +22,7 @@ SET pgmnemo.gate_strict = 'off';
 SET pgmnemo.include_unverified = 'on';
 SET pgmnemo.track_recall_recency = 'off';
 
-ALTER EXTENSION pgmnemo UPDATE TO '0.15.0';
+ALTER EXTENSION pgmnemo UPDATE TO '0.15.1';
 
 -- =============================================================================
 -- A: classify_content_type — function exists and has correct signature
