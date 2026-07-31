@@ -15,6 +15,20 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.16.1] - 2026-07-31
+
+### Fixed
+
+- **`extract_entity_keys()` recognised only 41% of real failure-class tokens.** The rule
+  accepted an `UPPER_SNAKE` token as a failure class only when it contained one of
+  `FAIL`/`ERROR`/`BUG`/`CRASH`/… . Measured against 5,730 failing runs from a live agent
+  fleet, that missed **59%** of them — including the most common class in the corpus, whose
+  name contains none of those words, along with `…_EXCEEDED`, `…_UNMET` and `…_CEILING`.
+
+  The vocabulary now covers the words failure classes actually use. Unrecognised: 59% → 0.03%.
+  Purely additive — every token recognised at 0.16.0 still is. Ordinary upper-case prose
+  still yields no failure key.
+
 ## [0.16.0] - 2026-07-31
 
 ### Added

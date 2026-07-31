@@ -1,0 +1,35 @@
+{
+   "version": "v0.16.1",
+   "date": "2026-07-31",
+   "pgmnemo_version": "0.16.1",
+   "gate_status": "PASS",
+   "gate_type": "functional",
+   "significance_required": false,
+   "scope": "extract_entity_keys() failure-class vocabulary widened. The rule recognised a token as a failure class only when it contained one of FAIL/ERROR/BUG/CRASH/... . Measured against 5,730 real failing runs on a live agent fleet, that word list missed 59% of them — including the single most common class in the corpus, whose name contains none of those words, plus EXCEEDED, UNMET and CEILING. Vocabulary extended to the words failure classes actually use. No signature change, no schema change, no ranking change.",
+   "justification": "Functional gate — no recall-quality metric is claimed. The change is a widening of one regex alternation inside an IMMUTABLE pure function; it can only add keys, never remove them. Coverage measured before and after against the real distribution of failure classes over 60 days: unrecognised runs 3,387/5,730 (59%) before, 2/5,730 (0.03%) after — the residual is a single-token class with no underscore, which the UPPER_SNAKE shape rule does not match by design. False positives checked: ordinary upper-case prose ('The README and the API are both fine.') yields no failure key.",
+   "schema_change": false,
+   "schema_change_detail": "No table, column, index or GUC change. extract_entity_keys() body replaced in place. Upgrade path: pgmnemo--0.16.0--0.16.1.sql. Fresh-install path: pgmnemo--0.16.1.sql. The published 0.16.0 flat install is untouched.",
+   "scoring_impact": "none — no scoring coefficient, ranking, or recall function touched",
+   "recall_ranking_impact": "none",
+   "backward_compat_proof": "Additive by construction: the alternation only gained branches, so every token recognised at 0.16.0 is still recognised. All 54 pre-existing extension tests and 10 pre-existing root tests continue to pass. New test test_v0161_failure_vocab covers the four previously-missed classes, two previously-recognised ones, and a no-false-positive case.",
+   "new_regress_tests": [
+      "test_v0161_failure_vocab"
+   ],
+   "new_regress_test_count": 1,
+   "installcheck": {
+      "harness": "pg_regress — extension/Makefile AND root Makefile (--inputdir=tests), both with --load-extension=vector --load-extension=pgmnemo",
+      "postgres": "17",
+      "pgvector": "0.8.3",
+      "result": "PASS — 55/55 (extension suite) and 11/11 (root suite)",
+      "tests_run": 66,
+      "tests_passed": 66,
+      "date_run": "2026-07-31"
+   },
+   "leak_scan": "PASS — scripts/check_no_internal_leak.sh exit 0 (2026-07-31)",
+   "measured_pgmnemo_version": "0.16.1",
+   "corpus": {
+      "database": "failure_class distribution over 5,730 failing runs, 60 days",
+      "pgmnemo_version": "0.16.1",
+      "measurement": "unrecognised 3,387 (59%) before -> 2 (0.03%) after"
+   }
+}

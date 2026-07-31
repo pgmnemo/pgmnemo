@@ -29,7 +29,7 @@ SET pgmnemo.gate_strict = 'off';
 SET pgmnemo.include_unverified = 'on';
 SET pgmnemo.track_recall_recency = 'off';
 
-ALTER EXTENSION pgmnemo UPDATE TO '0.16.0';
+ALTER EXTENSION pgmnemo UPDATE TO '0.16.1';
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- A: extract_entity_keys — signature
