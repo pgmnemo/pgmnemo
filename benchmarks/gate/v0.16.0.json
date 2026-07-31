@@ -1,0 +1,35 @@
+{
+   "version": "v0.16.0",
+   "date": "2026-07-31",
+   "pgmnemo_version": "0.16.0",
+   "gate_status": "PASS",
+   "gate_type": "functional",
+   "significance_required": false,
+   "scope": "Entity key extraction and read-side. extract_entity_keys(text) -> text[] derives entity keys from lesson text with deterministic shape rules (failure classes, model identifiers, source paths, schema-qualified names) — no LLM call, no external service. ingest() calls it and stores the result in metadata.entity_keys. recall_entity(entity_key, k) reads back everything held about one entity, keyed on metadata rather than on the heuristic content_type label. Additive: no table, column, or index definition changes to existing objects; no ranking or scoring change.",
+   "justification": "Functional gate — no recall-quality metric is claimed, so no statistical validation is required. extract_entity_keys() is IMMUTABLE and pure; recall_entity() is a lookup keyed on metadata.entity_keys and does not touch recall_hybrid(), recall_fast(), recall_lessons(), RRF weights, confidence, or reinforce(). Density was measured before the read-side was built rather than assumed: on the active corpus (is_active AND t_valid_to = 'infinity', 5,910 lessons) extraction yields 972 distinct keys, median 2 lessons per key, 332 keys with three or more references — above the >1 median and >=20 dense-key thresholds set in the release plan. Both installcheck suites green.",
+   "schema_change": false,
+   "schema_change_detail": "No table, column, or index definition change. Two new functions (extract_entity_keys, recall_entity); ingest() body extended to populate metadata.entity_keys. Upgrade path: pgmnemo--0.15.1--0.16.0.sql. Fresh-install path: pgmnemo--0.16.0.sql.",
+   "scoring_impact": "none — recall ranking, confidence, and reinforce() paths are untouched; no scoring coefficient changed",
+   "recall_ranking_impact": "none — no change to result ordering, RRF weights, graph-proximity boost, recency stamping, or any GUC",
+   "backward_compat_proof": "Existing callers see no change: no existing function signature, return shape, or default was modified. ingest() gains an additive metadata key (entity_keys); callers reading metadata by explicit key are unaffected. All 53 pre-existing extension tests and 9 pre-existing root tests continue to pass. One behaviour note for readers of the source: the schema: extraction rule was made deployment-agnostic before release — it previously matched a hardcoded allowlist of schema names, which meant it silently produced nothing on any other installation.",
+   "new_regress_tests": [
+      "test_v0160_entity_keys"
+   ],
+   "new_regress_test_count": 1,
+   "installcheck": {
+      "harness": "pg_regress — extension/Makefile (--load-extension=vector --load-extension=pgmnemo) AND root Makefile (--inputdir=tests --load-extension=vector --load-extension=pgmnemo)",
+      "postgres": "17",
+      "pgvector": "0.8.3",
+      "result": "PASS — 54/54 (extension suite) and 10/10 (root suite)",
+      "tests_run": 64,
+      "tests_passed": 64,
+      "date_run": "2026-07-31"
+   },
+   "leak_scan": "PASS — scripts/check_no_internal_leak.sh exit 0 (2026-07-31); the scan blocked an earlier candidate that hardcoded deployment-specific schema names, which was fixed before tagging",
+   "measured_pgmnemo_version": "0.16.0",
+   "corpus": {
+      "database": "agent lesson corpus, 5910 active lessons (is_active AND t_valid_to = 'infinity')",
+      "pgmnemo_version": "0.16.0",
+      "measurement": "972 distinct entity keys; median 2 lessons per key; 332 keys with >=3 references; 47.7% singletons"
+   }
+}
