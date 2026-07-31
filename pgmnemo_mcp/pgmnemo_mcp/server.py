@@ -1,11 +1,16 @@
 """pgmnemo MCP server — exposes ingest and recall as MCP tools.
 
 Transport note (BUG-3 resolution):
-    FastMCP uses MCP protocol transport (stdio by default, SSE/streamable-http
+    MCPServer uses MCP protocol transport (stdio by default, SSE/streamable-http
     optionally). It does NOT expose REST endpoints at /ingest or /recall.
     Clients must use the MCP JSON-RPC protocol (stdio pipe or SSE at /sse).
     The --smoke command in __main__.py exercises the DB layer directly
     without going through the MCP transport.
+
+Migration note (0.16.0):
+    mcp 2.0.0 removed `mcp.server.fastmcp.FastMCP`. The replacement is
+    `mcp.server.MCPServer` with an identical `@server.tool()` decorator
+    and `.run()` entry point.
 """
 
 from __future__ import annotations
@@ -13,7 +18,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from mcp.server.fastmcp import FastMCP
+from mcp.server import MCPServer
 
 import re
 
@@ -28,7 +33,7 @@ from .config import (
     to_pgvector,
 )
 
-mcp = FastMCP("pgmnemo", port=8765)
+mcp = MCPServer(name="pgmnemo")
 
 
 @mcp.tool(name="pgmnemo.ingest", description="Ingest a lesson into pgmnemo agent memory.")

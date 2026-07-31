@@ -23,10 +23,9 @@ def _stub_mcp() -> None:
         return
     mcp_pkg = types.ModuleType("mcp")
     server_pkg = types.ModuleType("mcp.server")
-    fastmcp_mod = types.ModuleType("mcp.server.fastmcp")
 
-    class _FastMCP:
-        def __init__(self, name: str, **kw: object) -> None:
+    class _MCPServer:
+        def __init__(self, name: str | None = None, **kw: object) -> None:
             self.name = name
 
         def tool(self, **kw: object):
@@ -37,10 +36,9 @@ def _stub_mcp() -> None:
         def run(self) -> None:
             pass
 
-    fastmcp_mod.FastMCP = _FastMCP
+    server_pkg.MCPServer = _MCPServer
     sys.modules["mcp"] = mcp_pkg
     sys.modules["mcp.server"] = server_pkg
-    sys.modules["mcp.server.fastmcp"] = fastmcp_mod
 
 
 _stub_mcp()
