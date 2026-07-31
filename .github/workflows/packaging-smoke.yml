@@ -12,11 +12,16 @@ jobs:
         with: {python-version: '3.11'}
       - name: Build wheel
         working-directory: ${{ matrix.package }}
-        run: pip install build && python -m build --wheel
+        # Clean dist first. A stale wheel left in the tree makes the glob below
+        # expand to two versions, and if their dependency ranges disagree pip
+        # cannot resolve both — the job then fails on history, not on this build.
+        run: rm -rf dist && pip install build && python -m build --wheel
       - name: Install in clean venv
         run: |
           python -m venv /tmp/testenv
-          /tmp/testenv/bin/pip install ${{ matrix.package }}/dist/*.whl
+          WHL=$(ls ${{ matrix.package }}/dist/*.whl)
+          test "$(echo "$WHL" | wc -l)" -eq 1 || { echo "FAIL: expected exactly one wheel, got:"; echo "$WHL"; exit 1; }
+          /tmp/testenv/bin/pip install "$WHL"
       - name: Import smoke test
         run: /tmp/testenv/bin/python -c "import pgmnemo_mcp; print('OK:', pgmnemo_mcp.__file__)"
       - name: Verify wheel is non-empty
