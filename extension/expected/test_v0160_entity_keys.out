@@ -1,0 +1,172 @@
+-- test_v0160_entity_keys.sql
+-- pg_regress tests for pgmnemo v0.16.0 — extract_entity_keys() + ingest hook
+--
+-- Coverage:
+--   A1: extract_entity_keys exists — 1 param, text[], immutable, strict
+--   B1: project keys — "project:agency"
+--   B2: model keys — "model:claude-sonnet-4-6"
+--   B3: file keys — "file:apps/v3-next/routes/tasks.py"
+--   B4: failure keys — "failure:PHANTOM_DONE"
+--   B5: schema keys — "schema:pgmnemo.agent_lesson"
+--   B6: multiple keys in one text
+--   B7: no keys → empty array
+--   B8: NULL input → NULL (STRICT)
+--   C1: ingest() auto-populates metadata.entity_keys
+--   C2: ingest() preserves existing metadata keys
+--   C3: ingest() with no entity keys — no entity_keys key added
+--
+-- Test isolation: role 'tc_ek', project_id -1600.
+SET pgmnemo.gate_strict = 'off';
+SET pgmnemo.include_unverified = 'on';
+SET pgmnemo.track_recall_recency = 'off';
+ALTER EXTENSION pgmnemo UPDATE TO '0.16.0';
+-- ─────────────────────────────────────────────────────────────────────────────
+-- A: extract_entity_keys — signature
+-- ─────────────────────────────────────────────────────────────────────────────
+-- A1: 1 param, returns text[], IMMUTABLE, STRICT
+SELECT
+    p.pronargs                                            AS nargs,
+    pg_catalog.format_type(p.prorettype, NULL)            AS rettype,
+    CASE p.provolatile WHEN 'i' THEN 'immutable' END      AS volatility,
+    p.proisstrict                                         AS strict
+FROM pg_proc p
+JOIN pg_namespace n ON n.oid = p.pronamespace
+WHERE n.nspname = 'pgmnemo' AND p.proname = 'extract_entity_keys';
+ nargs | rettype | volatility | strict
+-------+---------+------------+--------
+     1 | text[]  | immutable  | t
+(1 row)
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- B: extract_entity_keys — correct extraction per category
+-- ─────────────────────────────────────────────────────────────────────────────
+-- B1: project key
+SELECT pgmnemo.extract_entity_keys(
+    'When working on project:agency tasks, always use v3-next API endpoint.'
+) AS b1_project;
+   b1_project
+-----------------
+ {project:agency}
+(1 row)
+
+-- B2: model key
+SELECT pgmnemo.extract_entity_keys(
+    'The model claude-sonnet-4-6 is the default for dispatch in v3-next.'
+) AS b2_model;
+          b2_model
+----------------------------
+ {model:claude-sonnet-4-6}
+(1 row)
+
+-- B3: file key
+SELECT pgmnemo.extract_entity_keys(
+    'The bug was in apps/v3-next/routes/tasks.py line 42 causing a 500 error.'
+) AS b3_file;
+               b3_file
+--------------------------------------
+ {file:apps/v3-next/routes/tasks.py}
+(1 row)
+
+-- B4: failure key
+SELECT pgmnemo.extract_entity_keys(
+    'The PHANTOM_DONE bug caused tasks to be marked complete without real commits.'
+) AS b4_failure;
+       b4_failure
+-------------------------
+ {failure:PHANTOM_DONE}
+(1 row)
+
+-- B5: schema key
+SELECT pgmnemo.extract_entity_keys(
+    'The table pgmnemo.agent_lesson stores all ingested lessons with embeddings.'
+) AS b5_schema;
+           b5_schema
+--------------------------------
+ {schema:pgmnemo.agent_lesson}
+(1 row)
+
+-- B6: multiple keys in one text
+SELECT pgmnemo.extract_entity_keys(
+    'When using claude-sonnet-4-6 on project:pgmnemo, the file apps/v3-next/workflows/w1_dispatch.py had a STALE_SESSION_ERROR that corrupted pgmnemo.agent_lesson records.'
+) AS b6_multiple;
+                                                                b6_multiple
+--------------------------------------------------------------------------------------------------------------------------------------------
+ {failure:STALE_SESSION_ERROR,file:apps/v3-next/workflows/w1_dispatch.py,model:claude-sonnet-4-6,project:pgmnemo,schema:pgmnemo.agent_lesson}
+(1 row)
+
+-- B7: no keys → empty array
+SELECT pgmnemo.extract_entity_keys(
+    'This is a simple lesson about coding best practices and nothing more.'
+) AS b7_empty;
+ b7_empty
+----------
+ {}
+(1 row)
+
+-- B8: NULL input → NULL (STRICT)
+SELECT pgmnemo.extract_entity_keys(NULL) AS b8_null;
+ b8_null
+---------
+
+(1 row)
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- C: ingest() — entity_keys metadata hook
+-- ─────────────────────────────────────────────────────────────────────────────
+-- C1: ingest with entity keys — metadata should contain entity_keys
+DO $$
+DECLARE
+    _id BIGINT;
+    _keys JSONB;
+BEGIN
+    _id := pgmnemo.ingest(
+        'tc_ek'::TEXT, -1600, 'c1-entity-hook'::TEXT,
+        'When deploying project:agency, check apps/v3-next/routes/tasks.py for broken imports.'::TEXT,
+        3::SMALLINT, NULL::vector(1024), NULL::TEXT, NULL::TEXT, '{}'::jsonb, NULL::TEXT
+    );
+    SELECT metadata->'entity_keys' INTO _keys
+    FROM pgmnemo.agent_lesson WHERE id = _id;
+    RAISE NOTICE 'C1 entity_keys: %', _keys;
+END $$;
+NOTICE:  C1 entity_keys: ["file:apps/v3-next/routes/tasks.py", "project:agency"]
+DO
+-- C2: ingest preserves existing metadata
+DO $$
+DECLARE
+    _id BIGINT;
+    _val JSONB;
+BEGIN
+    _id := pgmnemo.ingest(
+        'tc_ek'::TEXT, -1600, 'c2-preserve-meta'::TEXT,
+        'The model claude-sonnet-4-6 is preferred for project:agency dispatch tasks.'::TEXT,
+        3::SMALLINT, NULL::vector(1024), NULL::TEXT, NULL::TEXT,
+        '{"custom_field": "preserved"}'::jsonb, NULL::TEXT
+    );
+    SELECT metadata->'custom_field' INTO _val
+    FROM pgmnemo.agent_lesson WHERE id = _id;
+    RAISE NOTICE 'C2 custom_field preserved: %', _val;
+END $$;
+NOTICE:  C2 custom_field preserved: "preserved"
+DO
+-- C3: ingest with no entity keys — no entity_keys key added
+DO $$
+DECLARE
+    _id BIGINT;
+    _has BOOLEAN;
+BEGIN
+    _id := pgmnemo.ingest(
+        'tc_ek'::TEXT, -1600, 'c3-no-keys'::TEXT,
+        'Simple lesson with no identifiable entity references whatsoever.'::TEXT,
+        3::SMALLINT, NULL::vector(1024), NULL::TEXT, NULL::TEXT, '{}'::jsonb, NULL::TEXT
+    );
+    SELECT metadata ? 'entity_keys' INTO _has
+    FROM pgmnemo.agent_lesson WHERE id = _id;
+    RAISE NOTICE 'C3 has entity_keys key: %', _has;
+END $$;
+NOTICE:  C3 has entity_keys key: f
+DO
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Cleanup test data
+-- ─────────────────────────────────────────────────────────────────────────────
+DELETE FROM pgmnemo.agent_lesson WHERE role = 'tc_ek' AND project_id = -1600;
+DELETE 3
