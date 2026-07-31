@@ -19,8 +19,8 @@
 --   T15: 0 consolidation edges remain
 --   T16: second undo is idempotent (no-op for this role)
 -- SPDX-License-Identifier: Apache-2.0
-ALTER EXTENSION pgmnemo UPDATE TO '0.15.1';
-NOTICE:  version "0.15.1" of extension "pgmnemo" is already installed
+ALTER EXTENSION pgmnemo UPDATE TO '0.16.0';
+NOTICE:  version "0.16.0" of extension "pgmnemo" is already installed
 SET pgmnemo.gate_strict           = 'off';
 SET pgmnemo.include_unverified    = 'on';
 SET pgmnemo.track_recall_recency  = 'off';

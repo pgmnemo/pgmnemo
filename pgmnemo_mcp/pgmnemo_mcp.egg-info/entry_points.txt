@@ -1,2 +1,3 @@
 [console_scripts]
+pgmnemo = pgmnemo_mcp.__main__:main
 pgmnemo-mcp = pgmnemo_mcp.server:run

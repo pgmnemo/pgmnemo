@@ -28,6 +28,7 @@ SET pgmnemo.gate_strict = 'off';
 SET pgmnemo.include_unverified = 'on';
 SET pgmnemo.track_recall_recency = 'off';
 ALTER EXTENSION pgmnemo UPDATE TO '0.16.0';
+NOTICE:  version "0.16.0" of extension "pgmnemo" is already installed
 -- ─────────────────────────────────────────────────────────────────────────────
 -- A: extract_entity_keys — signature
 -- ─────────────────────────────────────────────────────────────────────────────
@@ -40,7 +41,7 @@ SELECT
 FROM pg_proc p
 JOIN pg_namespace n ON n.oid = p.pronamespace
 WHERE n.nspname = 'pgmnemo' AND p.proname = 'extract_entity_keys';
- nargs | rettype | volatility | strict
+ nargs | rettype | volatility | strict 
 -------+---------+------------+--------
      1 | text[]  | immutable  | t
 (1 row)
@@ -52,8 +53,8 @@ WHERE n.nspname = 'pgmnemo' AND p.proname = 'extract_entity_keys';
 SELECT pgmnemo.extract_entity_keys(
     'The model claude-sonnet-4-6 is the default for dispatch in v3-next.'
 ) AS b1_model;
-          b1_model
------------------------------
+         b1_model          
+---------------------------
  {model:claude-sonnet-4-6}
 (1 row)
 
@@ -61,8 +62,8 @@ SELECT pgmnemo.extract_entity_keys(
 SELECT pgmnemo.extract_entity_keys(
     'The bug was in apps/v3-next/routes/tasks.py line 42 causing a 500 error.'
 ) AS b2_file;
-               b2_file
---------------------------------------
+               b2_file               
+-------------------------------------
  {file:apps/v3-next/routes/tasks.py}
 (1 row)
 
@@ -70,8 +71,8 @@ SELECT pgmnemo.extract_entity_keys(
 SELECT pgmnemo.extract_entity_keys(
     'The PHANTOM_DONE bug caused tasks to be marked complete without real commits.'
 ) AS b3_failure;
-       b3_failure
--------------------------
+       b3_failure       
+------------------------
  {failure:PHANTOM_DONE}
 (1 row)
 
@@ -79,8 +80,8 @@ SELECT pgmnemo.extract_entity_keys(
 SELECT pgmnemo.extract_entity_keys(
     'The table pgmnemo.agent_lesson stores all ingested lessons with embeddings.'
 ) AS b4_schema;
-           b4_schema
---------------------------------
+           b4_schema           
+-------------------------------
  {schema:pgmnemo.agent_lesson}
 (1 row)
 
@@ -88,8 +89,8 @@ SELECT pgmnemo.extract_entity_keys(
 SELECT pgmnemo.extract_entity_keys(
     'When using claude-sonnet-4-6 on this codebase, the file apps/v3-next/workflows/w1_dispatch.py had a STALE_SESSION_ERROR that corrupted pgmnemo.agent_lesson records.'
 ) AS b5_multiple;
-                                                          b5_multiple
---------------------------------------------------------------------------------------------------------------------------------
+                                                         b5_multiple                                                          
+------------------------------------------------------------------------------------------------------------------------------
  {failure:STALE_SESSION_ERROR,file:apps/v3-next/workflows/w1_dispatch.py,model:claude-sonnet-4-6,schema:pgmnemo.agent_lesson}
 (1 row)
 
@@ -97,23 +98,23 @@ SELECT pgmnemo.extract_entity_keys(
 SELECT pgmnemo.extract_entity_keys(
     'This is a simple lesson about coding best practices and nothing more.'
 ) AS b6_empty;
- b6_empty
+ b6_empty 
 ----------
  {}
 (1 row)
 
 -- B7: NULL input → NULL (STRICT)
 SELECT pgmnemo.extract_entity_keys(NULL) AS b7_null;
- b7_null
+ b7_null 
 ---------
-
+ 
 (1 row)
 
 -- B8: project keys REMOVED — must NOT extract project:xxx
 SELECT pgmnemo.extract_entity_keys(
     'When working on project:agency tasks, always use v3-next API endpoint.'
 ) AS b8_no_project;
- b8_no_project
+ b8_no_project 
 ---------------
  {}
 (1 row)
@@ -122,7 +123,7 @@ SELECT pgmnemo.extract_entity_keys(
 SELECT pgmnemo.extract_entity_keys(
     'See the report at docs/reports/RETRO_260410.md for full analysis details and review.'
 ) AS b9_no_md;
- b9_no_md
+ b9_no_md 
 ----------
  {}
 (1 row)
@@ -131,7 +132,7 @@ SELECT pgmnemo.extract_entity_keys(
 SELECT pgmnemo.extract_entity_keys(
     'The spec at spec/v2/D1_ARCH_OVERVIEW.md describes the system architecture completely.'
 ) AS b10_no_spec;
- b10_no_spec
+ b10_no_spec 
 -------------
  {}
 (1 row)
@@ -155,7 +156,6 @@ BEGIN
     RAISE NOTICE 'C1 entity_keys: %', _keys;
 END $$;
 NOTICE:  C1 entity_keys: ["file:apps/v3-next/routes/tasks.py"]
-DO
 -- C2: ingest preserves existing metadata
 DO $$
 DECLARE
@@ -173,7 +173,6 @@ BEGIN
     RAISE NOTICE 'C2 custom_field preserved: %', _val;
 END $$;
 NOTICE:  C2 custom_field preserved: "preserved"
-DO
 -- C3: ingest with no entity keys — no entity_keys key added
 DO $$
 DECLARE
@@ -190,7 +189,6 @@ BEGIN
     RAISE NOTICE 'C3 has entity_keys key: %', _has;
 END $$;
 NOTICE:  C3 has entity_keys key: f
-DO
 -- ─────────────────────────────────────────────────────────────────────────────
 -- D: recall_entity() — entity-keyed recall
 -- ─────────────────────────────────────────────────────────────────────────────
@@ -202,7 +200,7 @@ SELECT
 FROM pg_proc p
 JOIN pg_namespace n ON n.oid = p.pronamespace
 WHERE n.nspname = 'pgmnemo' AND p.proname = 'recall_entity';
- nargs | volatility | returns_set
+ nargs | volatility | returns_set 
 -------+------------+-------------
      2 | volatile   | t
 (1 row)
@@ -232,13 +230,12 @@ BEGIN
         3::SMALLINT, NULL::vector(1024), NULL::TEXT, NULL::TEXT, '{}'::jsonb, NULL::TEXT
     );
 END $$;
-DO
 -- D2: recall_entity finds lesson by failure key
 SELECT lesson_id IS NOT NULL AS d2_found, topic, importance
 FROM pgmnemo.recall_entity('failure:INFRA_FAILURE')
 WHERE role = 'tc_ek' AND project_id = -1600
 ORDER BY importance DESC, created_at DESC;
- d2_found |        topic        | importance
+ d2_found |        topic        | importance 
 ----------+---------------------+------------
  t        | d2-failure-recall   |          4
  t        | d5-failure-recall-2 |          3
@@ -249,7 +246,7 @@ SELECT lesson_id IS NOT NULL AS d3_found, topic, importance
 FROM pgmnemo.recall_entity('model:claude-sonnet-4-6')
 WHERE role = 'tc_ek' AND project_id = -1600
 ORDER BY importance DESC, created_at DESC;
- d3_found |      topic       | importance
+ d3_found |      topic       | importance 
 ----------+------------------+------------
  t        | d3-model-recall  |          5
  t        | c2-preserve-meta |          3
@@ -258,7 +255,7 @@ ORDER BY importance DESC, created_at DESC;
 -- D4: recall_entity — empty result for non-existent key (silent, no error)
 SELECT count(*) AS d4_count
 FROM pgmnemo.recall_entity('failure:NONEXISTENT_KEY_XYZZY');
- d4_count
+ d4_count 
 ----------
         0
 (1 row)
@@ -267,7 +264,7 @@ FROM pgmnemo.recall_entity('failure:NONEXISTENT_KEY_XYZZY');
 SELECT count(*) AS d5_count
 FROM pgmnemo.recall_entity('failure:INFRA_FAILURE', 1)
 WHERE role = 'tc_ek' AND project_id = -1600;
- d5_count
+ d5_count 
 ----------
         1
 (1 row)
@@ -278,7 +275,7 @@ SELECT entity_keys IS NOT NULL AS d6_has_keys,
 FROM pgmnemo.recall_entity('failure:INFRA_FAILURE')
 WHERE role = 'tc_ek' AND project_id = -1600
 LIMIT 1;
- d6_has_keys | d6_keys_not_empty
+ d6_has_keys | d6_keys_not_empty 
 -------------+-------------------
  t           | t
 (1 row)
@@ -287,4 +284,3 @@ LIMIT 1;
 -- Cleanup test data
 -- ─────────────────────────────────────────────────────────────────────────────
 DELETE FROM pgmnemo.agent_lesson WHERE role = 'tc_ek' AND project_id = -1600;
-DELETE 6

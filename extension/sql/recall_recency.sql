@@ -17,7 +17,7 @@
 SET pgmnemo.gate_strict = 'off';
 SET pgmnemo.include_unverified = 'on';
 
-ALTER EXTENSION pgmnemo UPDATE TO '0.15.1';
+ALTER EXTENSION pgmnemo UPDATE TO '0.16.0';
 
 -- Confirm new columns exist (boolean check avoids alignment-sensitive output)
 SELECT

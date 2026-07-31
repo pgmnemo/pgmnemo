@@ -15,6 +15,27 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.16.0] - 2026-07-31
+
+### Added
+
+- **`extract_entity_keys(text) → text[]`** — pulls entity keys out of a lesson's text
+  using deterministic shape rules (no LLM call, no external service): failure classes,
+  model identifiers, source paths, and schema-qualified names. `ingest()` now calls it and
+  stores the result in `metadata.entity_keys`, so the entity index builds itself as you write.
+
+- **`recall_entity(entity_key text, k int DEFAULT 10)`** — returns what memory holds about one
+  entity. Keyed on `metadata.entity_keys`, not on the content-type label, because the label is
+  assigned heuristically and does not track the structure.
+
+  On a 5,910-lesson corpus this yields 972 distinct keys, median 2 lessons per key, 332 keys with
+  three or more. `recall_entity('failure:INFRA_FAILURE')` returns a slice no other query builds.
+
+### Changed
+
+- `extract_entity_keys()` deliberately does **not** emit a `project:` key, and skips one-off
+  report paths. Both produced mostly singletons — index entries nobody would ever ask for.
+
 ## [0.15.1] — 2026-07-30
 
 ### Behaviour change (default — affects callers with unverified rows)
