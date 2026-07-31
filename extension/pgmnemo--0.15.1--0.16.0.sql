@@ -6,14 +6,14 @@
 --           C: recall_entity(text, int) — entity-keyed recall
 --
 -- A rationale:
---   Live corpus audit (2026-07-31, agency_v3, 8 117 active lessons).
+--   Live corpus audit (2026-07-31, 8,117 active lessons).
 --   extract_entity_keys() applies deterministic regex heuristics to lesson_text
 --   to surface entity keys implicit in text but never written to metadata:
 --
 --     model:<id>               — "model:claude-sonnet-4-6", "model:gpt-4o"
 --     file:<path>              — "file:apps/v3-next/routes/tasks.py"
 --     failure:<CLASS>          — "failure:PHANTOM_DONE", "failure:OOM_KILL"
---     schema:<qualified>       — "schema:pgmnemo.agent_lesson", "schema:agency_v3.task"
+--     schema:<qualified>       — "schema:pgmnemo.agent_lesson", "schema:app.orders"
 --
 --   Pruned in 0.16.0-D (gate review):
 --     project:<slug>  — REMOVED: 48 keys, 69 refs, 75% singletons = noise
@@ -46,7 +46,7 @@
 --   model:<id>         — Claude/GPT/Ollama model identifiers
 --   file:<path>        — source/config file paths (NOT spec/reports/*, NOT *.md reports)
 --   failure:<CLASS>    — UPPER_SNAKE_CASE failure class names
---   schema:<qualified> — dotted qualified names (pgmnemo.*, agency_v3.*, etc.)
+--   schema:<qualified> — dotted qualified names (schema.object)
 --
 -- REMOVED in 0.16.0-D:
 --   project:<slug>     — 48 keys, 69 refs, 75% singletons = noise (no recall value)
@@ -107,17 +107,27 @@ failure_keys AS (
 ),
 
 -- ── 4. schema:<qualified> ───────────────────────────────────────────────────
--- Dotted qualified names: schema.object or db.table patterns.
--- Must match known schema/db prefixes to avoid false positives.
+-- Dotted qualified names: schema.object. Deliberately generic — a memory
+-- extension must not hardcode one deployment's schema names, or the rule
+-- silently does nothing for everyone else. Any lowercase dotted identifier
+-- pair qualifies, minus the source-file extensions that also look dotted
+-- (those are already covered by the file: category above).
 schema_keys AS (
     SELECT DISTINCT 'schema:' || lower(m[1]) AS key
     FROM regexp_matches(
         p_text,
-        '\m((?:pgmnemo|agency_v3|execas|public|pg_catalog)\.[a-z_][a-z0-9_]{1,60})\M',
+        '\m([a-z_][a-z0-9_]{1,60}\.[a-z_][a-z0-9_]{1,60})\M',
         'gi'
     ) AS m
     -- Filter out function call noise (method-like .word() patterns)
     WHERE m[1] !~ '\(\s*$'
+      -- ...and dotted tokens that are really filenames, not schema objects
+      AND lower(split_part(m[1], '.', 2)) NOT IN (
+          'py','sql','md','ts','js','tsx','jsx','sh','yml','yaml','json','toml',
+          'txt','csv','html','css','go','rs','rb','java','c','h','cpp','ini','cfg',
+          'lock','log','out','env','xml','conf','png','svg','jpg','gz','zip','com',
+          'org','net','io','dev','local'
+      )
 ),
 
 -- ── Combine, sort, deduplicate ──────────────────────────────────────────────
