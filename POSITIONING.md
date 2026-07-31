@@ -17,24 +17,25 @@ pgmnemo is a PostgreSQL extension. `CREATE EXTENSION pgmnemo CASCADE` in the dat
 ```sql
 SELECT pgmnemo.ingest(
   'developer', 99, 'connection-pooling',
-  'When PgBouncer is in transaction mode, prepared statements fail
-   silently. Switch to session mode or use simple query protocol.',
-  4, NULL, 'abc1234'
+  'When PgBouncer runs in transaction mode, prepared statements fail
+   silently. Switch to session mode, or disable the statement cache.',
+  4, NULL, 'demo_readme_proof'
 );
--- Result: 45079
+-- Result: 45087
 ```
 
 **Session 2** — different agent, fresh context, same problem:
 
 ```sql
-SELECT lesson_text, score FROM pgmnemo.recall_lessons(
-  query_text := 'prepared statements broken with pgbouncer',
-  role_filter := 'developer', k := 3
+SELECT lesson_id, score, lesson_text FROM pgmnemo.recall_lessons(
+  query_embedding := NULL::vector, k := 3,
+  role_filter := 'developer',
+  query_text := 'prepared statements broken with pgbouncer'
 );
 
-  [1] id=45079  score=0.0500
-      When PgBouncer is in transaction mode, prepared statements fail
-      silently. Switch to session mode or use simple query protocol.
+  [1] id=45087  score=0.0500
+      When PgBouncer runs in transaction mode, prepared statements fail
+      silently. Switch to session mode, or disable the statement cache.
 ```
 
 The lesson from Session 1 surfaces as the top result. The second agent skips the debugging cycle.

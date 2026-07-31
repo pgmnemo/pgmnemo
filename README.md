@@ -27,20 +27,20 @@ This happens because agent memory lives in the context window. When the session 
 
 ## See it work
 
-The following transcript was captured on a live pgmnemo instance (v0.15.1, 6,210 active lessons, July 2026). Not simulated output.
+The following transcript was captured on a pgmnemo v0.15.1 instance holding 8,112 active lessons (July 2026). Real output, copied from the session.
 
 **Session 1** — an agent debugs a connection-pooling issue and writes what it learned:
 
 ```sql
 SELECT pgmnemo.ingest(
   'developer', 99, 'connection-pooling',
-  'When PgBouncer is in transaction mode, prepared statements fail
-   silently. Switch to session mode or use simple query protocol
+  'When PgBouncer runs in transaction mode, prepared statements fail
+   silently. Switch to session mode, or disable the statement cache
    (statement_cache_mode=none in asyncpg).',
-  4, NULL, 'demo_readme_proof_2026'
+  4, NULL, 'demo_readme_proof'
 );
 
--- Result: 45079
+-- Result: 45087
 ```
 
 One SQL call. The lesson is stored in your Postgres with a provenance link (`commit_sha`), indexed for hybrid retrieval. No LLM API call on the write path.
@@ -48,15 +48,16 @@ One SQL call. The lesson is stored in your Postgres with a provenance link (`com
 **Session 2** — a different agent, fresh context, hits the same problem. It asks memory:
 
 ```sql
-SELECT lesson_id, lesson_text, score
+SELECT lesson_id, score, lesson_text
 FROM pgmnemo.recall_lessons(
-  query_text := 'prepared statements broken with pgbouncer',
-  role_filter := 'developer', k := 3
+  query_embedding := NULL::vector, k := 3,
+  role_filter := 'developer',
+  query_text := 'prepared statements broken with pgbouncer'
 );
 
-  [1] id=45079  score=0.0500
-      When PgBouncer is in transaction mode, prepared statements fail
-      silently. Switch to session mode or use simple query protocol
+  [1] id=45087  score=0.0500
+      When PgBouncer runs in transaction mode, prepared statements fail
+      silently. Switch to session mode, or disable the statement cache
       (statement_cache_mode=none in asyncpg).
 ```
 
