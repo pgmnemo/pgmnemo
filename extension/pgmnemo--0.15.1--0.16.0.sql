@@ -252,7 +252,7 @@ BEGIN
 
     -- v0.16.0: auto-populate entity_keys in metadata
     _entity_keys := pgmnemo.extract_entity_keys(p_lesson_text);
-    _effective_metadata := p_metadata;
+    _effective_metadata := COALESCE(p_metadata, '{}'::jsonb);
     IF array_length(_entity_keys, 1) > 0 THEN
         _effective_metadata := _effective_metadata || jsonb_build_object('entity_keys', _entity_keys);
     END IF;

@@ -1,9 +1,9 @@
--- pgmnemo--0.15.1.sql
--- Flat install for pgmnemo 0.15.1 (GUC-gated situational recall: recall_situation() honours include_unverified)
--- Generated from: pgmnemo--0.15.0.sql + pgmnemo--0.15.0--0.15.1.sql
+-- pgmnemo--0.16.0.sql
+-- Flat install for pgmnemo 0.16.0 (entity-keyed recall: extract_entity_keys, recall_entity)
+-- Generated from: pgmnemo--0.15.1.sql + pgmnemo--0.15.1--0.16.0.sql
 -- SPDX-License-Identifier: Apache-2.0
 
-\echo Use "CREATE EXTENSION pgmnemo VERSION '0.15.1'" to load this file. \quit
+\echo Use "CREATE EXTENSION pgmnemo VERSION '0.16.0'" to load this file. \quit
 
 
 -- ─────────────────────────────────────────────────────────────────────────────
@@ -13284,7 +13284,7 @@ BEGIN
 
     -- v0.16.0: auto-populate entity_keys in metadata
     _entity_keys := pgmnemo.extract_entity_keys(p_lesson_text);
-    _effective_metadata := p_metadata;
+    _effective_metadata := COALESCE(p_metadata, '{}'::jsonb);
     IF array_length(_entity_keys, 1) > 0 THEN
         _effective_metadata := _effective_metadata || jsonb_build_object('entity_keys', _entity_keys);
     END IF;
