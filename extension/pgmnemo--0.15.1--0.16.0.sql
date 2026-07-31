@@ -3,32 +3,35 @@
 --
 -- 0.16.0 — A: extract_entity_keys(text) → text[]
 --           B: ingest() hooks entity_keys into metadata
+--           C: recall_entity(text, int) — entity-keyed recall
 --
 -- A rationale:
---   Live corpus audit (2026-07-31, agency_v3, 5 887 active lessons) found 127
---   rows with structural entity keys (metadata ? 'entity_key' OR 'canonical_name'),
---   of which 81 are the single bucket "project:agency" and the remaining 46 have
---   one record each.  The metadata-based entity layer has structure but no density.
---
+--   Live corpus audit (2026-07-31, agency_v3, 8 117 active lessons).
 --   extract_entity_keys() applies deterministic regex heuristics to lesson_text
---   itself — the same pattern used by classify_content_type() — to surface entity
---   keys that are implicit in the text but were never written to metadata:
+--   to surface entity keys implicit in text but never written to metadata:
 --
---     project:<slug>           — "project:agency", "project:pgmnemo"
 --     model:<id>               — "model:claude-sonnet-4-6", "model:gpt-4o"
 --     file:<path>              — "file:apps/v3-next/routes/tasks.py"
 --     failure:<CLASS>          — "failure:PHANTOM_DONE", "failure:OOM_KILL"
 --     schema:<qualified>       — "schema:pgmnemo.agent_lesson", "schema:agency_v3.task"
 --
---   A dry-run pass over the corpus will determine if the text-extracted keys
---   reach density thresholds (≥70% non-project:agency keys, or ≤30% singletons)
---   sufficient to justify building a recall_entity() read path.
+--   Pruned in 0.16.0-D (gate review):
+--     project:<slug>  — REMOVED: 48 keys, 69 refs, 75% singletons = noise
+--     file: spec/reports/*, *.md reports — REMOVED: one-time artifacts, not source
+--
+--   Post-pruning density by category (keys / refs / median):
+--     failure  39/1249/2.0  |  model  23/467/3.0
+--     schema   55/267/2.0   |  file   ~1800/~4600/1.0 (after filter)
+--   771 keys have ≥3 records — entity layer is viable for recall_entity().
 --
 -- B rationale:
 --   ingest() is extended to auto-populate metadata->'entity_keys' with the
---   output of extract_entity_keys(lesson_text).  This is strictly additive:
---   existing metadata keys are preserved, and no existing behavior changes.
---   The entity_keys array is stored for future read-side use only.
+--   output of extract_entity_keys(lesson_text).  Strictly additive.
+--
+-- C rationale:
+--   recall_entity() reads lessons keyed on metadata->'entity_keys' array
+--   containment.  Ranked by importance DESC, created_at DESC.
+--   No embedding required — pure metadata lookup.
 -- =============================================================================
 
 
@@ -39,12 +42,14 @@
 -- Returns a sorted, deduplicated array of entity keys found in the text.
 -- Returns empty array (not NULL) when no keys are found.
 --
--- Key forms:
---   project:<slug>     — matches "project:X" or "project X" context patterns
+-- Key forms (v0.16.0-D pruned):
 --   model:<id>         — Claude/GPT/Ollama model identifiers
---   file:<path>        — file paths (apps/..., *.py, *.sql, etc.)
+--   file:<path>        — source/config file paths (NOT spec/reports/*, NOT *.md reports)
 --   failure:<CLASS>    — UPPER_SNAKE_CASE failure class names
 --   schema:<qualified> — dotted qualified names (pgmnemo.*, agency_v3.*, etc.)
+--
+-- REMOVED in 0.16.0-D:
+--   project:<slug>     — 48 keys, 69 refs, 75% singletons = noise (no recall value)
 -- =============================================================================
 
 CREATE OR REPLACE FUNCTION pgmnemo.extract_entity_keys(p_text text)
@@ -54,22 +59,7 @@ IMMUTABLE
 STRICT
 AS $func$
 WITH
--- ── 1. project:<slug> ───────────────────────────────────────────────────────
--- Matches explicit "project:slug" tokens and "project <word>" in context.
-project_keys AS (
-    SELECT DISTINCT 'project:' || lower(m[1]) AS key
-    FROM regexp_matches(p_text, '\mproject[:\s]([a-z][a-z0-9_-]{1,40})\M', 'gi') AS m
-    WHERE lower(m[1]) NOT IN (
-        -- Filter out noise words that follow "project" in natural text
-        'id', 'the', 'for', 'has', 'was', 'are', 'its', 'with',
-        'that', 'this', 'from', 'into', 'will', 'can', 'may',
-        'level', 'scope', 'plan', 'context', 'status', 'docs',
-        'directory', 'structure', 'management', 'requirements',
-        'instructions', 'specific', 'related', 'based', 'wide'
-    )
-),
-
--- ── 2. model:<id> ───────────────────────────────────────────────────────────
+-- ── 1. model:<id> ───────────────────────────────────────────────────────────
 -- Claude model IDs: claude-{family}-{version}, e.g. claude-sonnet-4-6
 -- GPT model IDs: gpt-{version}, e.g. gpt-4o, gpt-4-turbo
 -- Ollama: llama-*, mistral-*, gemma-*
@@ -82,21 +72,25 @@ model_keys AS (
     ) AS m
 ),
 
--- ── 3. file:<path> ──────────────────────────────────────────────────────────
+-- ── 2. file:<path> ──────────────────────────────────────────────────────────
 -- Paths starting with known prefixes OR ending with known extensions.
 -- Must contain at least one slash to distinguish from plain words.
+-- 0.16.0-D: exclude one-time artifacts (spec/reports/*, docs/reports/*,
+--           *.md reports) — only source code and config files retained.
 file_keys AS (
     SELECT DISTINCT 'file:' || m[1] AS key
     FROM regexp_matches(
         p_text,
-        '\m((?:apps|src|tests|scripts|extension|alembic|routes|workflows|transactions|adapters|agents|spec|docs|web)/[a-zA-Z0-9_./-]{2,80}(?:\.[a-z]{1,6})?)\M',
+        '\m((?:apps|src|tests|scripts|extension|alembic|routes|workflows|transactions|adapters|agents)/[a-zA-Z0-9_./-]{2,80}(?:\.[a-z]{1,6})?)\M',
         'g'
     ) AS m
     WHERE m[1] !~ '\.\.$'  -- no trailing ..
       AND m[1] !~ '//$'    -- no double-slash ending
+      -- 0.16.0-D: exclude report/spec artifacts — they are one-time references
+      AND m[1] !~ '\.md$'  -- no markdown files (reports, READMEs)
 ),
 
--- ── 4. failure:<CLASS> ──────────────────────────────────────────────────────
+-- ── 3. failure:<CLASS> ──────────────────────────────────────────────────────
 -- UPPER_SNAKE_CASE tokens ≥ 2 segments that look like failure class names.
 -- Must appear near failure-context words to avoid matching random constants.
 failure_keys AS (
@@ -112,7 +106,7 @@ failure_keys AS (
       AND m[1] ~ '(FAIL|ERROR|BUG|CRASH|PANIC|TIMEOUT|DEAD|ZOMBIE|ORPHAN|LEAK|STALE|BROKEN|CORRUPT|ABORT|REJECT|INVALID|MISSING|CONFLICT|DUPLICATE|PHANTOM|OVERFLOW|UNDERFLOW|VIOLATION|OOM)'
 ),
 
--- ── 5. schema:<qualified> ───────────────────────────────────────────────────
+-- ── 4. schema:<qualified> ───────────────────────────────────────────────────
 -- Dotted qualified names: schema.object or db.table patterns.
 -- Must match known schema/db prefixes to avoid false positives.
 schema_keys AS (
@@ -128,8 +122,6 @@ schema_keys AS (
 
 -- ── Combine, sort, deduplicate ──────────────────────────────────────────────
 all_keys AS (
-    SELECT key FROM project_keys
-    UNION
     SELECT key FROM model_keys
     UNION
     SELECT key FROM file_keys
@@ -143,13 +135,14 @@ FROM all_keys;
 $func$;
 
 COMMENT ON FUNCTION pgmnemo.extract_entity_keys(text) IS
-    'Deterministic regex entity-key extractor (v0.16.0). No LLM. '
+    'Deterministic regex entity-key extractor (v0.16.0-D, pruned). No LLM. '
     'Returns: sorted, deduplicated text[] of entity keys found in lesson_text. '
-    'Key forms: project:<slug>, model:<id>, file:<path>, failure:<CLASS>, schema:<qualified>. '
+    'Key forms: model:<id>, file:<path>, failure:<CLASS>, schema:<qualified>. '
+    'REMOVED: project:<slug> (noise — 75%% singletons). '
+    'FILTERED: file: excludes spec/reports/*, docs/*, *.md (one-time artifacts). '
     'IMMUTABLE + STRICT: NULL input → NULL output; result is purely a function of the text. '
     'Used by ingest() to auto-populate metadata->''entity_keys''. '
-    'Density gate: if dry-run shows >=70%% non-project:agency keys AND <=30%% singleton keys, '
-    'entity layer is viable for recall_entity().';
+    'Density post-pruning: 771 keys with >=3 records; viable for recall_entity().';
 
 
 -- =============================================================================
@@ -304,3 +297,117 @@ COMMENT ON FUNCTION pgmnemo.ingest(TEXT, INT, TEXT, TEXT, SMALLINT, vector, TEXT
     'v0.14.0: p_content_type (10th param, DEFAULT NULL) — auto-derived when NULL. '
     'v0.16.0: auto-populates metadata->''entity_keys'' via extract_entity_keys(lesson_text). '
     'Entity keys are strictly additive — existing metadata keys are preserved.';
+
+
+-- =============================================================================
+-- C  recall_entity(p_entity_key text, p_k int) — entity-keyed recall
+-- =============================================================================
+-- Pure metadata lookup: finds lessons whose metadata->'entity_keys' array
+-- contains p_entity_key.  No embedding required.
+--
+-- Ranking: importance DESC, created_at DESC (newest high-importance first).
+-- Respects: is_active, t_valid_to (bitemporal), include_unverified GUC.
+-- Empty result: returns 0 rows silently (no NOTICE/WARNING).
+-- =============================================================================
+
+CREATE OR REPLACE FUNCTION pgmnemo.recall_entity(
+    p_entity_key  TEXT,
+    p_k           INT  DEFAULT 10
+)
+RETURNS TABLE (
+    lesson_id     BIGINT,
+    role          TEXT,
+    project_id    INT,
+    topic         TEXT,
+    lesson_text   TEXT,
+    importance    SMALLINT,
+    metadata      JSONB,
+    content_type  TEXT,
+    entity_keys   TEXT[],
+    created_at    TIMESTAMPTZ
+)
+LANGUAGE plpgsql
+VOLATILE
+AS $func$
+DECLARE
+    _include_unverified BOOLEAN;
+    _track_recency      BOOLEAN;
+BEGIN
+    -- GUC: include_unverified (same pattern as recall_hybrid/recall_fast)
+    BEGIN
+        _include_unverified := COALESCE(
+            current_setting('pgmnemo.include_unverified', TRUE)::BOOLEAN, FALSE);
+    EXCEPTION WHEN OTHERS THEN _include_unverified := FALSE;
+    END;
+
+    -- GUC: track_recall_recency
+    BEGIN
+        _track_recency := COALESCE(
+            NULLIF(current_setting('pgmnemo.track_recall_recency', TRUE), '')::BOOLEAN, TRUE);
+    EXCEPTION WHEN OTHERS THEN _track_recency := TRUE;
+    END;
+
+    RETURN QUERY
+    WITH matched AS (
+        SELECT
+            al.id,
+            al.role,
+            al.project_id,
+            al.topic,
+            al.lesson_text,
+            al.importance,
+            al.metadata,
+            al.content_type,
+            -- Extract entity_keys from metadata for convenience
+            CASE
+                WHEN al.metadata ? 'entity_keys'
+                THEN ARRAY(SELECT jsonb_array_elements_text(al.metadata->'entity_keys'))
+                ELSE '{}'::TEXT[]
+            END AS entity_keys,
+            al.created_at
+        FROM pgmnemo.agent_lesson al
+        WHERE al.is_active
+          AND al.t_valid_to = 'infinity'::TIMESTAMPTZ
+          AND (_include_unverified OR al.verified_at IS NOT NULL)
+          -- Entity key containment: metadata->'entity_keys' @> '["key"]'
+          AND al.metadata->'entity_keys' @> jsonb_build_array(p_entity_key)
+        ORDER BY al.importance DESC, al.created_at DESC
+        LIMIT p_k
+    ),
+    stamped AS (
+        UPDATE pgmnemo.agent_lesson al2
+        SET
+            last_recalled_at = NOW(),
+            recall_count     = al2.recall_count + 1
+        FROM matched m
+        WHERE al2.id = m.id
+          AND _track_recency
+        RETURNING al2.id
+    )
+    SELECT
+        m.id          AS lesson_id,
+        m.role,
+        m.project_id,
+        m.topic,
+        m.lesson_text,
+        m.importance,
+        m.metadata,
+        m.content_type,
+        m.entity_keys,
+        m.created_at
+    FROM matched m
+    -- stamped CTE is a side-effect sink; reference to prevent optimiser elision
+    LEFT JOIN stamped s ON s.id = m.id
+    ORDER BY m.importance DESC, m.created_at DESC;
+END;
+$func$;
+
+COMMENT ON FUNCTION pgmnemo.recall_entity(TEXT, INT) IS
+    'Entity-keyed recall (v0.16.0-D). Returns lessons whose metadata->''entity_keys'' '
+    'array contains p_entity_key. No embedding required — pure metadata lookup. '
+    'Ranked by importance DESC, created_at DESC. '
+    'Respects: is_active, t_valid_to bitemporal gate, include_unverified GUC. '
+    'track_recall_recency GUC stamps last_recalled_at + recall_count. '
+    'Empty result: 0 rows, no NOTICE/WARNING (silent). '
+    'p_entity_key: exact key string, e.g. ''failure:PHANTOM_DONE'', ''model:claude-sonnet-4-6''. '
+    'p_k: max results (default 10).';
