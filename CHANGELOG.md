@@ -18,6 +18,21 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ## [0.17.0] - 2026-08-13
 
+### Upgrade parity — upgraded installs now match fresh ones exactly
+
+`scripts/check_upgrade_parity.sh` builds a fresh install and an upgraded one and
+diffs their function signatures. Two defects reached users because the regression
+suite creates the extension directly at the target version, so `ALTER EXTENSION
+UPDATE` is a no-op there and the upgrade path is never exercised: a truncated
+COMMENT literal that made the upgrade script unparseable, and superseded
+`recall_lessons` / `recall_hybrid` overloads that were never dropped — which made
+the short call published in the README fail with `function is not unique` on every
+upgraded install.
+
+The superseded 10-argument `recall_hybrid` is dropped on upgrade alongside the
+5-argument `recall_lessons`. Callers are unaffected: they resolve to the version
+whose trailing parameters default to the previous behaviour.
+
 ### Breaking change — superseded 5-arg `recall_lessons` overload dropped on upgrade
 
 A fresh install at 0.17.0 defines only the 9-argument `recall_lessons`. Installs

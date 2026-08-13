@@ -1612,3 +1612,10 @@ COMMENT ON FUNCTION pgmnemo.recall_fast(vector, INT, TEXT, INT, TEXT, TEXT[], RE
 -- Callers passing five arguments keep working: they now resolve to the 9-arg
 -- version, whose remaining parameters default to the same behaviour.
 DROP FUNCTION IF EXISTS pgmnemo.recall_lessons(vector, integer, text, integer, text);
+
+-- Same defect, same fix: the 10-arg recall_hybrid is superseded by the 11-arg
+-- version whose trailing p_min_score defaults. A fresh install defines only the
+-- 11-arg form; upgraded installs kept both, making every short call ambiguous.
+DROP FUNCTION IF EXISTS pgmnemo.recall_hybrid(
+    vector, text, integer, text, integer, double precision, double precision,
+    integer, text, text[]);
