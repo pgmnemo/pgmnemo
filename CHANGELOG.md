@@ -18,6 +18,26 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ## [0.17.0] - 2026-08-13
 
+### Breaking change — superseded 5-arg `recall_lessons` overload dropped on upgrade
+
+A fresh install at 0.17.0 defines only the 9-argument `recall_lessons`. Installs
+upgraded from earlier versions also still carried the old 5-argument overload,
+because no upgrade script ever dropped it. Since the 9-argument version defaults
+its 6th–9th parameters, a short call matched both and Postgres refused it:
+
+```
+ERROR:  function pgmnemo.recall_lessons(...) is not unique
+```
+
+That is the exact call published in the README as the "see it work" example, so on
+every upgraded install our own front-page example errored out. The upgrade script now
+drops the redundant overload, making upgraded and fresh installs identical.
+
+Five-argument callers are unaffected — they resolve to the 9-argument version, whose
+remaining parameters default to the previous behaviour. If you referenced the old
+overload explicitly by signature, drop the last four argument types from that
+reference.
+
 ### Breaking change — `graph_proximity_weight` effective default unified to `0.0`
 
 **Who is affected:** callers of `recall_hybrid()` (10-param or 11-param) or

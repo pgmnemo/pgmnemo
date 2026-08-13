@@ -1596,3 +1596,19 @@ COMMENT ON FUNCTION pgmnemo.recall_fast(vector, INT, TEXT, INT, TEXT, TEXT[], RE
     'Non-NULL restricts candidates to the given content_type values before HNSW ranking. '
     'v0.13.0: p_min_score REAL DEFAULT NULL (7th param) — post-rank filter on vec_score.';
 
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Converge upgraded installs with fresh ones: drop the superseded 5-arg
+-- recall_lessons overload.
+--
+-- A fresh CREATE EXTENSION at 0.17.0 defines only the 9-arg recall_lessons.
+-- Installs upgraded from earlier versions still carry the old 5-arg overload,
+-- because no upgrade script ever dropped it. Since the 9-arg version defaults
+-- its 6th-9th parameters, a short call matches BOTH and Postgres refuses it:
+--   ERROR: function pgmnemo.recall_lessons(...) is not unique
+-- That is the exact call published in the README and POSITIONING as the "see it
+-- work" example, so on every upgraded install our own front-page example errors.
+--
+-- Dropping the redundant overload makes upgraded and fresh installs identical.
+-- Callers passing five arguments keep working: they now resolve to the 9-arg
+-- version, whose remaining parameters default to the same behaviour.
+DROP FUNCTION IF EXISTS pgmnemo.recall_lessons(vector, integer, text, integer, text);
