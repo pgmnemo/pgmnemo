@@ -294,6 +294,25 @@ jobs:
           test "$UPDAT_COL" = "updated_at" || { echo "FAIL: updated_at column missing after upgrade to $TARGET_VER"; exit 1; }
           echo "✓ updated_at + patch_count confirmed present at $TARGET_VER"
 
+  evidence-integrity:
+    # Anti-fabrication gate (PGMREL-0170-QA-G1).
+    # Three checks — all required:
+    #   1. No Python file under benchmarks/*/ may both import a random-number
+    #      generator (random, numpy.random, secrets) and write a data file.
+    #      Datasets are exports; generators belong in test fixtures.
+    #   2. Every decimal number in each registered evidence document must appear
+    #      (within rounding) in that benchmark's analysis script output.
+    #      A document that disagrees with its own data fails.
+    #   3. Analysis scripts must open their dataset file; printing constants fails.
+    # Uses Python stdlib only — no pip install required.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run evidence integrity gate
+        run: python3 scripts/check_evidence_integrity.py
+      - name: Run evidence gate self-tests
+        run: python3 -m pytest tests/test_evidence_gate.py -v
+
   clean-room-install:
     # PR-time packaging gate. Builds the REAL bundle zip (same builder the release
     # uses) and installs it into a pristine pgvector/pgvector:pg17 container via

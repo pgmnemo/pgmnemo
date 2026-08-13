@@ -490,7 +490,7 @@ score = vec_weight × cosine + bm25_weight × ts_rank_cd(lesson_tsv, q, 32)
 
 Union retrieval: candidates matched by **either** cosine **or** BM25.
 `rrf_score` column = raw `rrf_diag` value (unchanged from pre-v0.6.0 column).
-`graph_proximity_weight` GUC (default `0.2`). Set to `0.0` for pure semantic recall.
+`graph_proximity_weight` GUC (default `0.0`). Set to a positive value (e.g. `0.1`) to activate graph-walk proximity scoring.
 
 ### 2.6 `pgmnemo.traverse_causal_chain(...)` (v0.2.0+, direction added in v0.2.1)
 
@@ -769,7 +769,7 @@ Ghost-lesson NOTICE fires only when `p_min_score IS NULL` and result set is empt
 | `pgmnemo.importance_weight` | float | **`0.15`** (v0.4.1 documented; was implicit `0.20` in pre-v0.4.1 formula) | 0.0 – 0.3 | Coefficient on `importance / 5` term in scoring. Documents the per-formula importance coefficient. |
 | `pgmnemo.ef_search` | int | `100` (v0.2.1+) | 10 – 500 | Applied as `SET LOCAL pgvector.hnsw.ef_search` at recall entry. Higher = more accurate ANN at cost of latency. |
 | `pgmnemo.disable_hybrid` | bool | `false` (v0.4.0+) | `true` / `false` | Opt out of hybrid routing. When `true`, `recall_lessons()` always uses vector-only path regardless of `query_text`. Use for adopters who need deterministic v0.3.x behaviour. |
-| `pgmnemo.graph_proximity_weight` | float | `0.2` | 0.0 – 0.5 | Weight on `mem_edge` graph-walk proximity term in `recall_hybrid()` scoring. Set to `0.0` for pure semantic recall (the reference bench setup). |
+| `pgmnemo.graph_proximity_weight` | float | **`0.0`** (opt-in since v0.10.1; COALESCE inconsistency between code paths reconciled in v0.17.0) | 0.0 – 0.5 | Weight on `mem_edge` graph-walk proximity term in `recall_hybrid()` scoring. Default `0.0` = pure semantic recall. Set to a positive value (e.g. `0.1`) to activate graph-walk scoring. |
 | `pgmnemo.temporal_boost` | float | `1.0` (v0.5.0+) | 0.0 – 20.0 | Multiplier on the recency component. `effective_γ = recency_weight × temporal_boost`. Default `1.0` = unchanged behaviour from v0.4.1. H-06 optimal: `boost=10` with `recency_weight=0.05` → `effective_γ=0.5`. Helper: `SELECT pgmnemo.get_temporal_boost()`. |
 | `pgmnemo.confidence_boost_weight` | float | **`0.0`** (v0.9.2+, off by default) | 0.0 – 0.01 | Additive confidence boost in `recall_hybrid()` final score: `score += w × (confidence − 0.5)`. Zero-centered: confidence=0.5 gets no boost. Off by default — byte-identical to v0.9.1 without `SET`. Activate with `SET pgmnemo.confidence_boost_weight = '0.003'`. Recommended range: 0.001 – 0.005. |
 | `pgmnemo.track_recall_recency` | bool | **`on`** (v0.9.5+) | `on` / `off` | When `on`, every recall function (`recall_hybrid`, `recall_lessons`, `navigate_locate`, `navigate_expand`) stamps `last_recalled_at = NOW()` and increments `recall_count` on the returned lessons via a data-modifying CTE. Set to `off` to disable all stamping — functions are then byte-identical to v0.9.4. Default `on` (opt-out, not opt-in). |

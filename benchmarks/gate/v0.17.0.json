@@ -1,0 +1,28 @@
+{
+  "version": "v0.17.0",
+  "date": "2026-08-13",
+  "pgmnemo_version": "0.17.0",
+  "gate_status": "PASS",
+  "gate_type": "functional",
+  "significance_required": false,
+  "scope": "GUC consistency (graph_proximity_weight COALESCE fallback unified 0.2 to 0.0 in three overloads), foreign-schema CI gate (R3), and anti-fabrication evidence gate (G1). No ranking function, no scoring coefficient, no embedding index changed.",
+  "justification": "Three correctness and process improvements, no recall-quality metric claimed. (1) graph_proximity_weight: three overloads in pgmnemo--0.16.1.sql still carried 0.2 as their COALESCE fallback — navigate_locate(5p), recall_hybrid(10p), recall_hybrid(11p). The two recall_hybrid overloads additionally had 0.2 on the EXCEPTION path (corrupt or invalid GUC string). All three are recreated with COALESCE=0.0 and EXCEPTION=0.0. Callers who never set the GUC and called any of these three functions directly were getting graph_proximity_weight=0.2 instead of the 0.0 default established in v0.10.1. (2) Foreign-schema gate: a pg_regress test suite verifies that every user-facing capability returns non-empty results in a database whose role names, schema names, and topic vocabulary look nothing like the pgmnemo development corpus — specifically guarding against the class of defect (hardcoded schema name matching) that silently returned empty results in v0.16.0. (3) Anti-fabrication gate: a CI pre-flight check that (a) refuses any published benchmark directory containing a random-number generator that writes a data file, (b) asserts every numeric claim in docs/ matches the analysis script output within rounding, and (c) confirms analysis scripts read their dataset rather than printing constants.",
+  "schema_change": false,
+  "schema_change_detail": "No table, column, index or GUC definition changed. COALESCE fallback and EXCEPTION path fixed in recall_hybrid(10p), recall_hybrid(11p), navigate_locate(5p) function bodies. Upgrade path: pgmnemo--0.16.1--0.17.0.sql. Fresh-install path: pgmnemo--0.17.0.sql.",
+  "scoring_impact": "graph_proximity_weight effective default 0.2 -> 0.0 for callers of navigate_locate(5p) and the two recall_hybrid overloads who did not set the GUC explicitly. Installations with empty mem_edge (the majority) are unaffected — the graph term is 0 regardless of weight when there are no edges.",
+  "recall_ranking_impact": "For installations with populated mem_edge, ranking changes proportionally to the graph term contribution from those three overloads.",
+  "backward_compat_proof": "graph_proximity_weight change affects callers who relied on the COALESCE fallback default (unset GUC) for navigate_locate or either recall_hybrid overload — they were getting 0.2, they now get 0.0. Restore: SET pgmnemo.graph_proximity_weight = 0.2. All other changes are additive CI/test infrastructure. All pre-existing pg_regress tests pass.",
+  "new_regress_tests": [
+    "test_v0170_foreign_schema",
+    "test_v0170_guc_consistency"
+  ],
+  "new_regress_test_count": 2,
+  "new_ci_gates": [
+    "Evidence integrity gate (scripts/check_evidence_integrity.py)"
+  ],
+  "installcheck": {
+    "harness": "pg_regress",
+    "result": "PASS",
+    "new_tests_pass": true
+  }
+}

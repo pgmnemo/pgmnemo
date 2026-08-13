@@ -128,6 +128,12 @@ jobs:
             echo "✓ README version badge matches v$V"
           fi
 
+      - name: Evidence integrity gate (G1)
+        # Anti-fabrication: no RNG generator in published benchmark dirs,
+        # numbers in docs/ agree with analysis scripts, scripts read real data.
+        # Added in v0.17.0 (commit: PGMREL-0170-QA-G1).
+        run: python3 scripts/check_evidence_integrity.py
+
       - name: Check pg_regress fixtures use current default_version
         # Catches the recurring pitfall (v0.6.0, v0.6.2, v0.6.3 all hit it):
         # tests have hardcoded `ALTER EXTENSION pgmnemo UPDATE TO 'X.Y.Z'` or
@@ -153,9 +159,24 @@ jobs:
           fi
           echo "✓ pg_regress fixtures all reference v$V"
 
+  # ─── Job 0.5: evidence integrity gate ──────────────────────────────────────
+  # Blocks the release if published benchmark numbers do not match analysis
+  # script output, any benchmark script imports RNG AND writes a data file,
+  # or any analysis script does not reference its dataset.
+  # Must pass before installcheck runs — fabricated evidence cannot ship.
+  evidence-integrity:
+    needs: pre-flight
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run evidence integrity gate
+        run: python3 scripts/check_evidence_integrity.py
+      - name: Run evidence gate self-tests
+        run: python3 -m pytest tests/test_evidence_gate.py -v
+
   # ─── Job 1: pg_regress installcheck ────────────────────────────────────────
   installcheck:
-    needs: pre-flight
+    needs: [pre-flight, evidence-integrity]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -231,7 +252,7 @@ jobs:
 
   # ─── Job 2: bench-gate ─────────────────────────────────────────────────────
   bench-gate:
-    needs: pre-flight
+    needs: [pre-flight, evidence-integrity]
     runs-on: ubuntu-latest
     outputs:
       bench_pass: ${{ steps.gate.outputs.bench_pass }}

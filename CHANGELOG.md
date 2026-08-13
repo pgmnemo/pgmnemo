@@ -8,12 +8,68 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 | Version | Breaking change | Migration |
 |---|---|---|
+| **0.17.0** | `graph_proximity_weight` COALESCE default unified `0.2` → `0.0` in `recall_hybrid` (10p, 11p) and `navigate_locate` (5p) — callers with unset GUC lost implicit graph weighting | `SET pgmnemo.graph_proximity_weight = '0.2'` restores the 0.16.1 effective weight |
 | **0.9.1** | `navigate_expand` 4-arg overload dropped (5th param `relation_types TEXT[]` added) | Positional callers unaffected (DEFAULT NULL); explicit overload refs must update |
 | **0.9.0** | `navigate_locate` budget counter fixed — ~5× more IDs returned per equivalent budget | Callers with `token_budget_chars` need proportional adjustment; see §Breaking changes in [0.9.0] |
 | **0.5.0** | 4-arg `traverse_causal_chain` removed | Use 2-arg form + `WHERE` clause |
 | **0.5.0** | `mem_edge` columns renamed: `lesson_a_id` → `source_id`, `lesson_b_id` → `target_id` | Use `pgmnemo.add_edge()` to avoid direct column references; see [docs/MIGRATION.md](docs/MIGRATION.md) |
 
 ---
+
+## [0.17.0] - 2026-08-13
+
+### Breaking change — `graph_proximity_weight` effective default unified to `0.0`
+
+**Who is affected:** callers of `recall_hybrid()` (10-param or 11-param) or
+`navigate_locate()` (5-param) who never set `pgmnemo.graph_proximity_weight` explicitly
+and relied on the COALESCE fallback — which was `0.2` in those three overloads rather
+than the `0.0` applied everywhere else since v0.10.1. `recall_lessons()` was already
+correct in 0.16.1 (its final definition carried `0.0`).
+
+**What changed:** In `pgmnemo--0.16.1.sql`, three function overloads still carried `0.2`
+as the COALESCE fallback for `graph_proximity_weight`: `navigate_locate` (5-param) and
+the two most-recent `recall_hybrid` overloads (10-param and 11-param). The two
+`recall_hybrid` overloads additionally had `0.2` on the EXCEPTION path (corrupt or
+invalid GUC value); `navigate_locate` had the EXCEPTION path correctly at `0.0`. This
+release recreates all three with `COALESCE=0.0` and `EXCEPTION=0.0`, matching the value
+applied everywhere else since v0.10.1. The OPT-IN decision (0.2 → 0.0) was made in
+v0.10.1 based on graph-walk ablation showing zero ranking change; it was not applied to
+those three overloads.
+
+**To restore the previous effective behaviour** (activate graph-walk scoring):
+
+```sql
+SET pgmnemo.graph_proximity_weight = '0.2';  -- restore the pre-0.17.0 COALESCE value
+```
+
+### Added
+
+- **Anti-fabrication CI gate (`scripts/check_evidence_integrity.py`)** — required
+  pre-flight step blocking tags when: (a) a file under `benchmarks/*/` imports a
+  random-number generator and writes a data file; (b) a numeric claim in a published
+  document disagrees with the corresponding analysis script; (c) an analysis script
+  does not read its dataset file.
+
+- **Foreign-schema CI gate (`extension/sql/test_v0170_foreign_schema.sql`)** — proves
+  every user-facing function (`ingest`, `recall_hybrid`, `recall_fast`, `recall_lessons`,
+  `recall_entity`, `recall_situation`, `consolidate`, `classify_content_type`,
+  `reclassify_corpus`, `reinforce`, `navigate_locate`, `navigate_expand`,
+  `navigate_locate_dispatch`, `extract_entity_keys`, `extract_sit_fp`) returns a
+  non-empty result when called in a database whose role names, schema names, and topic
+  vocabulary look nothing like our development corpus.
+
+- **GUC single-default verification (`extension/sql/test_v0170_guc_consistency.sql`)** —
+  five-test suite (G1–G5) proving `graph_proximity_weight` COALESCE default equals
+  explicit `0.0` in every recall and navigation entry point; G5 additionally proves
+  the corrupt-GUC exception path recovers to `0.0` rather than silently activating
+  graph weighting.
+
+### Fixed
+
+- **`docs/GUC_EVIDENCE.md` and `docs/SQL_REFERENCE.md`** — corrected stale claim that
+  `graph_proximity_weight` default changed in this release; it was changed to opt-in
+  (`0.0`) in v0.10.1. This release reconciles the COALESCE inconsistency between code
+  paths that existed in v0.16.1.
 
 ## [0.16.1] - 2026-07-31
 
