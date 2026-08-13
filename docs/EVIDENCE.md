@@ -78,7 +78,11 @@ Read this before quoting any number above.
 - **The A-vs-B comparison was not pre-registered.** The pre-registered primary
   metric was arm C cost against arm B cost. On cost there is no effect at all.
 - **The sample is short.** The pre-registered target was 400 completed runs per
-  arm. We have 150, 148 and 137. The experiment is still running toward that target.
+  arm. We have 150, 148 and 137, and the experiment was stopped there. At the run
+  volume this fleet actually produces, reaching 400 per arm would have taken about
+  five more months, during which two thirds of production runs would keep being
+  assigned to arms we had already measured as worse. We chose to stop and report
+  an underpowered result honestly rather than buy power with degraded work.
 - **No comparison survives multiple-comparison correction.** Every pairwise test
   above loses significance under Bonferroni.
 - **Direction is consistent.** Arms were balanced week over week and the A-vs-B
@@ -91,6 +95,8 @@ to prove it, on a comparison we did not pre-register — and selective recall is
 one arm we can say something firm about, because it failed.*
 
 We do not headline a number from this experiment without the correction attached.
+These figures are final: the experiment is closed, not paused, and this file will
+not be quietly updated with a larger sample later.
 
 ### Reproducing it
 
