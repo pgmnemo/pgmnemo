@@ -20,8 +20,17 @@ arm with recall switched off entirely, the selective arm was statistically
 indistinguishable from having no memory: 55.5% task success against 55.3%,
 chi-square 0.001, p=0.98. Plain always-on recall beat it (p=0.048 uncorrected).
 
-Selectivity did save money — the selective arm was the cheapest of the three —
-but it saved it by withholding the context that produced the benefit.
+It is worth being precise about *why*, because the obvious explanation is wrong.
+Arm C did not starve the agent of context: it injected **more** lessons per run than
+arm B (4.05 against 3.29 on average), with the same rate of runs that retrieved
+nothing (12.4% against 12.2%), at essentially the same match quality (mean cosine 0.561 against 0.570). More
+retrieved context, and no benefit.
+
+What actually separates the two arms is the retrieval mechanism, not the amount. Arm B
+used the hybrid path — vector plus BM25, no score threshold, no type filter. Arm C used
+vector-only recall with a 0.40 cosine gate and a type filter. On this evidence the lever
+is *how* memory is retrieved, not how much of it is handed over; a vector-only path with
+quality gates returned more material that helped less.
 
 This is published first because it is the most useful result here for anyone else
 building agent memory, and because it is the result that costs us the most.

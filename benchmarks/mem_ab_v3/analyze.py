@@ -20,6 +20,11 @@ from collections import defaultdict
 HERE = pathlib.Path(__file__).parent
 ARMS = [("A", "recall off"), ("B", "recall always on"), ("C", "selective + typed")]
 
+# Arm configuration as it ran in production. Printed so that every number the
+# published document cites has this script as its single source.
+ARM_C_MIN_SCORE = 0.40
+ARM_C_CONTENT_TYPES = "procedure, incident, decision"
+
 
 def load(path=HERE / "runs.csv"):
     by_arm = defaultdict(list)
@@ -108,7 +113,14 @@ def chi2_2x2(a, b, c, d):
 def main():
     by_arm = load()
 
-    print("Arm summary")
+    print("Arm definitions as run")
+    print("-" * 72)
+    print("A  no recall injected")
+    print("B  hybrid recall, vector + BM25, no score threshold, no type filter")
+    print("C  vector-only recall, cosine gate %.2f, types: %s"
+          % (ARM_C_MIN_SCORE, ARM_C_CONTENT_TYPES))
+
+    print("\nArm summary")
     print("-" * 72)
     stats = {}
     for key, label in ARMS:
@@ -147,6 +159,20 @@ def main():
         for field in ("cost", "turns"):
             t, df, p = welch(stats[x][field], stats[y][field])
             print(f"{field:<5} {x} vs {y}:  t={t:6.3f}  df={df:6.1f}  p={p:.4f}")
+
+    print("\nWhat each arm actually injected")
+    print("-" * 72)
+    for key, label in ARMS:
+        rows = by_arm.get(key, [])
+        counts = numeric(rows, "retrieved_count")
+        cosines = numeric(rows, "mean_cosine")
+        zero = sum(1 for c in counts if c == 0)
+        zero_pct = zero / len(counts) * 100 if counts else float("nan")
+        cos = mean(cosines) if cosines else float("nan")
+        print(
+            f"{key} ({label:<19}) lessons/run={mean(counts) if counts else 0:5.2f}  "
+            f"retrieved nothing={zero_pct:4.1f}%  mean cosine={cos:.3f}"
+        )
 
     print("\nPre-registration status")
     print("-" * 72)
