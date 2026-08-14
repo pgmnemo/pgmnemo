@@ -1,105 +1,13 @@
 EXTENSION = pgmnemo
-DATA = pgmnemo--0.0.1.sql \
-       pgmnemo--0.0.1--0.1.0.sql \
-       pgmnemo--0.1.0--0.1.1.sql \
-       pgmnemo--0.1.1--0.1.2.sql \
-       pgmnemo--0.1.2--0.1.3.sql \
-       pgmnemo--0.1.3--0.1.4.sql \
-       pgmnemo--0.1.3--0.1.4-provenance.sql \
-       pgmnemo--0.1.3--0.1.4-ttl.sql \
-       pgmnemo--0.1.3--0.1.4-state-machine.sql \
-       pgmnemo--0.1.4--0.1.4.1.sql \
-       pgmnemo--0.1.4--0.2.0-mem-edge.sql \
-       pgmnemo--0.1.4--0.2.0.sql \
-       pgmnemo--0.1.4--0.2.0-traverse-causal.sql \
-       pgmnemo--0.1.4--0.2.0-traverse-temporal.sql \
-       pgmnemo--0.1.4.1--0.2.0.sql \
-       pgmnemo--0.2.0--0.2.0.1.sql \
-       pgmnemo--0.2.0-step4-recall-mixin.sql \
-       pgmnemo--0.2.0.1--0.2.1.sql \
-       pgmnemo--0.2.1.sql \
-       pgmnemo--0.2.1--0.2.2.sql \
-       pgmnemo--0.2.1--0.2.2-hybrid.sql \
-       pgmnemo--0.2.1--0.3.0.sql \
-       pgmnemo--0.3.0.sql \
-       pgmnemo--0.3.0--0.3.1.sql \
-       pgmnemo--0.3.1.sql \
-       pgmnemo--0.3.1--0.4.0.sql \
-       pgmnemo--0.4.0.sql \
-       pgmnemo--0.4.0--0.4.1.sql \
-       pgmnemo--0.4.1.sql \
-       pgmnemo--0.4.1--0.5.0.sql \
-       pgmnemo--0.5.0.sql \
-       pgmnemo--0.5.0--0.5.1.sql \
-       pgmnemo--0.5.1.sql \
-       pgmnemo--0.5.1--0.6.0.sql \
-       pgmnemo--0.6.0.sql \
-       pgmnemo--0.6.0--0.6.1.sql \
-       pgmnemo--0.6.1.sql \
-       pgmnemo--0.6.1--0.6.2.sql \
-       pgmnemo--0.6.2.sql \
-       pgmnemo--0.6.2--0.6.3.sql \
-       pgmnemo--0.6.3.sql \
-       pgmnemo--0.6.3--0.7.0.sql \
-       pgmnemo--0.7.0.sql \
-       pgmnemo--0.7.0--0.7.1.sql \
-       pgmnemo--0.7.1.sql \
-       pgmnemo--0.7.1--0.7.2.sql \
-       pgmnemo--0.7.2.sql \
-       pgmnemo--0.7.2--0.8.0.sql \
-       pgmnemo--0.8.0.sql \
-       pgmnemo--0.8.0--0.8.1.sql \
-       pgmnemo--0.8.1.sql \
-       pgmnemo--0.8.1--0.8.2.sql \
-       pgmnemo--0.8.2.sql \
-       pgmnemo--0.8.2--0.8.3.sql \
-       pgmnemo--0.8.3.sql \
-       pgmnemo--0.8.3--0.9.0.sql \
-       pgmnemo--0.9.0.sql \
-       pgmnemo--0.9.0--0.9.1.sql \
-       pgmnemo--0.9.1.sql \
-       pgmnemo--0.9.1--0.9.2.sql \
-       pgmnemo--0.9.2.sql \
-       pgmnemo--0.9.2--0.9.3.sql \
-       pgmnemo--0.9.3.sql \
-       pgmnemo--0.9.3--0.9.4.sql \
-       pgmnemo--0.9.4.sql \
-       pgmnemo--0.9.4--0.9.5.sql \
-       pgmnemo--0.9.5.sql \
-       pgmnemo--0.9.5--0.9.6.sql \
-       pgmnemo--0.9.6.sql \
-       pgmnemo--0.9.6--0.9.7.sql \
-       pgmnemo--0.9.7.sql \
-       pgmnemo--0.9.7--0.10.0.sql \
-       pgmnemo--0.10.0.sql \
-       pgmnemo--0.10.0--0.10.1.sql \
-       pgmnemo--0.10.1.sql \
-       pgmnemo--0.10.0--0.11.0.sql \
-       pgmnemo--0.10.1--0.11.0.sql \
-       pgmnemo--0.11.0.sql \
-       pgmnemo--0.11.0--0.11.1.sql \
-       pgmnemo--0.11.1.sql \
-       pgmnemo--0.11.1--0.12.0.sql \
-       pgmnemo--0.12.0.sql \
-       pgmnemo--0.12.0--0.12.1.sql \
-       pgmnemo--0.12.1.sql \
-       pgmnemo--0.12.1--0.12.2.sql \
-       pgmnemo--0.12.2.sql \
-       pgmnemo--0.12.2--0.13.0.sql \
-       pgmnemo--0.13.0.sql \
-       pgmnemo--0.13.0--0.14.0.sql \
-       pgmnemo--0.14.0.sql \
-       pgmnemo--0.14.0--0.14.1.sql \
-       pgmnemo--0.14.1.sql \
-       pgmnemo--0.14.1--0.14.2.sql \
-       pgmnemo--0.14.2.sql \
-       pgmnemo--0.14.2--0.15.0.sql \
-       pgmnemo--0.15.0.sql \
-       pgmnemo--0.15.0--0.15.1.sql \
-       pgmnemo--0.15.1.sql \
-       pgmnemo--0.15.1--0.16.0.sql \
-       pgmnemo--0.16.0.sql pgmnemo--0.16.0--0.16.1.sql pgmnemo--0.16.1.sql \
-       pgmnemo--0.16.1--0.17.0.sql pgmnemo--0.17.0.sql
+# Every pgmnemo--*.sql in this directory is an install or upgrade script and
+# must be installed. This was a hand-maintained list until 2026-08-14, when it
+# drifted: pgmnemo--0.18.0.sql and its upgrade script were added to the tree but
+# not to the list, so `make install` skipped them and CREATE EXTENSION failed
+# with "no installation script nor update path for version 0.18.0" — every CI
+# job that installs the extension went red. Two older upgrade scripts
+# (0.2.2--0.2.3, 0.5.2--0.6.0) turned out to have been missing the same way.
+# The root Makefile already used a wildcard; this one now matches it.
+DATA = $(wildcard pgmnemo--*.sql)
 REGRESS = version recency_weight_guc prov_strength_tristate recall_lessons_pooled recall_lessons_smoke verifier_role source_run_task_ids ttl_expires_at state_machine mem_edge traverse_causal recall_graph traverse_temporal_smoke temporal_boost_guc bitemporality_smoke as_of_ts stress_recall rrf_sparse role_no_ambiguity test_confidence test_v071 test_v080 test_v082 test_v091 confidence_boost_guc reinforce_delta_guc recall_recency versioned_items provenance_gate recall_fast navigate_dispatch selective_embedding recall_hybrid_robustness test_v0101 typed_recall typed_recall_fast test_remember_fact test_v0120 add_edge_idempotent guc_guard_threshold t_posterior_confidence t_use_attribution t_class_imbalance t_confidence_mode_switch t_backward_compat test_v0140_classify consolidate test_v0141_hnsw_planner test_v0141_p1b undo_consolidate test_v0142_p2 test_v0150_episodic test_v0151_guc_situation test_v0160_entity_keys test_v0161_failure_vocab test_v0170_foreign_schema test_v0170_guc_consistency
 REGRESS_OPTS = --load-extension=vector --load-extension=pgmnemo
 PG_CONFIG = pg_config
