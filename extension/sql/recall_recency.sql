@@ -3,9 +3,9 @@
 -- RFC-PGM-CURATE-260619
 --
 -- Coverage:
---   T1: After recall_hybrid(), last_recalled_at is stamped on returned lessons
---   T2: recall_count increments by 1 per call
---   T3: GUC OFF (pgmnemo.track_recall_recency=off) — no stamping occurs
+--   T1: recall_hybrid() does NOT stamp; mark_recalled() does (v0.18.0 contract)
+--   T2: mark_recalled() increments recall_count by 1 per call
+--   T3: recall_hybrid() leaves recency untouched regardless of the GUC
 --   T4: mark_stale() dry_run=TRUE returns candidates, no state change
 --   T5: mark_stale() dry_run=FALSE deprecates eligible lessons
 --   T6: mark_stale() safeguard — confidence >= 0.6 lesson NOT deprecated
@@ -42,7 +42,13 @@ VALUES
     ('tc_e_rr', 'recency_test', 'recall recency stamp lesson xylophone quasar nebula bravo foxtrot', 'rr-sha-3');
 
 -- =============================================================================
--- T1: last_recalled_at is stamped on recalled lessons
+-- T1: recall does NOT stamp; mark_recalled() does
+--
+-- v0.18.0 took the write out of the read path: the _stamp CTE inside
+-- recall_hybrid/recall_lessons made them VOLATILE and made every recall take
+-- RowExclusiveLock on agent_lesson, costing 44 ms against a 4 ms retrieval
+-- baseline and blocking behind concurrent writers. Recency is now an explicit
+-- call. This test asserts the new contract in both directions.
 -- =============================================================================
 
 SET pgmnemo.track_recall_recency = 'on';
@@ -55,22 +61,32 @@ FROM pgmnemo.recall_hybrid(
     10, 'tc_e_rr', NULL
 );
 
--- All 3 should now have last_recalled_at stamped
-SELECT COUNT(*) = 3 AS t1_all_stamped
+-- Recall alone must leave recency untouched (v0.18.0)
+SELECT COUNT(*) = 0 AS t1_recall_does_not_stamp
+FROM pgmnemo.agent_lesson
+WHERE role = 'tc_e_rr'
+  AND last_recalled_at IS NOT NULL;
+
+-- mark_recalled() is now what stamps
+SELECT pgmnemo.mark_recalled(ARRAY(
+    SELECT id FROM pgmnemo.agent_lesson WHERE role = 'tc_e_rr'
+));
+
+SELECT COUNT(*) = 3 AS t1_mark_recalled_stamps
 FROM pgmnemo.agent_lesson
 WHERE role = 'tc_e_rr'
   AND last_recalled_at IS NOT NULL;
 
 -- =============================================================================
--- T2: recall_count increments by 1 per recall_hybrid call
+-- T2: recall_count increments by 1 per mark_recalled() call
 -- =============================================================================
 
--- After first recall, count should be 1 for all rows
+-- After the first mark_recalled() above, count is 1 for all rows
 SELECT bool_and(recall_count = 1) AS t2_count_is_one
 FROM pgmnemo.agent_lesson
 WHERE role = 'tc_e_rr';
 
--- Second recall
+-- A second recall on its own must not move the counter
 SELECT COUNT(*) AS rows_recalled_second
 FROM pgmnemo.recall_hybrid(
     NULL::vector(1024),
@@ -78,13 +94,22 @@ FROM pgmnemo.recall_hybrid(
     10, 'tc_e_rr', NULL
 );
 
--- After second recall, count should be 2
+SELECT bool_and(recall_count = 1) AS t2_recall_alone_does_not_increment
+FROM pgmnemo.agent_lesson
+WHERE role = 'tc_e_rr';
+
+-- A second mark_recalled() does
+SELECT pgmnemo.mark_recalled(ARRAY(
+    SELECT id FROM pgmnemo.agent_lesson WHERE role = 'tc_e_rr'
+));
+
 SELECT bool_and(recall_count = 2) AS t2_count_incremented
 FROM pgmnemo.agent_lesson
 WHERE role = 'tc_e_rr';
 
 -- =============================================================================
--- T3: GUC OFF — no stamping
+-- T3: recall leaves recency untouched regardless of the GUC
+-- The GUC now gates mark_recalled(), not the read path — recall never stamps.
 -- Fresh lesson with its own role to ensure last_recalled_at starts NULL.
 -- =============================================================================
 
