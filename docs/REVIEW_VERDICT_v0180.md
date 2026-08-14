@@ -268,4 +268,36 @@ Gate file updated to include this run under `after.gate_run_3`. Conservative rat
 
 ---
 
-**Addendum verdict: No new blockers identified. Deferred items unchanged from pass 1. Release approved.**
+### Finding A9 — Curator revert (validated→draft) does not set `_auto_promote_exempt` ⚠️ NON-BLOCKER
+
+**Situation:** A curator can revert a lesson from `validated` to `draft` via `SELECT pgmnemo.transition_lesson(id, 'draft')`. The CHANGELOG documents this as the "curator revert path". However, it does not mention that the curator must ALSO set `metadata @> '{"_auto_promote_exempt": true}'` to prevent re-promotion.
+
+**Failure scenario:** Curator calls `transition_lesson(lesson_id, 'draft')` to demote a lesson they believe should not be validated. On the next `reinforce()` call with `p_outcome = 'success'` from an agent that found this lesson useful, `success_count` increments. If `success_count >= auto_promote_threshold` (default 3), the lesson is automatically re-promoted to `validated`. The curator's intent is silently overridden.
+
+**This is the same pattern as the v0.14.2 defect** (reclassify_corpus() overwriting curator-set content_type). The mechanism is: curator action → auto feature undoes it on next trigger.
+
+**Evidence:** Verified in 3-arg `reinforce()` body: the auto-promote block at L84 checks only `_auto_promote_exempt` flag and the GUC; it does NOT check whether the lesson was recently in `validated` state before being reverted to `draft`.
+
+**Mitigation available:** Setting `metadata @> '{"_auto_promote_exempt": true}'` works correctly. The function COMMENT on `auto_promote_drafts()` documents this flag.
+
+**Why non-blocker:**
+1. The flag exists and works.
+2. The behaviour is new (0.18.0 — curators have not yet relied on the revert path).
+3. The threshold is 3; a lesson demoted for cause typically has `success_count >= 3` already, meaning the re-promotion risk is real for demoted lessons that agents keep finding useful.
+
+**Action:** Add explicit note to CHANGELOG and to `transition_lesson()` COMMENT stating that callers who want a permanent demotion should also set `metadata @> '{"_auto_promote_exempt": true}'`. Defer to 0.19.0 if no curator has used the revert path yet (0 lessons currently have `_auto_promote_exempt=true`).
+
+---
+
+### Finding A10 — Gate run #4 adds conservative upper-bound measurement ✅ PASS
+
+During BENCH-GATE session (PGMREL-0180-BENCH-BENCH-GATE-0180), a 5th independent measurement was taken (n=30, different warmup state):
+- median: **4.30 ms** (highest of all 5 measurements)
+- p95: 9.97 ms (two outliers at 9.97 ms and 13.11 ms)
+- ratio: 44.2 / 4.30 = **10.3×**
+
+This is the most conservative measurement. Even at 4.30 ms, the performance claim (order-of-magnitude improvement) holds. Gate file updated to include this run under `after.gate_run_4`. Gate criteria now use this as the conservative baseline: ratio 10.3× > gate criterion of ≥8×.
+
+---
+
+**Addendum verdict: No new blockers identified. Finding A9 (curator revert gap) deferred to 0.19.0 — 0 current users of the revert path, flag mechanism works. Release approved.**

@@ -64,6 +64,22 @@
       "stdev_ms": 0.718,
       "errors": 0,
       "discrepancy_note": "Gate run #3 median (3.672 ms) is between run #1 (3.378 ms) and run #2 (3.694 ms). Stdev 0.718 ms is much lower than run #2's 2.435 ms, indicating run #2 had more OS jitter. Three independent measurements: 3.24 ms (bench), 3.378 ms (gate run #1), 3.694 ms (gate run #2), 3.672 ms (gate run #3). All within 14% of each other. Claim is robust."
+    },
+    "gate_run_4": {
+      "source": "Gate measurement run #4 (PGMREL-0180-BENCH-BENCH-GATE-0180 session, 2026-08-14, fresh warmup-excluded run)",
+      "n": 30,
+      "median_ms": 4.30,
+      "mean_ms": 4.83,
+      "p90_ms": 5.71,
+      "p95_ms": 9.97,
+      "p99_ms": 13.11,
+      "min_ms": 3.59,
+      "max_ms": 13.11,
+      "stdev_ms": 1.98,
+      "errors": 0,
+      "all_ms": [13.11, 5.63, 4.85, 5.73, 4.34, 9.97, 5.71, 4.29, 4.62, 4.38, 4.81, 4.31, 4.93, 5.08, 4.46, 4.07, 3.81, 3.76, 3.73, 3.59, 3.78, 3.97, 4.22, 3.86, 3.77, 3.73, 3.68, 5.42, 3.65, 3.69],
+      "ratio_this_run": 10.3,
+      "discrepancy_note": "Run #4 median (4.30 ms) is higher than runs #1-3 (3.38-3.69 ms). Two outliers in this run (13.11 ms, 9.97 ms) inflate p95/p99. Remaining 28/30 calls were 3.59-5.73 ms. Higher median likely reflects system load variation on a shared aarch64 Docker host. All four independent after-measurements (3.24, 3.38, 3.69, 4.30 ms) are well within the falsification threshold of 8 ms. Conservative ratio is 44.2/4.30 = 10.3x — still comfortably above the 8x gate criterion."
     }
   },
 
@@ -122,13 +138,15 @@
   "gate_criteria": "after.median_ms < 8 AND speedup.conservative_ratio >= 8.0 AND falsifiability.verified = true",
   "gate_criteria_met": {
     "after_median_under_8ms": true,
-    "after_median_ms": 3.694,
+    "after_median_ms_worst_run": 4.30,
+    "after_median_ms_gate_run2": 3.694,
     "speedup_over_8x": true,
-    "speedup_conservative_ratio": 11.97,
+    "speedup_conservative_ratio": 10.3,
+    "speedup_note": "Conservative ratio uses worst measured after-median (4.30 ms from gate-run-4). All five measurements pass: 13.6x, 13.1x, 12.0x, 12.0x, 10.3x.",
     "stamp_removed_verified": true
   },
 
-  "methodology": "Single-connection psycopg2 measurement on live production corpus. 5-call warmup (excluded). No concurrent writers. Embedding reused from corpus (one real lesson embedding as query vector, top row by id). statement_timeout=10s. Sorted result set used for percentiles. Before measurement from PGMREL-0180-BENCH task (performed on v0.17.0 with same corpus, same hardware, immediately before migration was applied — not reproducible post-migration). After measurement from gate run #2 (conservative baseline). Four independent after measurements exist (bench-report n=30: 3.24 ms; gate-run-1 n=50: 3.378 ms; gate-run-2 n=50: 3.694 ms; gate-run-3 n=50: 3.672 ms); all within 14% of each other. Gate file was updated with run #3 numbers during adversarial review (PGMREL-0180-REVIEW-REVIEW-0180, 2026-08-14).",
+  "methodology": "Single-connection psycopg2 measurement on live production corpus. Warmup calls excluded (3-5 per run). No concurrent writers during quiet-system runs. Embedding reused from corpus (one real lesson embedding as query vector). statement_timeout=10s. Sorted result set used for percentiles. Before measurement from PGMREL-0180-BENCH task (performed on v0.17.0 with same corpus, same hardware, immediately before migration was applied — not reproducible post-migration without DROP/reinstall). Gate uses conservative after-median (highest of all runs). Five independent after measurements: bench-report n=30 (3.24 ms), gate-run-1 n=50 (3.378 ms), gate-run-2 n=50 (3.694 ms), gate-run-3 n=50 (3.672 ms), gate-run-4 n=30 (4.30 ms). Range 3.24–4.30 ms. Highest is gate-run-4 (4.30 ms); used as conservative baseline for gate criteria. Falsification threshold 8 ms; all runs pass with margin.",
 
   "new_functions": ["pgmnemo.mark_recalled(lesson_ids BIGINT[]) RETURNS VOID"],
   "schema_change": false,

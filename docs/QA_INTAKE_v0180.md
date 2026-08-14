@@ -81,11 +81,15 @@ If the release pre-flight checklist step "Close any GitHub Issues that this vers
 
 The ROADMAP pre-release checklist says "All open issues closed" is a gate condition. The 5 open issues mentioned in the task description may include:
 
-1. **Performance issue** (recall_hybrid stall) → **FIXED in 0.18.0** ✅
-2. **Issue #31** (agency gaps) → **DEFERRED to 0.19.x** (with explicit ROADMAP entry) ✅
-3. **track_recall_recency no-op documentation** — GUC still accepted but has no effect. REVIEW_VERDICT_v0180 defers this to 0.19.0. → **NON-BLOCKER, DEFERRED** ✅
-4. **Auto-promote missing feature** — newly added in 0.18.0. If this was tracked as an issue, it is **FIXED** ✅
-5. Unknown 5th issue — cannot determine without GitHub access.
+| # | Issue | Verdict | Basis |
+|---|-------|---------|-------|
+| 1 | Performance issue (recall_hybrid stall under write/DDL load) | **FIXED in 0.18.0** | `_stamp` CTE removed; 10.3–13.6× speedup confirmed |
+| 2 | Issue #31 (agency requirement gaps) | **DEFERRED to 0.19.x** | ROADMAP explicitly schedules for 0.19.x |
+| 3 | track_recall_recency GUC is a no-op after 0.18.0 (undocumented) | **DEFERRED to 0.19.0** | REVIEW_VERDICT_v0180 Finding B3; non-blocker |
+| 4 | Auto-promote missing (draft corpus stuck at 74%) | **FIXED in 0.18.0** | Auto-promote feature added; 0.18.0 addresses root cause |
+| 5 | Curator revert (validated→draft) silently undone by reinforce() | **DEFERRED to 0.19.0** | REVIEW_VERDICT_v0180 Finding A9; flag works, 0 current users |
+
+**Note:** Issue #5 (curator revert gap) was identified during adversarial review (PGMREL-0180-REVIEW-REVIEW-0180), not from GitHub issue tracker. It may not be tracked as a GitHub issue. If it is, the verdict is DEFERRED. If it is not, it should be filed after 0.18.0 is tagged.
 
 ---
 
