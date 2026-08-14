@@ -16,6 +16,88 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.18.0] - 2026-08-14
+
+### Auto-promotion: draft → validated by confirmed benefit
+
+74 % of the live corpus (≈ 6 800 lessons) was permanently stuck in `draft` state
+because nothing automatically promoted lessons that had been recalled and proven
+useful.  This release adds a data-driven promotion rule so the corpus starts
+distinguishing confirmed knowledge from unconfirmed knowledge.
+
+#### Promotion rule
+
+A `draft` lesson is promoted to `validated` when `reinforce()` records a `success`
+outcome and the lesson's cumulative `success_count` reaches the configured threshold.
+
+**Threshold default = 3** — justified by corpus analysis (2026-08-14, n = 6 819
+draft lessons):
+
+| Threshold | Eligible immediately | % of draft corpus | Beta(1,1) posterior at s=N, f=0 |
+|---|---|---|---|
+| 1 | 1 072 | 15.7 % | 0.67 |
+| **2** | **496** | **7.3 %** | **0.75** |
+| **3** | **280** | **4.1 %** | **0.80** ← default |
+| 4 | 195 | 2.9 % | 0.83 |
+| 5 | 141 | 2.1 % | 0.86 |
+
+At threshold = 3 and zero failures, the Bayesian posterior mean is 4/5 = **0.80**,
+above the 0.75 commonly used as the "validated-confidence floor".  The threshold
+is tunable via GUC.
+
+#### Curator exemption (mirrors 0.14.2 curation-honesty fix)
+
+Any lesson with `metadata @> '{"_auto_promote_exempt": true}'` is never
+auto-promoted.  This lets curators pin lessons in draft after a manual demotion.
+Pattern mirrors the `content_type` exemption added in 0.14.2 for `reclassify_corpus()`.
+
+#### Reversibility and audit log
+
+Every automatic transition writes `metadata._auto_promoted` with `{at, from,
+reason, threshold}`.  A new `validated → draft` edge is added to the state machine
+so curators can revert via `SELECT pgmnemo.transition_lesson(id, 'draft')`.
+
+#### New GUCs
+
+| GUC | Type | Default | Purpose |
+|---|---|---|---|
+| `pgmnemo.auto_promote_enabled` | boolean | `on` | Kill switch — set `off` to disable promotion globally |
+| `pgmnemo.auto_promote_threshold` | integer | `3` | `success_count` floor; controls both `reinforce()` hook and `auto_promote_drafts()` |
+
+#### New function
+
+**`pgmnemo.auto_promote_drafts(p_dry_run BOOLEAN DEFAULT TRUE, p_limit INT DEFAULT NULL)`**
+
+Back-fills lessons that predate this upgrade.  Call once after `ALTER EXTENSION
+pgmnemo UPDATE TO '0.18.0'`:
+
+```sql
+-- Preview (no writes)
+SELECT * FROM pgmnemo.auto_promote_drafts();
+
+-- Apply (promotes eligible lessons, returns promoted set)
+SELECT * FROM pgmnemo.auto_promote_drafts(p_dry_run := false);
+```
+
+#### Changed: `reinforce(BIGINT, TEXT, BOOLEAN)`
+
+Auto-promotion fires as a side-effect inside `reinforce()` when `p_outcome =
+'success'`.  The promotion is atomic with the `success_count` increment (same
+transaction).  No API change; the function signature and return type are unchanged.
+
+#### Changed: state machine
+
+Two new edges added to `agent_lesson_state_transition`:
+
+| from | to | purpose |
+|---|---|---|
+| `draft` | `validated` | auto-promotion path |
+| `validated` | `draft` | curator revert path |
+
+No breaking changes.  Upgrade path: `ALTER EXTENSION pgmnemo UPDATE TO '0.18.0'`.
+
+---
+
 ## [0.17.0] - 2026-08-13
 
 ### Upgrade parity — upgraded installs now match fresh ones exactly
