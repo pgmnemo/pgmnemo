@@ -20,6 +20,8 @@ from typing import Any
 
 from mcp.server import MCPServer
 
+from . import __version__
+
 import re
 
 from .config import (
@@ -33,7 +35,15 @@ from .config import (
     to_pgvector,
 )
 
-mcp = MCPServer(name="pgmnemo")
+# version/description reach the client in the initialize handshake; without
+# them serverInfo reports an empty version, which directory listings and
+# MCP clients show verbatim.
+mcp = MCPServer(
+    name="pgmnemo",
+    version=__version__,
+    description="Agent memory in PostgreSQL: hybrid recall, provenance gates, outcome loop.",
+    website_url="https://pgmnemo.com",
+)
 
 
 @mcp.tool(name="pgmnemo.ingest", description="Ingest a lesson into pgmnemo agent memory.")
