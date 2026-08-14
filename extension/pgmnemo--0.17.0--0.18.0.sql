@@ -472,3 +472,705 @@ COMMENT ON FUNCTION pgmnemo.auto_promote_drafts(BOOLEAN, INT) IS
     'function and the inline hook in reinforce(). '
     'Typically called once after upgrading from < 0.18.0, then not needed '
     '(reinforce() handles new promotions inline).';
+
+-- =============================================================================
+-- PERF: Remove _stamp from read path (PGMREL-0180-IMPLEMENT)
+-- 2026-08-14 · pgmnemo 0.18.0
+-- =============================================================================
+--
+-- BEHAVIOUR BREAK: recall_hybrid() and recall_lessons() no longer update
+-- last_recalled_at or recall_count. mark_stale() and corpus curation depend on
+-- last_recalled_at; they will not function correctly unless callers explicitly
+-- call pgmnemo.mark_recalled() after each recall.
+--
+-- Reason: the inline _stamp UPDATE CTE caused recall_hybrid to take
+-- RowExclusiveLock (relation) + ExclusiveLock (per-row tuple) on the returned
+-- lessons, held until transaction end. On a quiet system: +40 ms median overhead
+-- (10× above the 4 ms retrieval baseline). Under concurrent write load: blocked
+-- indefinitely, limited only by statement_timeout. The track_recall_recency GUC
+-- gated only the row writes, not the relation lock — so even with the GUC off
+-- the function participated in DDL lock convoys. See:
+-- benchmarks/results/PGMREL-0180-BENCH-PERF-HYBRID-UNDER-WRITE-LOAD.md
+--
+-- RESTORING OLD BEHAVIOUR (call after each recall):
+--   SELECT pgmnemo.mark_recalled(
+--       ARRAY(SELECT lesson_id FROM pgmnemo.recall_hybrid(emb, text, k))
+--   );
+--
+-- mark_recalled() is VOLATILE and takes the same locks the inline stamp did.
+-- Call it asynchronously or in a separate transaction for best performance.
+-- =============================================================================
+
+-- Step 1: add mark_recalled() — explicit write-back function
+-- =============================================================================
+
+CREATE OR REPLACE FUNCTION pgmnemo.mark_recalled(
+    lesson_ids BIGINT[]
+)
+RETURNS VOID
+LANGUAGE plpgsql
+VOLATILE
+AS $$
+BEGIN
+    IF lesson_ids IS NULL OR array_length(lesson_ids, 1) IS NULL THEN
+        RETURN;
+    END IF;
+    UPDATE pgmnemo.agent_lesson
+    SET last_recalled_at = NOW(),
+        recall_count     = recall_count + 1
+    WHERE id = ANY(lesson_ids)
+      AND is_active;
+END;
+$$;
+
+COMMENT ON FUNCTION pgmnemo.mark_recalled(BIGINT[]) IS
+    'v0.18.0 — Explicit recency write-back, separated from the recall read path. '
+    'Updates last_recalled_at = NOW() and recall_count += 1 for each lesson ID '
+    'in the input array. Skips IDs that are not active (is_active=false). '
+    'Silently returns for NULL or empty input. '
+    'VOLATILE — takes RowExclusiveLock on agent_lesson. '
+    'Call after recall_hybrid() or recall_lessons() when recency tracking is needed. '
+    'mark_stale() and corpus curation depend on last_recalled_at; they will not '
+    'function correctly unless mark_recalled() is called after each recall. '
+    'Previously this update was embedded in the recall functions themselves '
+    '(the _stamp CTE, introduced in v0.9.5, removed in v0.18.0). '
+    'See: benchmarks/results/PGMREL-0180-BENCH-PERF-HYBRID-UNDER-WRITE-LOAD.md';
+
+-- Step 2: recall_hybrid — update 11-arg overload: remove _stamp CTE
+-- =============================================================================
+-- Note: recall_hybrid uses CREATE TEMP TABLE internally for _pgmnemo_vc and
+-- _pgmnemo_bm25_work. PostgreSQL does not allow CREATE TABLE in STABLE functions.
+-- The function remains VOLATILE. The performance fix is removing the _stamp CTE,
+-- which was the source of RowExclusiveLock on pgmnemo.agent_lesson. Without _stamp,
+-- the function takes NO locks on agent_lesson — it only reads from it.
+-- =============================================================================
+
+CREATE OR REPLACE FUNCTION pgmnemo.recall_hybrid(
+    query_embedding   vector(1024),
+    query_text        TEXT,
+    k                 INT              DEFAULT 10,
+    role_filter       TEXT             DEFAULT NULL,
+    project_id_filter INT              DEFAULT NULL,
+    vec_weight        DOUBLE PRECISION DEFAULT 0.4,
+    bm25_weight       DOUBLE PRECISION DEFAULT 0.4,
+    rrf_k             INT              DEFAULT 60,
+    exclude_dag_id    TEXT             DEFAULT NULL,
+    p_content_types   text[]           DEFAULT NULL,
+    p_min_score       REAL             DEFAULT NULL
+)
+RETURNS TABLE (
+    lesson_id        BIGINT,
+    score            DOUBLE PRECISION,
+    vec_score        DOUBLE PRECISION,
+    bm25_score       DOUBLE PRECISION,
+    rrf_score        DOUBLE PRECISION,
+    role             TEXT,
+    project_id       INT,
+    topic            TEXT,
+    lesson_text      TEXT,
+    importance       SMALLINT,
+    metadata         JSONB,
+    commit_sha       TEXT,
+    artifact_hash    TEXT,
+    verified_at      TIMESTAMPTZ,
+    created_at       TIMESTAMPTZ,
+    confidence       REAL,
+    match_confidence REAL
+)
+LANGUAGE plpgsql
+VOLATILE
+AS $func$
+#variable_conflict use_column
+DECLARE
+    _ef_search          INT;
+    _include_unverified BOOLEAN;
+    _tsquery            TSQUERY;
+    _has_text           BOOLEAN;
+    _has_vec            BOOLEAN;
+    _graph_weight       DOUBLE PRECISION;
+    _max_depth          CONSTANT INT := 5;
+    _rrf_k_f            DOUBLE PRECISION;
+    _aux_scale          CONSTANT DOUBLE PRECISION := (0.8 / 61.0) / 0.76;
+    _as_of_ts           TIMESTAMPTZ;
+    _raw_blend_weight   DOUBLE PRECISION;
+    _ghost_count        INT;
+    _fetch_k_vec        INT;
+    _fetch_k_bm25       INT;
+    _conf_boost_w       DOUBLE PRECISION;
+    -- 0.10.1 additions (#87)
+    _lexical_text       TEXT;
+    _bm25_budget_ms     INT;
+    _bm25_timed_out     BOOLEAN := FALSE;
+BEGIN
+    _has_vec  := query_embedding IS NOT NULL;
+    _has_text := query_text IS NOT NULL AND length(trim(query_text)) > 0;
+
+    IF NOT _has_vec AND NOT _has_text THEN
+        RAISE EXCEPTION
+            'pgmnemo.recall_hybrid: both query_embedding and query_text are NULL/empty -- '
+            'at least one retrieval signal is required';
+    END IF;
+
+    IF NOT _has_vec AND _has_text THEN
+        RAISE NOTICE
+            'pgmnemo: query_embedding IS NULL -- falling back to text-only recall; no semantic similarity';
+    END IF;
+
+    vec_weight  := GREATEST(0.0, LEAST(1.0, vec_weight));
+    bm25_weight := GREATEST(0.0, LEAST(1.0, bm25_weight));
+    _rrf_k_f    := GREATEST(1.0, rrf_k::DOUBLE PRECISION);
+    _raw_blend_weight := 1.0 / (_rrf_k_f + 1.0);
+
+    BEGIN
+        _ef_search := COALESCE(
+            NULLIF(current_setting('pgmnemo.ef_search', TRUE), '')::INT, 100);
+        IF _ef_search BETWEEN 10 AND 500 THEN
+            EXECUTE format('SET LOCAL pgvector.hnsw.ef_search = %s', _ef_search);
+        END IF;
+    EXCEPTION WHEN OTHERS THEN
+        _ef_search := 100;
+    END;
+
+    BEGIN
+        _include_unverified := COALESCE(
+            current_setting('pgmnemo.include_unverified', TRUE)::BOOLEAN, FALSE);
+    EXCEPTION WHEN OTHERS THEN _include_unverified := FALSE;
+    END;
+
+    BEGIN
+        _as_of_ts := NULLIF(current_setting('pgmnemo.as_of_timestamp', TRUE), '')::TIMESTAMPTZ;
+    EXCEPTION WHEN OTHERS THEN _as_of_ts := NULL;
+    END;
+
+    BEGIN
+        _graph_weight := GREATEST(0.0, LEAST(0.5, COALESCE(
+            NULLIF(current_setting('pgmnemo.graph_proximity_weight', TRUE), '')::DOUBLE PRECISION,
+            0.0)));
+    EXCEPTION WHEN OTHERS THEN _graph_weight := 0.0;
+    END;
+
+    BEGIN
+        _conf_boost_w := GREATEST(0.0, LEAST(0.01, COALESCE(
+            NULLIF(current_setting('pgmnemo.confidence_boost_weight', TRUE), '')::DOUBLE PRECISION,
+            0.0)));
+    EXCEPTION WHEN OTHERS THEN _conf_boost_w := 0.0;
+    END;
+
+    -- v0.10.1 (#87): BM25 budget timeout (milliseconds)
+    BEGIN
+        _bm25_budget_ms := COALESCE(
+            NULLIF(current_setting('pgmnemo.bm25_budget_ms', TRUE), '')::INT, 250);
+    EXCEPTION WHEN OTHERS THEN _bm25_budget_ms := 250;
+    END;
+
+    -- v0.10.1 (#87): cap query_text length
+    BEGIN
+        _lexical_text := left(query_text,
+            COALESCE(NULLIF(current_setting('pgmnemo.max_query_text_chars', TRUE), '')::INT, 2000));
+    EXCEPTION WHEN OTHERS THEN _lexical_text := query_text;
+    END;
+    _has_text := _lexical_text IS NOT NULL AND length(trim(_lexical_text)) > 0;
+
+    IF _has_text THEN
+        BEGIN
+            _tsquery := websearch_to_tsquery('simple', _lexical_text);
+        EXCEPTION WHEN OTHERS THEN
+            BEGIN
+                _tsquery := plainto_tsquery('simple', _lexical_text);
+            EXCEPTION WHEN OTHERS THEN _has_text := FALSE;
+            END;
+        END;
+    END IF;
+
+    -- Phase 1: HNSW vector retrieval via temp table (v0.14.1: literal LIMIT for planner)
+    IF _has_vec THEN
+        CREATE TEMP TABLE IF NOT EXISTS _pgmnemo_vc (
+            id              BIGINT,
+            role            TEXT,
+            project_id      INT,
+            topic           TEXT,
+            lesson_text     TEXT,
+            importance      SMALLINT,
+            metadata        JSONB,
+            commit_sha      TEXT,
+            artifact_hash   TEXT,
+            verified_at     TIMESTAMPTZ,
+            created_at      TIMESTAMPTZ,
+            confidence      REAL,
+            raw_vec_score   DOUBLE PRECISION
+        ) ON COMMIT DROP;
+        TRUNCATE _pgmnemo_vc;
+
+        EXECUTE format(
+            $q$
+            INSERT INTO _pgmnemo_vc
+            SELECT
+                al.id,
+                al.role, al.project_id, al.topic, al.lesson_text,
+                al.importance, al.metadata, al.commit_sha, al.artifact_hash,
+                al.verified_at, al.created_at, al.confidence,
+                (1.0 - (al.embedding <=> $1))::DOUBLE PRECISION AS raw_vec_score
+            FROM pgmnemo.agent_lesson al
+            WHERE al.is_active
+              AND al.embedding IS NOT NULL
+              AND ($2 OR al.verified_at IS NOT NULL)
+              AND ($3 IS NULL OR al.role = $3)
+              AND ($4 IS NULL OR al.project_id = $4)
+              AND ($5 IS NULL OR al.source_dag_id IS DISTINCT FROM $5)
+              AND ($6 IS NULL OR al.content_type = ANY($6))
+              AND ($7 IS NULL OR (al.t_valid_from <= $7 AND al.t_valid_to > $7))
+              AND ($7 IS NOT NULL OR al.t_valid_to = 'infinity'::TIMESTAMPTZ)
+            ORDER BY al.embedding <=> $1
+            LIMIT %s
+            $q$,
+            GREATEST(k * 4, _ef_search)
+        )
+        USING query_embedding, _include_unverified, role_filter,
+              project_id_filter, exclude_dag_id, p_content_types, _as_of_ts;
+    END IF;
+
+    -- Phase 2: BM25 retrieval via temp table (with budget timeout)
+    IF _has_text THEN
+        CREATE TEMP TABLE IF NOT EXISTS _pgmnemo_bm25_work (
+            id              BIGINT,
+            raw_bm25_score  DOUBLE PRECISION
+        ) ON COMMIT DROP;
+        TRUNCATE _pgmnemo_bm25_work;
+
+        BEGIN
+            EXECUTE format(
+                $q$
+                INSERT INTO _pgmnemo_bm25_work
+                SELECT al.id,
+                    ts_rank_cd(al.lesson_tsv || al.topic_tsv, $1, 32)::DOUBLE PRECISION
+                FROM pgmnemo.agent_lesson al
+                WHERE al.is_active
+                  AND ($2 OR al.verified_at IS NOT NULL)
+                  AND (al.lesson_tsv @@ $1 OR al.topic_tsv @@ $1)
+                  AND ($3 IS NULL OR al.role = $3)
+                  AND ($4 IS NULL OR al.project_id = $4)
+                  AND ($5 IS NULL OR al.source_dag_id IS DISTINCT FROM $5)
+                  AND ($6 IS NULL OR al.content_type = ANY($6))
+                  AND ($7 IS NULL OR (al.t_valid_from <= $7 AND al.t_valid_to > $7))
+                  AND ($7 IS NOT NULL OR al.t_valid_to = 'infinity'::TIMESTAMPTZ)
+                ORDER BY ts_rank_cd(al.lesson_tsv || al.topic_tsv, $1, 32) DESC
+                LIMIT %s
+                $q$,
+                GREATEST(k * 4, 40)
+            )
+            USING _tsquery, _include_unverified, role_filter,
+                  project_id_filter, exclude_dag_id, p_content_types, _as_of_ts;
+        EXCEPTION WHEN QUERY_CANCELED THEN
+            _bm25_timed_out := TRUE;
+        END;
+    END IF;
+
+    RETURN QUERY
+    WITH RECURSIVE
+    all_candidates AS (
+        -- Merge: vector candidates (temp table) LEFT JOIN bm25 results + anti-join UNION ALL
+        SELECT
+            v.id, v.role, v.project_id, v.topic, v.lesson_text,
+            v.importance, v.metadata, v.commit_sha, v.artifact_hash,
+            v.verified_at, v.created_at, v.confidence,
+            v.raw_vec_score,
+            COALESCE(bw.raw_bm25_score, 0.0::DOUBLE PRECISION) AS raw_bm25_score
+        FROM _pgmnemo_vc v                            -- temp table (was: vec_candidates CTE)
+        LEFT JOIN _pgmnemo_bm25_work bw ON bw.id = v.id
+
+        UNION ALL
+
+        SELECT
+            al.id, al.role, al.project_id, al.topic, al.lesson_text,
+            al.importance, al.metadata, al.commit_sha, al.artifact_hash,
+            al.verified_at, al.created_at, al.confidence,
+            0.0::DOUBLE PRECISION AS raw_vec_score,
+            bw.raw_bm25_score
+        FROM _pgmnemo_bm25_work bw
+        JOIN pgmnemo.agent_lesson al ON al.id = bw.id
+        WHERE (_has_vec IS FALSE OR bw.id NOT IN (SELECT id FROM _pgmnemo_vc))
+    ),
+    rrf_ranked AS (
+        SELECT *,
+            COUNT(*) OVER ()                                              AS n_candidates,
+            ROW_NUMBER() OVER (ORDER BY raw_vec_score DESC NULLS LAST, id ASC) AS vec_rank,
+            CASE WHEN raw_bm25_score > 0
+                 THEN RANK() OVER (PARTITION BY (raw_bm25_score > 0)
+                                   ORDER BY raw_bm25_score DESC NULLS LAST)
+                 ELSE NULL
+            END                                                           AS bm25_rank_sparse
+        FROM all_candidates
+    ),
+    scored AS (
+        SELECT
+            r.id, r.role, r.project_id, r.topic, r.lesson_text,
+            r.importance, r.metadata, r.commit_sha, r.artifact_hash,
+            r.verified_at, r.created_at, r.confidence,
+            r.raw_vec_score  AS v_score,
+            r.raw_bm25_score AS b_score,
+            (vec_weight  / (_rrf_k_f + r.vec_rank::DOUBLE PRECISION)
+           + bm25_weight / (_rrf_k_f + COALESCE(r.bm25_rank_sparse,
+                                                 r.n_candidates + 1)::DOUBLE PRECISION)
+           + _raw_blend_weight * (
+                 vec_weight  * r.raw_vec_score
+               + bm25_weight * r.raw_bm25_score))
+                AS rrf_sparse
+        FROM rrf_ranked r
+    ),
+    anchors AS (
+        SELECT id FROM scored ORDER BY rrf_sparse DESC LIMIT 5
+    ),
+    graph_walk(anchor_id, depth, reached_id) AS (
+        SELECT id, 0, id FROM anchors WHERE _graph_weight > 0
+        UNION ALL
+        SELECT gw.anchor_id, gw.depth + 1, me.target_id
+        FROM graph_walk gw
+        JOIN pgmnemo.mem_edge me ON me.source_id = gw.reached_id
+        WHERE me.edge_kind IN ('causal', 'temporal')
+          AND gw.depth < _max_depth
+    ),
+    graph_proximity AS (
+        SELECT gw.reached_id AS lesson_id,
+               MAX(1.0 - gw.depth::DOUBLE PRECISION / _max_depth::DOUBLE PRECISION) AS proximity
+        FROM graph_walk gw WHERE gw.depth > 0 GROUP BY gw.reached_id
+    ),
+    final AS (
+        SELECT
+            s.id,
+            (
+                s.rrf_sparse
+              + _aux_scale * (
+                    0.025 * (s.importance::DOUBLE PRECISION / 5.0)
+                  + 0.025 * s.confidence::DOUBLE PRECISION
+                  + 0.05 * GREATEST(0.0, 1.0 - LEAST(
+                               EXTRACT(EPOCH FROM (NOW() - s.created_at)) / (90.0 * 86400.0), 1.0))
+                  + 0.05 * (CASE
+                                WHEN s.commit_sha IS NOT NULL AND s.verified_at IS NOT NULL THEN 1.0
+                                WHEN s.commit_sha IS NOT NULL                               THEN 0.4
+                                ELSE 0.0 END)
+                )
+              + _conf_boost_w * (s.confidence::DOUBLE PRECISION - 0.5)
+            ) * (1.0 + _graph_weight * COALESCE(gp.proximity, 0.0))
+              AS final_score,
+            s.role, s.project_id, s.topic, s.lesson_text, s.importance,
+            s.metadata, s.commit_sha, s.artifact_hash, s.verified_at, s.created_at,
+            s.confidence, s.v_score, s.b_score, s.rrf_sparse,
+            COALESCE(gp.proximity, 0.0) AS prox
+        FROM scored s
+        LEFT JOIN graph_proximity gp ON gp.lesson_id = s.id
+    ),
+    final_results AS MATERIALIZED (
+        SELECT
+            f.id                   AS lesson_id,
+            f.final_score          AS score,
+            f.v_score              AS vec_score,
+            f.b_score              AS bm25_score,
+            f.rrf_sparse           AS rrf_score,
+            f.role,
+            f.project_id,
+            f.topic,
+            f.lesson_text,
+            f.importance,
+            f.metadata,
+            f.commit_sha,
+            f.artifact_hash,
+            f.verified_at,
+            f.created_at,
+            f.confidence::REAL,
+            LEAST(1.0, GREATEST(0.0, f.v_score))::REAL AS match_confidence
+        FROM final f
+        WHERE (p_min_score IS NULL
+               OR LEAST(1.0, GREATEST(0.0, f.v_score))::REAL >= p_min_score)
+        ORDER BY f.final_score DESC, f.id ASC
+        LIMIT k
+    )
+    -- v0.18.0: _stamp removed. Call mark_recalled() separately if needed.
+    SELECT
+        fr.lesson_id, fr.score, fr.vec_score, fr.bm25_score, fr.rrf_score,
+        fr.role, fr.project_id, fr.topic, fr.lesson_text, fr.importance,
+        fr.metadata, fr.commit_sha, fr.artifact_hash, fr.verified_at, fr.created_at,
+        fr.confidence, fr.match_confidence
+    FROM final_results fr
+    ORDER BY fr.score DESC, fr.lesson_id ASC;
+
+    IF NOT FOUND AND p_min_score IS NULL THEN
+        SELECT COUNT(*)::INT INTO _ghost_count
+        FROM pgmnemo.agent_lesson al
+        WHERE al.is_active
+          AND al.t_valid_to = 'infinity'::TIMESTAMPTZ
+          AND al.verified_at IS NULL
+          AND (recall_hybrid.role_filter IS NULL OR al.role = recall_hybrid.role_filter)
+          AND (recall_hybrid.project_id_filter IS NULL
+               OR al.project_id = recall_hybrid.project_id_filter);
+        IF _ghost_count > 0 THEN
+            RAISE NOTICE
+                'pgmnemo: % matching lesson(s) are unverified (ingested without commit_sha/artifact_hash) '
+                'and excluded by default. SET pgmnemo.include_unverified = ''on'' for this session, '
+                'or pass provenance on ingest.',
+                _ghost_count;
+        END IF;
+    END IF;
+END;
+$func$;
+
+COMMENT ON FUNCTION pgmnemo.recall_hybrid(vector, TEXT, INT, TEXT, INT, DOUBLE PRECISION, DOUBLE PRECISION, INT, TEXT, text[], REAL) IS
+    'v0.18.0 — VOLATILE (uses CREATE TEMP TABLE internally). Recency stamp (_stamp CTE) '
+    'removed from read path: no longer takes RowExclusiveLock on pgmnemo.agent_lesson. '
+    'Call pgmnemo.mark_recalled(ARRAY(SELECT lesson_id FROM pgmnemo.recall_hybrid(...))) '
+    'separately if you want last_recalled_at / recall_count to be updated. '
+    'v0.14.1 — HNSW planner regression fix. Vector candidates fetched via EXECUTE with a '
+    'literal LIMIT so the planner always sees the concrete value and chooses HNSW index scan. '
+    'v0.13.0 — adds p_min_score REAL DEFAULT NULL (11th param). '
+    'p_min_score: filter rows where match_confidence < p_min_score. NULL = no filter. '
+    'v0.11.0 (P0.2): typed recall via p_content_types. '
+    'v0.10.1 (#87): query_text cap, indexed BM25, bm25_budget_ms timeout. '
+    'match_confidence: vec_score (cosine similarity, [0,1]). '
+    'RRF fusion sparse-safe (Cormack 2009). graph_proximity via mem_edge walk (depth ≤5). '
+    'VOLATILE (v0.18.0). No RowExclusiveLock on agent_lesson. mark_recalled() is the write path.';
+
+-- Step 3: recall_lessons — update 9-arg overload: remove _stamp delegation
+-- =============================================================================
+-- recall_lessons delegates to recall_hybrid on the hybrid path. recall_hybrid
+-- is now VOLATILE (because of CREATE TEMP TABLE) but no longer takes
+-- RowExclusiveLock on agent_lesson. recall_lessons remains VOLATILE as well.
+-- CREATE OR REPLACE updates the function body without DROP for extension-owned functions.
+-- =============================================================================
+
+CREATE OR REPLACE FUNCTION pgmnemo.recall_lessons(
+    query_embedding   vector(1024),
+    k                 INT         DEFAULT 10,
+    role_filter       TEXT        DEFAULT NULL,
+    project_id_filter INT         DEFAULT NULL,
+    query_text        TEXT        DEFAULT NULL,
+    as_of_ts          TIMESTAMPTZ DEFAULT NULL,
+    exclude_dag_id    TEXT        DEFAULT NULL,
+    p_content_types   TEXT[]      DEFAULT NULL,
+    p_min_score       REAL        DEFAULT NULL
+)
+RETURNS TABLE (
+    lesson_id        BIGINT,
+    score            DOUBLE PRECISION,
+    role             TEXT,
+    project_id       INT,
+    topic            TEXT,
+    lesson_text      TEXT,
+    importance       SMALLINT,
+    metadata         JSONB,
+    commit_sha       TEXT,
+    artifact_hash    TEXT,
+    verified_at      TIMESTAMPTZ,
+    created_at       TIMESTAMPTZ,
+    vec_score        DOUBLE PRECISION,
+    bm25_score       DOUBLE PRECISION,
+    rrf_score        DOUBLE PRECISION,
+    confidence       REAL,
+    match_confidence REAL
+)
+LANGUAGE plpgsql
+VOLATILE
+AS $func$
+#variable_conflict use_column
+DECLARE
+    _ef_search          INT;
+    _include_unverified BOOLEAN;
+    _tsquery            TSQUERY;
+    _has_text           BOOLEAN;
+    _has_vec            BOOLEAN;
+    _gamma              DOUBLE PRECISION;
+    _temporal_boost     DOUBLE PRECISION;
+    _graph_weight       DOUBLE PRECISION;
+    _disable_hybrid     BOOLEAN;
+    _max_depth          CONSTANT INT := 5;
+    _max_chars          INT;
+    _query_text         TEXT;
+    _ghost_count        INT;
+BEGIN
+    _max_chars := COALESCE(
+        NULLIF(current_setting('pgmnemo.max_query_text_chars', TRUE), '')::INT, 2000);
+    IF query_text IS NOT NULL AND length(query_text) > _max_chars THEN
+        RAISE NOTICE 'pgmnemo.recall_lessons: query_text truncated to % chars. Original: %',
+                     _max_chars, length(query_text);
+        _query_text := left(query_text, _max_chars);
+    ELSE
+        _query_text := query_text;
+    END IF;
+
+    _has_vec  := query_embedding IS NOT NULL;
+    _has_text := _query_text IS NOT NULL AND length(trim(_query_text)) > 0;
+
+    IF NOT _has_vec AND _has_text THEN
+        RAISE NOTICE
+            'pgmnemo: query_embedding IS NULL -- falling back to text-only recall; no semantic similarity';
+    END IF;
+
+    BEGIN
+        _disable_hybrid := COALESCE(
+            current_setting('pgmnemo.disable_hybrid', TRUE)::BOOLEAN, FALSE);
+    EXCEPTION WHEN OTHERS THEN _disable_hybrid := FALSE;
+    END;
+
+    -- Hybrid path delegates to recall_hybrid (now STABLE, no stamp)
+    IF NOT _disable_hybrid AND _has_vec AND _has_text THEN
+        IF as_of_ts IS NOT NULL THEN
+            PERFORM set_config('pgmnemo.as_of_timestamp', as_of_ts::TEXT, TRUE);
+        END IF;
+
+        RETURN QUERY
+        SELECT
+            h.lesson_id, h.score, h.role, h.project_id, h.topic, h.lesson_text,
+            h.importance, h.metadata, h.commit_sha, h.artifact_hash,
+            h.verified_at, h.created_at,
+            h.vec_score, h.bm25_score, h.rrf_score,
+            h.confidence, h.match_confidence
+        FROM pgmnemo.recall_hybrid(
+            query_embedding, _query_text, k,
+            role_filter, project_id_filter, 0.4, 0.4, 60,
+            exclude_dag_id, p_content_types, p_min_score
+        ) h;
+        RETURN;
+    END IF;
+
+    -- Vector-only path (no _stamp, already side-effect-free)
+    BEGIN
+        _ef_search := COALESCE(
+            NULLIF(current_setting('pgmnemo.ef_search', TRUE), '')::INT, 100);
+        IF _ef_search BETWEEN 10 AND 500 THEN
+            EXECUTE format('SET LOCAL pgvector.hnsw.ef_search = %s', _ef_search);
+        END IF;
+    EXCEPTION WHEN OTHERS THEN NULL;
+    END;
+
+    BEGIN
+        _include_unverified := COALESCE(
+            current_setting('pgmnemo.include_unverified', TRUE)::BOOLEAN, FALSE);
+    EXCEPTION WHEN OTHERS THEN _include_unverified := FALSE;
+    END;
+
+    _gamma := COALESCE(
+        NULLIF(current_setting('pgmnemo.recency_weight', TRUE), '')::DOUBLE PRECISION, 0.05);
+    _temporal_boost := GREATEST(0.0, LEAST(20.0, COALESCE(
+        NULLIF(current_setting('pgmnemo.temporal_boost', TRUE), '')::DOUBLE PRECISION, 1.0)));
+    _gamma := _gamma * _temporal_boost;
+
+    BEGIN
+        _graph_weight := GREATEST(0.0, LEAST(0.5, COALESCE(
+            NULLIF(current_setting('pgmnemo.graph_proximity_weight', TRUE), '')::DOUBLE PRECISION,
+            0.0)));
+    EXCEPTION WHEN OTHERS THEN _graph_weight := 0.0;
+    END;
+
+    _has_text := _query_text IS NOT NULL AND length(trim(_query_text)) > 0;
+    IF _has_text THEN
+        BEGIN
+            _tsquery := websearch_to_tsquery('english', _query_text);
+        EXCEPTION WHEN OTHERS THEN
+            BEGIN
+                _tsquery := plainto_tsquery('english', _query_text);
+            EXCEPTION WHEN OTHERS THEN _has_text := FALSE;
+            END;
+        END;
+    END IF;
+
+    RETURN QUERY
+    WITH RECURSIVE
+    candidates AS (
+        SELECT
+            al.id           AS cand_id,
+            al.role         AS cand_role,
+            al.project_id   AS cand_project_id,
+            al.topic        AS cand_topic,
+            al.lesson_text  AS cand_lesson_text,
+            al.importance   AS cand_importance,
+            al.metadata     AS cand_metadata,
+            al.commit_sha   AS cand_commit_sha,
+            al.artifact_hash AS cand_artifact_hash,
+            al.verified_at  AS cand_verified_at,
+            al.created_at   AS cand_created_at,
+            al.confidence   AS cand_confidence,
+            CASE
+                WHEN _has_vec AND al.embedding IS NOT NULL
+                THEN (1.0 - (al.embedding <=> query_embedding))::DOUBLE PRECISION
+                ELSE 0.0::DOUBLE PRECISION
+            END AS vec_score_raw,
+            CASE
+                WHEN _has_text AND al.full_text @@ _tsquery
+                THEN ts_rank_cd(al.full_text, _tsquery)::DOUBLE PRECISION
+                ELSE 0.0::DOUBLE PRECISION
+            END AS ft_score_raw
+        FROM pgmnemo.agent_lesson al
+        WHERE al.is_active
+          AND (_include_unverified OR al.verified_at IS NOT NULL)
+          AND (role_filter IS NULL OR al.role = role_filter)
+          AND (project_id_filter IS NULL OR al.project_id = project_id_filter)
+          AND (exclude_dag_id IS NULL OR al.source_dag_id IS DISTINCT FROM exclude_dag_id)
+          AND (p_content_types IS NULL OR al.content_type = ANY(p_content_types))
+          AND (as_of_ts IS NULL
+               OR (al.t_valid_from <= as_of_ts AND al.t_valid_to > as_of_ts))
+          AND (al.embedding IS NOT NULL OR _has_text)
+          AND (al.t_valid_to = 'infinity'::TIMESTAMPTZ OR as_of_ts IS NOT NULL)
+        ORDER BY al.embedding <=> query_embedding
+        LIMIT GREATEST(k * 5, 50)
+    ),
+    anchors AS (
+        SELECT cand_id FROM candidates ORDER BY vec_score_raw DESC LIMIT 5
+    ),
+    graph_walk(anchor_id, depth, reached_id) AS (
+        SELECT cand_id, 0, cand_id FROM anchors
+        UNION ALL
+        SELECT gw.anchor_id, gw.depth + 1, me.target_id
+        FROM graph_walk gw
+        JOIN pgmnemo.mem_edge me ON me.source_id = gw.reached_id
+        WHERE me.edge_kind IN ('causal', 'temporal')
+          AND gw.depth < _max_depth
+    ),
+    graph_proximity AS (
+        SELECT reached_id AS gp_lesson_id,
+               MAX(1.0 - depth::DOUBLE PRECISION / _max_depth::DOUBLE PRECISION) AS proximity
+        FROM graph_walk WHERE depth > 0 GROUP BY reached_id
+    )
+    SELECT
+        c.cand_id        AS lesson_id,
+        (
+            c.vec_score_raw * (1.0 - _gamma)
+          + _gamma * GREATEST(0.0, 1.0 - LEAST(
+                EXTRACT(EPOCH FROM (NOW() - c.cand_created_at)) / (90.0 * 86400.0), 1.0))
+          + COALESCE(gp.proximity, 0.0) * _graph_weight
+        )                AS score,
+        c.cand_role      AS role,
+        c.cand_project_id AS project_id,
+        c.cand_topic     AS topic,
+        c.cand_lesson_text AS lesson_text,
+        c.cand_importance AS importance,
+        c.cand_metadata  AS metadata,
+        c.cand_commit_sha AS commit_sha,
+        c.cand_artifact_hash AS artifact_hash,
+        c.cand_verified_at AS verified_at,
+        c.cand_created_at AS created_at,
+        c.vec_score_raw  AS vec_score,
+        c.ft_score_raw   AS bm25_score,
+        0.0::DOUBLE PRECISION AS rrf_score,
+        c.cand_confidence::REAL AS confidence,
+        LEAST(1.0, GREATEST(0.0, c.vec_score_raw))::REAL AS match_confidence
+    FROM candidates c
+    LEFT JOIN graph_proximity gp ON gp.gp_lesson_id = c.cand_id
+    WHERE (p_min_score IS NULL
+           OR LEAST(1.0, GREATEST(0.0, c.vec_score_raw))::REAL >= p_min_score)
+    ORDER BY score DESC, c.cand_id ASC
+    LIMIT k;
+END;
+$func$;
+
+COMMENT ON FUNCTION pgmnemo.recall_lessons(vector, INT, TEXT, INT, TEXT, TIMESTAMPTZ, TEXT, TEXT[], REAL) IS
+    'v0.18.0 — VOLATILE. Recency stamp removed from recall path. No longer takes '
+    'RowExclusiveLock on pgmnemo.agent_lesson. '
+    'Call pgmnemo.mark_recalled(ARRAY(SELECT lesson_id FROM pgmnemo.recall_lessons(...))) '
+    'separately if you want last_recalled_at / recall_count to be updated. '
+    'v0.13.0 hybrid router with diagnostic columns, typed recall, and min_score gate. '
+    'Routes to recall_hybrid() when both query_embedding and query_text are present '
+    '(and pgmnemo.disable_hybrid is FALSE/unset). '
+    'Falls back to vector-only (HNSW + recency + graph) when query_text is absent. '
+    'p_content_types TEXT[] DEFAULT NULL (8th param): typed recall pushdown. '
+    'p_min_score REAL DEFAULT NULL (9th param): filter rows where match_confidence < p_min_score. '
+    'GIN-indexed for BM25 retrieval via ts_rank_cd in recall_hybrid(). '
+    'Respects pgmnemo.disable_hybrid, ef_search, include_unverified, recency_weight, '
+    'temporal_boost, graph_proximity_weight, max_query_text_chars GUCs. VOLATILE (v0.18.0).';

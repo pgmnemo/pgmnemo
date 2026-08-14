@@ -1,6 +1,6 @@
 # pgmnemo GUC Defaults — Evidence Audit
 
-**Version:** 0.17.0 · **Updated:** 2026-08-13  
+**Version:** 0.18.0 · **Updated:** 2026-08-14  
 **Purpose:** Every GUC default must be either evidence-backed (measurement named) or
 explicitly labelled **UNPROVEN**. An extension whose defaults contradict its own
 published evidence cannot carry the claim *"measured, not asserted."*
@@ -13,7 +13,7 @@ published evidence cannot carry the claim *"measured, not asserted."*
 |-----|---------|-----------------|--------|
 | `pgmnemo.gate_strict` | `enforce` | ✅ **PROVEN** — provenance requirement is load-bearing for compliance use-cases; no measurement needed (it is a policy knob, not a quality parameter) | Design intent: RFC-001 §provenance |
 | `pgmnemo.include_unverified` | `off` | ✅ **PROVEN** — verified rows are the authoritative corpus; unverified are drafts/candidates. Default matches LongMemEval-S corpus (all rows verified). | Operational practice |
-| `pgmnemo.track_recall_recency` | `on` | ⚠️ **UNPROVEN AT SCALE** — `mark_stale()` requires `last_recalled_at`; disabling prevents corpus curation. However, the claim "Zero performance impact on idle rows" (v0.17.0) was measured on a single-connection idle system only. **Measured under concurrent load (2026-08-14, 3 600-lesson corpus):** enabling recency stamping adds ~40 ms median overhead (10× above the 4 ms retrieval baseline) even with no contested locks, because `recall_hybrid` issues an inline UPDATE on every call. Under concurrent writers: blocks indefinitely when any writer holds a row lock on the returned lessons. Under DDL (`CREATE INDEX` without CONCURRENTLY): causes a relation-level lock convoy that blocks all subsequent callers regardless of this GUC. Setting `off` eliminates row-level tuple locks but does NOT eliminate the relation-level `RowExclusiveLock` — the UPDATE statement still runs and still takes that lock. **The `on` default is load-bearing for `mark_stale()` correctness; the cost is now documented. Operators on high-write corpora should benchmark before assuming the default is free.** See `benchmarks/results/PGMREL-0180-BENCH-PERF-HYBRID-UNDER-WRITE-LOAD.md`. | v0.9.5 design; measured 2026-08-14 (PGMREL-0180-BENCH) |
+| `pgmnemo.track_recall_recency` | `on` | ⚠️ **SUPERSEDED IN v0.18.0** — This GUC gated the `_stamp` UPDATE inside `recall_hybrid` (v0.9.5–v0.17.0). In v0.18.0, the `_stamp` CTE was removed entirely from the read path (PGMREL-0180-IMPLEMENT). The GUC still exists but has **no effect** on recall performance: `recall_hybrid` no longer issues any UPDATE on `agent_lesson`. **v0.17.0 measurement (before fix):** enabling recency stamping added 40 ms median overhead (10×) above the 4 ms retrieval baseline; under concurrent writers, calls blocked indefinitely; DDL caused relation-level lock convoy regardless of GUC. **v0.18.0 measurement (after fix):** 3.2 ms median on quiet system, 3.5 ms under write load — writer-immune. Recency must now be tracked explicitly via `pgmnemo.mark_recalled()`. The GUC is retained for operator awareness but no longer affects read-path latency. See `benchmarks/results/PGMREL-0180-BENCH-PERF-HYBRID-UNDER-WRITE-LOAD.md`. | v0.9.5 design; measured before/after 2026-08-14 (PGMREL-0180-BENCH/IMPLEMENT) |
 | `pgmnemo.ef_search` | `100` | ✅ **PROVEN** — `ef_search=100` is the pgvector recommended production value; HNSW recall degrades measurably below ~50 on 1K-row corpora. | pgvector project documentation |
 | `pgmnemo.confidence_boost_weight` | `0.0` | ✅ **PROVEN** — shipped default is 0.0 (opt-in). Directional signal CONFIRMED as non-inert (2026-08-13 benchmark, n=971 pairs: Wilcoxon p=0.000511, rank-improve:worsen=147:9=16.3:1; McNemar p=0.1306 NS — insufficient power for recall@10 claim). Production installs may set 0.003 via ALTER DATABASE; see `docs/CONFIDENCE_BOOST_GUIDE.md`. Recall@10 gate pending: requires ≥305 signal lessons with ≥5 outcomes (current: ~171). Pre-registered gate thresholds: r_pb≥0.200 ✅ (current r_pb=0.577 from n=4 533 run-level correlation), chi²(df=3)=1240 p<<0.0001 ✅; McNemar-powered benchmark (22 discordant pairs) ❌ not yet reached. | `benchmarks/METRICS_BY_VERSION.md` (v0.13.0 row); 2026-08-13 rank-comparison benchmark (971 pairs) |
 | `pgmnemo.recency_weight` | `0.05` | ✅ **PROVEN** — changed from 0.08 → 0.05 per internal ablation (H-06 grid search). Grid run on LoCoMo temporal category; 0.05 reduced temporal drift vs 0.08. | `benchmarks/h06_grid_search/` |
@@ -55,6 +55,28 @@ arm A — selective recall erased the benefit of memory entirely.
 **Conclusion:** `p_min_score` must default to NULL (no filtering). Score-gated
 filtering is an opt-in escape hatch for latency-sensitive contexts; at the default
 it removes enough qualifying memories that the residual provides no net benefit.
+
+---
+
+## Restore commands for v0.18.0 behaviour breaks
+
+### `recall_hybrid` / `recall_lessons` recency tracking (v0.17.0 default removed in v0.18.0)
+
+`last_recalled_at` and `recall_count` are no longer updated automatically. To restore:
+
+```sql
+-- After recall_hybrid:
+SELECT pgmnemo.mark_recalled(
+    ARRAY(SELECT lesson_id FROM pgmnemo.recall_hybrid($1::vector(1024), $2, 10))
+);
+
+-- After recall_lessons (via Python/application layer):
+-- Call mark_recalled() with the lesson_ids returned by recall_lessons().
+```
+
+**When to restore:** always, if you use `mark_stale()` or depend on corpus curation.  
+**When to omit:** read-heavy workloads where recency tracking is not needed; the omission
+eliminates 10× latency overhead and all write-lock contention from the recall path.
 
 ---
 

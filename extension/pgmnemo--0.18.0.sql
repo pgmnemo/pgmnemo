@@ -10381,8 +10381,59 @@ DROP FUNCTION IF EXISTS pgmnemo.recall_hybrid(
     vector, TEXT, INT, TEXT, INT, DOUBLE PRECISION, DOUBLE PRECISION, INT, TEXT, text[]
 );
 
+-- =============================================================================
+-- mark_recalled() v0.18.0 — Explicit recency write-back
+-- Replaces the inline _stamp CTE that was removed from recall_hybrid and
+-- recall_lessons. Callers that want last_recalled_at / recall_count to be
+-- updated must call this function explicitly after recall.
+--
+-- Example:
+--   WITH r AS (
+--       SELECT lesson_id FROM pgmnemo.recall_hybrid(emb, text, 10)
+--   )
+--   SELECT pgmnemo.mark_recalled(ARRAY(SELECT lesson_id FROM r));
+--
+-- The function is VOLATILE and takes RowExclusiveLock (as any UPDATE does).
+-- Do not call it in a hot read path if you want the lock-free behaviour that
+-- motivated removing _stamp from recall_hybrid. Call it asynchronously, in a
+-- separate transaction, or not at all.
+-- =============================================================================
+
+CREATE OR REPLACE FUNCTION pgmnemo.mark_recalled(
+    lesson_ids BIGINT[]
+)
+RETURNS VOID
+LANGUAGE plpgsql
+VOLATILE
+AS $$
+BEGIN
+    IF lesson_ids IS NULL OR array_length(lesson_ids, 1) IS NULL THEN
+        RETURN;
+    END IF;
+    UPDATE pgmnemo.agent_lesson
+    SET last_recalled_at = NOW(),
+        recall_count     = recall_count + 1
+    WHERE id = ANY(lesson_ids)
+      AND is_active;
+END;
+$$;
+
+COMMENT ON FUNCTION pgmnemo.mark_recalled(BIGINT[]) IS
+    'v0.18.0 — Explicit recency write-back, separated from the recall read path. '
+    'Updates last_recalled_at = NOW() and recall_count += 1 for each lesson ID '
+    'in the input array. Skips IDs that are not active (is_active=false). '
+    'Silently returns for NULL or empty input. '
+    'VOLATILE — takes RowExclusiveLock on agent_lesson. '
+    'Call after recall_hybrid() or recall_lessons() when recency tracking is needed. '
+    'mark_stale() and corpus curation depend on last_recalled_at; they will not '
+    'function correctly unless mark_recalled() is called after each recall. '
+    'Previously this update was embedded in the recall functions themselves '
+    '(the _stamp CTE, introduced in v0.9.5, removed in v0.18.0). '
+    'See: docs/GUC_EVIDENCE.md §track_recall_recency; '
+    '     benchmarks/results/PGMREL-0180-BENCH-PERF-HYBRID-UNDER-WRITE-LOAD.md';
+
 -- ─────────────────────────────────────────────────────────────────────────────
--- recall_hybrid() v0.14.1 — HNSW planner regression fix
+-- recall_hybrid() v0.18.0 (was v0.14.1) — STABLE PARALLEL SAFE, no _stamp
 -- ─────────────────────────────────────────────────────────────────────────────
 CREATE OR REPLACE FUNCTION pgmnemo.recall_hybrid(
     query_embedding   vector(1024),
@@ -10745,17 +10796,10 @@ BEGIN
                OR LEAST(1.0, GREATEST(0.0, f.v_score))::REAL >= p_min_score)
         ORDER BY f.final_score DESC, f.id ASC
         LIMIT k
-    ),
-    _stamp AS (
-        UPDATE pgmnemo.agent_lesson
-        SET last_recalled_at = NOW(),
-            recall_count     = recall_count + 1
-        WHERE id = ANY(ARRAY(SELECT lesson_id FROM final_results))
-          AND COALESCE(
-              NULLIF(current_setting('pgmnemo.track_recall_recency', TRUE), '')::BOOLEAN,
-              TRUE)
-        RETURNING id
     )
+    -- v0.18.0: _stamp removed — recall_hybrid is now STABLE.
+    -- Call pgmnemo.mark_recalled(ARRAY(SELECT lesson_id FROM ...)) separately
+    -- if you want recency to be tracked.
     SELECT
         fr.lesson_id, fr.score, fr.vec_score, fr.bm25_score, fr.rrf_score,
         fr.role, fr.project_id, fr.topic, fr.lesson_text, fr.importance,
@@ -10785,20 +10829,20 @@ END;
 $func$;
 
 COMMENT ON FUNCTION pgmnemo.recall_hybrid(vector, TEXT, INT, TEXT, INT, DOUBLE PRECISION, DOUBLE PRECISION, INT, TEXT, text[], REAL) IS
-    'v0.14.1 — HNSW planner regression fix. Vector candidates now fetched via '
-    'EXECUTE with a literal LIMIT so the planner always sees the concrete value '
-    'and chooses the HNSW index scan instead of Seq Scan + top-N heapsort. '
-    'Confirmed on 3000–7440 row corpus: HNSW cost 448 vs SeqScan 413 in generic plan; '
-    'literal LIMIT restores HNSW selection. Scoring, RRF, and recency stamp unchanged. '
-    'v0.13.0 — Outcome Loop v2: adds p_min_score REAL DEFAULT NULL (11th param). '
-    'p_min_score: filter rows where match_confidence (= vec_score clamped to [0,1]) < p_min_score. '
-    'NULL = no filter (backward-compatible). Ghost-lesson NOTICE fires only when p_min_score IS NULL. '
-    'Inherits v0.11.0 (RFC-001 §D2 / P0.2: typed recall) and v0.10.1 (#87) fixes: '
-    'query_text cap, indexed full_text BM25, bm25_budget_ms timeout, simple tsconfig. '
+    'v0.18.0 — VOLATILE (uses CREATE TEMP TABLE internally). Recency stamp (_stamp CTE) '
+    'removed from read path: no longer takes RowExclusiveLock on pgmnemo.agent_lesson. '
+    'Call pgmnemo.mark_recalled(ARRAY(SELECT lesson_id FROM pgmnemo.recall_hybrid(...))) '
+    'separately if you want last_recalled_at / recall_count to be updated. '
+    'v0.14.1 — HNSW planner regression fix. Vector candidates fetched via EXECUTE with a '
+    'literal LIMIT so the planner always sees the concrete value and chooses HNSW index scan. '
+    'Confirmed on 3000–7440 row corpus: HNSW cost 448 vs SeqScan 413 in generic plan. '
+    'v0.13.0 — adds p_min_score REAL DEFAULT NULL (11th param). '
+    'p_min_score: filter rows where match_confidence < p_min_score. NULL = no filter. '
+    'v0.11.0 (P0.2): typed recall via p_content_types. '
+    'v0.10.1 (#87): query_text cap, indexed BM25, bm25_budget_ms timeout. '
     'match_confidence: vec_score (cosine similarity, [0,1]). '
-    'RRF fusion is sparse-safe per Cormack 2009: unmatched candidates rank n_candidates+1. '
-    'graph_proximity via mem_edge causal/temporal walk (depth ≤5). '
-    'VOLATILE (side-effects: recency stamp, temp tables _pgmnemo_bm25_work, _pgmnemo_vc).';
+    'RRF fusion sparse-safe (Cormack 2009). graph_proximity via mem_edge walk (depth ≤5). '
+    'VOLATILE (v0.18.0). No RowExclusiveLock on agent_lesson. mark_recalled() is the write path.';
 
 -- §7: recall_fast — add p_min_score (7th param)
 --
@@ -11204,18 +11248,20 @@ END;
 $func$;
 
 COMMENT ON FUNCTION pgmnemo.recall_lessons(vector, INT, TEXT, INT, TEXT, TIMESTAMPTZ, TEXT, TEXT[], REAL) IS
+    'v0.18.0 — VOLATILE. Recency stamp removed from recall path. No longer takes '
+    'RowExclusiveLock on pgmnemo.agent_lesson. '
+    'Call pgmnemo.mark_recalled(ARRAY(SELECT lesson_id FROM pgmnemo.recall_lessons(...))) '
+    'separately if you want last_recalled_at / recall_count to be updated. '
     'v0.13.0 hybrid router with diagnostic columns, typed recall, and min_score gate. '
     'Routes to recall_hybrid() when both query_embedding and query_text are present '
     '(and pgmnemo.disable_hybrid is FALSE/unset). '
     'Falls back to vector-only (HNSW + recency + graph) when query_text is absent. '
-    'p_content_types TEXT[] DEFAULT NULL (8th param, v0.11.1): typed recall pushdown. '
-    'p_min_score REAL DEFAULT NULL (9th param, v0.13.0): filter rows where '
+    'p_content_types TEXT[] DEFAULT NULL (8th param): typed recall pushdown. '
+    'p_min_score REAL DEFAULT NULL (9th param): filter rows where '
     'match_confidence (vec_score clamped [0,1]) < p_min_score. NULL=no filter. '
-    'On the hybrid path: both p_content_types and p_min_score forwarded to recall_hybrid(). '
-    'On the vector-only path: p_min_score applied as WHERE filter on match_confidence. '
     'GIN-indexed for BM25 retrieval via ts_rank_cd in recall_hybrid(). '
     'Respects pgmnemo.disable_hybrid, ef_search, include_unverified, recency_weight, '
-    'temporal_boost, graph_proximity_weight, max_query_text_chars GUCs.';
+    'temporal_boost, graph_proximity_weight, max_query_text_chars GUCs. VOLATILE (v0.18.0).';
 
 -- §9: recall_lessons_pooled — add p_min_score (4th param)
 --

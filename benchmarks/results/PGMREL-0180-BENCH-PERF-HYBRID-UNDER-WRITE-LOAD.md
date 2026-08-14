@@ -3,16 +3,20 @@
 **Task:** PGMREL-0180-BENCH-PERF-HYBRID-UNDER-WRITE-LOAD  
 **Date:** 2026-08-14  
 **Analyst:** Statistical Analyst (assignee_id=79)  
-**Environment:** pgmnemo 0.17.0, PostgreSQL 17.10 / aarch64, 3 600 active lessons  
+**Environment:** pgmnemo 0.17.0 (before) / 0.18.0 (after), PostgreSQL 17.10 / aarch64, 3 600 active lessons  
 **Goal:** Separate retrieval cost from write contention; identify root cause of multi-second stalls.
+
+**Fix shipped:** v0.18.0 removes `_stamp` CTE from `recall_hybrid` and `recall_lessons`. See §After-Fix Results for measured improvement.
 
 ---
 
 ## Executive Summary
 
-`recall_hybrid()` contains a data-modifying CTE (`_stamp`) that issues an inline `UPDATE` on every call. This makes the function **VOLATILE** and causes it to take `RowExclusiveLock` (relation level) and `ExclusiveLock` (tuple level) on every returned lesson. On a quiet system this costs **~40 ms** above the 4 ms retrieval baseline — a 10× overhead. Under write contention the call blocks indefinitely, limited only by `statement_timeout`.
+**BEFORE (v0.17.0):** `recall_hybrid()` contained a data-modifying CTE (`_stamp`) that issued an inline `UPDATE` on every call. This made the function **VOLATILE** and caused it to take `RowExclusiveLock` (relation level) and `ExclusiveLock` (tuple level) on every returned lesson. On a quiet system this cost **~40 ms** above the 4 ms retrieval baseline — a 10× overhead. Under write contention the call blocked indefinitely, limited only by `statement_timeout`.
 
-The `track_recall_recency = off` GUC eliminates the row-level tuple locks but does **not** eliminate the relation-level `RowExclusiveLock`. This explains why turning the GUC off "did not reliably remove the stall": DDL operations (`CREATE INDEX`) queue behind `RowExclusiveLock` holders and block all subsequent callers regardless of the GUC.
+**AFTER (v0.18.0):** `_stamp` removed. `recall_hybrid` takes no locks on `pgmnemo.agent_lesson`. **3.2 ms median** on quiet system (≈retrieval baseline); **3.5 ms median** under active write load. Contention from concurrent writers is eliminated. DDL lock-convoy risk is eliminated.
+
+The `track_recall_recency = off` GUC eliminated the row-level tuple locks but did **not** eliminate the relation-level `RowExclusiveLock`. This explains why turning the GUC off "did not reliably remove the stall": DDL operations (`CREATE INDEX`) queue behind `RowExclusiveLock` holders and block all subsequent callers regardless of the GUC.
 
 ---
 
@@ -235,6 +239,62 @@ psql $PGMNEMO_DATABASE_URL -c "BEGIN; UPDATE pgmnemo.agent_lesson SET last_recal
 psql $PGMNEMO_DATABASE_URL -c "\timing on; SELECT lesson_id FROM pgmnemo.recall_hybrid(:'emb'::vector(1024), 'python memory recall', 10);"
 # Terminal B will block until Terminal A COMMITs.
 ```
+
+---
+
+## After-Fix Results — v0.18.0
+
+**Fix applied:** `_stamp` CTE removed from `recall_hybrid` (11-arg) and `recall_lessons` (9-arg).  
+`mark_recalled(lesson_ids BIGINT[]) RETURNS VOID` added as the explicit write-back.  
+**Measurement date:** 2026-08-14. Same corpus (3 600 active lessons), same hardware (PostgreSQL 17.10 / aarch64).
+
+### Quiet system (no concurrent writers)
+
+| Version | n | Median (ms) | p95 (ms) | p99 (ms) | Max (ms) |
+|---------|---|-------------|----------|----------|----------|
+| v0.17.0 — `track_recall_recency=on` (default) | 15 | **44.2** | 68.8 | — | 360.2 |
+| v0.17.0 — `track_recall_recency=off` | 30 | **4.2** | 4.8 | 184.6¹ | 184.6 |
+| **v0.18.0 — `_stamp` removed** | **30** | **3.2** | **3.9** | **9.9** | **9.9** |
+
+¹ Single outlier; 29/30 calls < 5 ms.
+
+**Improvement:** 44.2 ms → 3.2 ms median (13.6× speedup vs default-on; 1.3× vs recency-off).  
+`recall_hybrid` now runs at retrieval baseline — HNSW + BM25 fusion, no write overhead.
+
+### Under concurrent write load
+
+Background writer: `UPDATE agent_lesson SET last_recalled_at=NOW() WHERE id IN (RANDOM LIMIT 5)` at ~100 updates/second.
+
+| Version | n | Median (ms) | Failures |
+|---------|---|-------------|---------|
+| v0.17.0 — `track_recall_recency=on` | 15 | 21 ms | 0/15 (random rows) |
+| v0.17.0 — targeted same rows, `recency=on` | 5 | blocked | 5/5 (blocked > `statement_timeout`) |
+| **v0.18.0 — `_stamp` removed** | **20** | **3.5 ms** | **0/20** |
+
+v0.18.0 is immune to concurrent writer interference because it takes **no locks** on `pgmnemo.agent_lesson` during retrieval.
+
+### Summary
+
+| Metric | Before (v0.17.0 default) | After (v0.18.0) | Change |
+|--------|--------------------------|-----------------|--------|
+| Quiet median | 44.2 ms | 3.2 ms | **−41 ms / 13.6×** |
+| Quiet p95 | 68.8 ms | 3.9 ms | **−64.9 ms** |
+| Under write load | 21 ms (random), blocked (same rows) | 3.5 ms | **writer-immune** |
+| DDL lock convoy | blocks all callers | not affected | **eliminated** |
+| Recency maintained by default | yes (last_recalled_at, recall_count) | **no** — caller must call `mark_recalled()` | behaviour break |
+
+### Restore recency tracking (opt-in, v0.18.0+)
+
+```sql
+-- After calling recall_hybrid or recall_lessons:
+SELECT pgmnemo.mark_recalled(
+    ARRAY(SELECT lesson_id FROM pgmnemo.recall_hybrid(
+        $1::vector(1024), $2, 10
+    ))
+);
+```
+
+This call is now decoupled from the read path — it can be called asynchronously, batched, or omitted entirely for read-heavy workloads.
 
 ---
 
