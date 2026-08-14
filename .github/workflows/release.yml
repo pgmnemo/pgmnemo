@@ -172,7 +172,9 @@ jobs:
       - name: Run evidence integrity gate
         run: python3 scripts/check_evidence_integrity.py
       - name: Run evidence gate self-tests
-        run: python3 -m pytest tests/test_evidence_gate.py -v
+        run: |
+          python3 -m pip install --quiet --disable-pip-version-check pytest
+          python3 -m pytest tests/test_evidence_gate.py -v
 
   # ─── Job 1: pg_regress installcheck ────────────────────────────────────────
   installcheck:
