@@ -1,7 +1,8 @@
 {
   "version": "v0.18.0",
   "date": "2026-08-14",
-  "pgmnemo_version": "0.18.0",
+  "pgmnemo_version": "0.17.0+perf-patch",
+  "pgmnemo_version_note": "SELECT pgmnemo.version() returns '0.17.0' because the extension catalog was not updated via ALTER EXTENSION (migration applied manually via psycopg2 execute). The function bodies installed are the 0.18.0 versions — verified via pg_get_functiondef(). Honest representation: extension catalog 0.17.0, function behavior 0.18.0.",
   "gate_status": "PASS",
   "gate_type": "performance",
   "significance_required": true,

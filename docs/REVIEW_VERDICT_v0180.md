@@ -210,3 +210,62 @@ v0.17.0 with `track_recall_recency=off` gave 4.2 ms median — essentially the s
 
 1. Add deprecation note to `track_recall_recency` GUC documentation — it now has no effect on recall performance. Callers who set it expecting a performance difference should be informed explicitly.
 2. Confirm pg_regress test coverage for `mark_recalled()` and auto-promote paths.
+3. Remove `_stamp` CTE from `recall_fast()` (7-arg overload) — see Finding A6 below.
+
+---
+
+## Review addendum — PGMREL-0180-REVIEW pass 2 (2026-08-14)
+
+**Reviewer:** Chief Architect  
+**Additional verification performed against live DB.**
+
+### Finding A6 — recall_fast still has _stamp CTE ⚠️ NON-BLOCKER (deferred)
+
+**Verification:**
+```sql
+SELECT prosrc LIKE '%UPDATE%agent_lesson%' as has_stamp
+FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+WHERE n.nspname = 'pgmnemo' AND p.proname = 'recall_fast';
+-- Returns: has_stamp = TRUE
+```
+
+`recall_fast()` body contains `stamped AS (UPDATE pgmnemo.agent_lesson al2 SET last_recalled_at = NOW(), recall_count = al2.recall_count + 1 ...)`. This CTE is the same pattern as the removed `_stamp` in recall_hybrid.
+
+**Scope:** PGMREL-0180-IMPLEMENT was scoped to `recall_hybrid` and `recall_lessons` only. `recall_fast` was not in scope.
+
+**Impact:** `recall_fast` callers still take RowExclusiveLock on agent_lesson. Under DDL or high-write load on popular lessons, `recall_fast` will still exhibit the lock convoy described in the BENCH report.
+
+**Action:** Gate file documents under `known_residual_write_path`. Separate task required.
+
+---
+
+### Finding A7 — Extension version 0.17.0 in pg_extension ⚠️ NON-BLOCKER (process note)
+
+```sql
+SELECT extversion FROM pg_extension WHERE extname = 'pgmnemo';
+-- Returns: 0.17.0
+```
+
+Migration was applied as raw SQL (not via `ALTER EXTENSION pgmnemo UPDATE TO '0.18.0'`). All function bodies are updated correctly; pg_extension.extversion was not bumped on the live DB.
+
+This does not affect correctness: function behaviour matches v0.18.0 specification. Fresh installs and operator upgrades via `ALTER EXTENSION pgmnemo UPDATE TO '0.18.0'` (the supported path) correctly reach the 0.18.0 state.
+
+**Gate file note:** `installcheck.process_note` documents this gap.
+
+---
+
+### Finding A8 — Gate run #3 confirms claim (fresh measurement this session) ✅ PASS
+
+Fresh measurement (n=50, 5-call warmup, quiet single-connection system):
+- median: **3.672 ms**
+- p95: 4.210 ms
+- p99: 8.529 ms
+- stdev: 0.718 ms
+
+This is the fourth independent measurement of the after state. All four measurements (3.24, 3.38, 3.69, 3.67 ms) are within 14% of each other. Claim is robust.
+
+Gate file updated to include this run under `after.gate_run_3`. Conservative ratio remains 11.97× (using highest measured after-median of 3.694 ms from gate-run-2).
+
+---
+
+**Addendum verdict: No new blockers identified. Deferred items unchanged from pass 1. Release approved.**
