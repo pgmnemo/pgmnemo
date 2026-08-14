@@ -12,7 +12,7 @@ SELECT COUNT(*) AS transition_count
 FROM pgmnemo.agent_lesson_state_transition;
  transition_count 
 ------------------
-               17
+               19
 (1 row)
 
 -- Spot-check specific allowed transitions exist

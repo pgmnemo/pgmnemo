@@ -24,8 +24,8 @@ SET pgmnemo.gate_strict = 'off';
 SET pgmnemo.include_unverified = 'on';
 SET pgmnemo.track_recall_recency = 'off';
 
-ALTER EXTENSION pgmnemo UPDATE TO '0.17.0';
-ALTER EXTENSION pgmnemo UPDATE TO '0.17.0';
+ALTER EXTENSION pgmnemo UPDATE TO '0.18.0';
+ALTER EXTENSION pgmnemo UPDATE TO '0.18.0';
 
 -- =============================================================================
 -- A1-1: extract_sit_fp() exists and is IMMUTABLE
