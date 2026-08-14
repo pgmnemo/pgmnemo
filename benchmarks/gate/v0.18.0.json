@@ -50,6 +50,19 @@
       "n": 50,
       "median_ms": 3.378,
       "discrepancy_note": "Gate run #1 median was 3.378 ms; gate run #2 (this run) is 3.694 ms — 9.4% higher. Both are within 1 stdev of each other. The system is shared (aarch64 Docker host) and idle background activity varies between runs. The discrepancy does not indicate a regression: both runs are well within the falsification threshold of 8 ms. Published claim uses gate run #2 as the fresher measurement."
+    },
+    "gate_run_3": {
+      "source": "Gate measurement run #3 (PGMREL-0180-REVIEW-REVIEW-0180 session, 2026-08-14)",
+      "n": 50,
+      "median_ms": 3.672,
+      "mean_ms": 3.821,
+      "p95_ms": 4.210,
+      "p99_ms": 8.529,
+      "min_ms": 3.432,
+      "max_ms": 8.529,
+      "stdev_ms": 0.718,
+      "errors": 0,
+      "discrepancy_note": "Gate run #3 median (3.672 ms) is between run #1 (3.378 ms) and run #2 (3.694 ms). Stdev 0.718 ms is much lower than run #2's 2.435 ms, indicating run #2 had more OS jitter. Three independent measurements: 3.24 ms (bench), 3.378 ms (gate run #1), 3.694 ms (gate run #2), 3.672 ms (gate run #3). All within 14% of each other. Claim is robust."
     }
   },
 
@@ -59,8 +72,9 @@
     "published_claim_in_changelog": "13.6x (bench report used n=30 run with 3.24 ms median immediately post-migration)",
     "first_gate_run_ratio": 13.09,
     "second_gate_run_ratio": 11.97,
+    "third_gate_run_ratio": 12.04,
     "conservative_ratio": 11.97,
-    "note": "Three measurements across three runs (bench report: 3.24 ms, gate run #1: 3.378 ms, gate run #2: 3.694 ms) give ratios of 13.6x, 13.1x, and 12.0x respectively. All substantially above the falsification threshold (< 5.5x = 10 ms). The published 13.6x figure in CHANGELOG is the bench report value; the gate conservatively uses the freshest measurement (11.97x). The claim rounded to 13x is supported by all three runs.",
+    "note": "Four measurements (bench report: 3.24 ms, gate run #1: 3.378 ms, gate run #2: 3.694 ms, gate run #3: 3.672 ms) give ratios of 13.6x, 13.1x, 12.0x, 12.0x respectively. All substantially above the falsification threshold (< 5.5x = 8 ms). The published 13.6x figure in CHANGELOG is the bench report value; the gate conservatively uses the highest measured after-median (11.97x). The claim rounded to 12x is supported by all four independent runs.",
     "range_across_runs": "11.97x to 13.6x"
   },
 
@@ -113,7 +127,7 @@
     "stamp_removed_verified": true
   },
 
-  "methodology": "Single-connection psycopg2 measurement on live production corpus. 5-call warmup (excluded). No concurrent writers. Embedding reused from corpus (one real lesson embedding as query vector, top row by id). statement_timeout=10s. Sorted result set used for percentiles. Before measurement from PGMREL-0180-BENCH task (performed on v0.17.0 with same corpus, same hardware, immediately before migration was applied — not reproducible post-migration). After measurement from gate run #2 (this task, 2026-08-14, n=50). Three independent after measurements exist (bench-report n=30: 3.24 ms; gate-run-1 n=50: 3.378 ms; gate-run-2 n=50: 3.694 ms); all within 15% of each other.",
+  "methodology": "Single-connection psycopg2 measurement on live production corpus. 5-call warmup (excluded). No concurrent writers. Embedding reused from corpus (one real lesson embedding as query vector, top row by id). statement_timeout=10s. Sorted result set used for percentiles. Before measurement from PGMREL-0180-BENCH task (performed on v0.17.0 with same corpus, same hardware, immediately before migration was applied — not reproducible post-migration). After measurement from gate run #2 (conservative baseline). Four independent after measurements exist (bench-report n=30: 3.24 ms; gate-run-1 n=50: 3.378 ms; gate-run-2 n=50: 3.694 ms; gate-run-3 n=50: 3.672 ms); all within 14% of each other. Gate file was updated with run #3 numbers during adversarial review (PGMREL-0180-REVIEW-REVIEW-0180, 2026-08-14).",
 
   "new_functions": ["pgmnemo.mark_recalled(lesson_ids BIGINT[]) RETURNS VOID"],
   "schema_change": false,

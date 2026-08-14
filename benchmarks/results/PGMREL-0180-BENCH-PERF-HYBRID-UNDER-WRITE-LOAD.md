@@ -174,7 +174,9 @@ Remove `_stamp` from `recall_hybrid` and `recall_lessons`. Expose a separate:
 FUNCTION pgmnemo.mark_recalled(lesson_ids BIGINT[]) RETURNS VOID LANGUAGE plpgsql VOLATILE ...
 ```
 
-Callers that want recency tracking call `mark_recalled(ARRAY[...])` separately, asynchronously, or not at all. This makes `recall_hybrid` truly STABLE again. The write-back becomes opt-in at the call site, not forced in the critical path.
+Callers that want recency tracking call `mark_recalled(ARRAY[...])` separately, asynchronously, or not at all. The write-back becomes opt-in at the call site, not forced in the critical path.
+
+**Note (v0.18.0 implementation):** `recall_hybrid` uses `CREATE TEMP TABLE` internally (`_pgmnemo_vc`, `_pgmnemo_bm25_work`), which requires VOLATILE volatility — PostgreSQL rejects DDL in non-VOLATILE functions. The function remains VOLATILE but no longer takes `RowExclusiveLock` on `pgmnemo.agent_lesson`. The performance benefit is the same as if it were STABLE: no row locks on the corpus during retrieval.
 
 **Fixes:** row-level contention AND relation-level lock convoy.
 
