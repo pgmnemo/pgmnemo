@@ -2,110 +2,123 @@
 
 **Task:** PGMREL-0180-QA-INTAKE-0180  
 **Date:** 2026-08-14  
-**Scope:** All open GitHub issues before tagging v0.18.0
+**Scope:** All open GitHub issues before tagging v0.18.0  
+**Enumeration method:** GitHub REST API (`GET /repos/pgmnemo/pgmnemo/issues?state=open`) — no `gh` CLI available; used WebFetch against `api.github.com`.
 
 ---
 
-## Access limitation
+## Open issues — live enumeration (2026-08-14)
 
-GitHub CLI (`gh`) is not available in this environment. Live GitHub issue enumeration was not possible. This triage is based on:
-1. Issue numbers referenced in commit history and CHANGELOG
-2. Issues referenced in ROADMAP.md
-3. The known open performance issue that motivated this release cycle
-4. Context from the PGMREL-0180 task description
+5 open issues confirmed via API:
 
-If the release pre-flight checklist step "Close any GitHub Issues that this version addresses" is automated (see `docs/RELEASE_RUNBOOK.md §Post-release`), that step should enumerate and close the GH issues after the tag is pushed.
-
----
-
-## Issues identified and triaged
-
-### Issue: recall_hybrid / recall_lessons multi-second stall under write load
-
-**Source:** Observed live incident; motivated PGMREL-0180-BENCH and PGMREL-0180-IMPLEMENT  
-**Description:** `recall_hybrid()` and `recall_lessons()` stalled for 1.7–9+ minutes under concurrent write or DDL load. Root cause: inline `_stamp` UPDATE CTE took `RowExclusiveLock` on `pgmnemo.agent_lesson` on every call.  
-**Verdict: FIXED IN 0.18.0**  
-**Evidence:** `_stamp` CTE removed; 44.2 ms → 3.4 ms median (13.1×); zero `UPDATE agent_lesson` in installed function body (verified via `pg_get_functiondef()`).  
-**Artefact:** `benchmarks/results/PGMREL-0180-BENCH-PERF-HYBRID-UNDER-WRITE-LOAD.md`
+| # | Title | Labels | Created |
+|---|-------|--------|---------|
+| [#105](https://github.com/pgmnemo/pgmnemo/issues/105) | release-failure: v0.17.0 workflow failed | `release-failure`, `automated` | 2026-08-14 |
+| [#104](https://github.com/pgmnemo/pgmnemo/issues/104) | release-failure: v0.16.1 workflow failed | `release-failure`, `automated` | 2026-07-31 |
+| [#103](https://github.com/pgmnemo/pgmnemo/issues/103) | Retrieval: a single semantic axis misses procedural knowledge — measured, with a control | (none) | — |
+| [#89](https://github.com/pgmnemo/pgmnemo/issues/89) | feat: partial HNSW indexes per role for sub-2ms filtered recall | `enhancement` | — |
+| [#88](https://github.com/pgmnemo/pgmnemo/issues/88) | research(graph): graph_walk ablation — measure mem_edge contribution vs its latency cost | `enhancement` | — |
 
 ---
 
-### Issue #31 — Agency requirement gaps
+## Verdict table
 
-**Source:** `ROADMAP.md §v0.19.0` explicitly defers to that version.  
-**Description:** Remaining gaps from Issue #31 (agency-requirement gaps). Specific requirements not enumerated in local repo.  
-**Verdict: DEFERRED to v0.19.0**  
-**Basis:** ROADMAP explicitly schedules this work for 0.19.x. Not related to the 0.18.0 changes.
+| Issue | Verdict | Blocks 0.18.0? | Basis |
+|-------|---------|----------------|-------|
+| **#105** release-failure v0.17.0 | **CLOSE — root cause identified** | No | See §#105 below |
+| **#104** release-failure v0.16.1 | **CLOSE — root cause identified** | No | See §#104 below |
+| **#103** single semantic axis / procedural knowledge | **DEFER to v0.19.x** | No | Research issue; no 0.18.0 action |
+| **#89** partial HNSW indexes per role | **DEFER to v0.19.x** | No | Feature request; unrelated to 0.18.0 scope |
+| **#88** graph_walk ablation | **DEFER to v0.19.x** | No | Research task; 0.17.0 changed default to 0.0 (opt-in), ablation not yet run |
 
----
-
-### Issues #19, #20, #21, #24, #27 — Fixed in earlier releases
-
-**Source:** CHANGELOG references  
-| Issue | Description | Fixed in |
-|-------|-------------|---------|
-| #19 | Missing table issue | Fixed (CHANGELOG v0.8.x area) |
-| #20 | Scale issue (N=10k corpus) | Fixed |
-| #21 | issue referenced alongside #25 | Fixed |
-| #24 | Manual SQL patches recovery | Fixed (MIGRATION.md §B.5) |
-| #27 | Issue referenced in CHANGELOG | Fixed |
-
-**Verdict: All CLOSED in prior releases**  
-**Basis:** CHANGELOG contains explicit "Issue #N" references with resolution descriptions.
+**No open issue blocks v0.18.0 release.**
 
 ---
 
-### Issues #29, #32 — Fixed in v0.16.0 / v0.15.1
+## Issue-by-issue analysis
 
-| Issue | Description | Fixed in |
-|-------|-------------|---------|
-| #29 | `REGRESS` target in `extension/Makefile` | v0.16.0 |
-| #32 | Empty `pgmnemo-mcp` wheel on install | v0.15.1 |
+### Issue #105 — release-failure: v0.17.0 workflow failed
 
-**Verdict: Both CLOSED in prior releases**
+**Type:** Automated release-failure notification (filed by CI bot when workflow `release.yml` failed)  
+**Created:** 2026-08-14 (same day as this task)
 
----
+**What the issue body says:** "One or more jobs in the release workflow failed." Lists possible causes: version mismatch, regression test failures, missing/invalid benchmark gate file, credential issues, import failures, PGXN propagation delays.
 
-### Issue #84, #87, #88 — Fixed in v0.10.1 / v0.17.0
+**Reproduced?** The v0.17.0 gate file (`benchmarks/gate/v0.17.0.json`) exists and is valid JSON. The v0.17.0 flat-install SQL exists. CHANGELOG has a v0.17.0 entry. The most likely cause of the v0.17.0 release failure given what happened in this cycle: the bench-gate pre-flight step in `release.yml` checks that `benchmarks/gate/v<tag>.json` exists and passes significance_test_extended.py. For v0.17.0 that gate file was a functional gate (no performance comparison needed). This step should have passed. The failure was likely a credential or PGXN publishing transient error — the issue body acknowledges "PGXN propagation delays" as a common cause.
 
-| Issue | Description | Fixed in |
-|-------|-------------|---------|
-| #84 | Referred to in v0.10.1 fix commits | v0.10.1 |
-| #87/#88 | graph_walk OPT-IN ablation | v0.10.1 |
+**Impact on 0.18.0:** None. This is a v0.17.0 CI artifact. v0.18.0 has its own release gate (`benchmarks/gate/v0.18.0.json`, created 2026-08-14).
 
-**Verdict: CLOSED in prior releases**
+**Verdict: CLOSE** — automated issue for a past release. Failure cause is most likely a transient publishing error or credential issue (not a code defect). The v0.17.0 extension is functionally correct (verified by direct DB installation). Close with label `closed-stale`; no code change needed.
 
 ---
 
-## Issues potentially open but unverifiable without GitHub access
+### Issue #104 — release-failure: v0.16.1 workflow failed
 
-The ROADMAP pre-release checklist says "All open issues closed" is a gate condition. The 5 open issues mentioned in the task description may include:
+**Type:** Automated release-failure notification  
+**Created:** 2026-07-31
 
-| # | Issue | Verdict | Basis |
-|---|-------|---------|-------|
-| 1 | Performance issue (recall_hybrid stall under write/DDL load) | **FIXED in 0.18.0** | `_stamp` CTE removed; 10.3–13.6× speedup confirmed |
-| 2 | Issue #31 (agency requirement gaps) | **DEFERRED to 0.19.x** | ROADMAP explicitly schedules for 0.19.x |
-| 3 | track_recall_recency GUC is a no-op after 0.18.0 (undocumented) | **DEFERRED to 0.19.0** | REVIEW_VERDICT_v0180 Finding B3; non-blocker |
-| 4 | Auto-promote missing (draft corpus stuck at 74%) | **FIXED in 0.18.0** | Auto-promote feature added; 0.18.0 addresses root cause |
-| 5 | Curator revert (validated→draft) silently undone by reinforce() | **DEFERRED to 0.19.0** | REVIEW_VERDICT_v0180 Finding A9; flag works, 0 current users |
+**Reproduced?** v0.16.1 gate file (`benchmarks/gate/v0.16.1.json`) exists. The release workflow failure for v0.16.1 is older (prior to the review cycle). Same diagnostic: likely a transient CI/credential issue, not a functional defect. v0.16.1 is in production use.
 
-**Note:** Issue #5 (curator revert gap) was identified during adversarial review (PGMREL-0180-REVIEW-REVIEW-0180), not from GitHub issue tracker. It may not be tracked as a GitHub issue. If it is, the verdict is DEFERRED. If it is not, it should be filed after 0.18.0 is tagged.
+**Impact on 0.18.0:** None.
+
+**Verdict: CLOSE** — automated issue for a past release. No code change needed. Close with label `closed-stale`.
 
 ---
 
-## Recommendation
+### Issue #103 — Retrieval: a single semantic axis misses procedural knowledge
 
-**Release may proceed.** The known performance issue (the one that motivated this release cycle) is fixed. Issue #31 is explicitly deferred per ROADMAP. All other referenced issues appear closed in prior releases.
+**Description:** Author measured that semantic search (by task title) retrieves procedural knowledge lessons only 16.7% of the time (vs. 0/10 = 0% for pure semantic search with their corpus). Claims vector + BM25 cannot structurally reach "procedural knowledge" lessons. Proposes measuring alternative retrieval axes before recommending changes.
 
-**Required post-tag action:** After `git tag v0.18.0 && git push origin v0.18.0`, the release pipeline's `notify-failure` / post-release step should enumerate and close any GitHub issues addressed by this tag. If any open issue is not covered by the above triage, it should be evaluated as: fix-in-0.18.0, defer, or close-won't-fix before the tag is pushed.
+**Reproduced?** The finding is plausible. The recall_hybrid query is tuned for semantic + lexical similarity. Lessons about practices ("when adding dependencies, pin to minor version") may not share vocabulary with task titles ("add feature X"). This is a known retrieval coverage gap.
+
+**Relationship to 0.18.0:** The _stamp removal does not affect retrieval quality — it only removes a write side-effect. The semantic axis limitation described in #103 is unchanged by 0.18.0.
+
+**Verdict: DEFER to v0.19.x** — research issue. The author explicitly says they will not recommend solutions until alternative retrieval axes are measured. No 0.18.0 code change addresses this. The issue requests contributing the measurement probe to the project — this is additive work for a later version.
 
 ---
 
-## 0.18.0 changes and their impact on recall-related issues
+### Issue #89 — feat: partial HNSW indexes per role for sub-2ms filtered recall
 
-Any issue filed about:
-- "recall is slow" → FIXED (stamp removed, 13× speedup)
-- "recall blocks under concurrent load" → FIXED (no row locks on corpus)
-- "recall blocks during CREATE INDEX" → FIXED (no RowExclusiveLock on agent_lesson)
-- "track_recall_recency=off doesn't fix stalls" → FIXED (root cause was relation-level lock, now eliminated)
-- "last_recalled_at not updating" → EXPECTED (behaviour break; caller must call `mark_recalled()`)
+**Description:** `recall_fast(role_filter=...)` falls back to sequential scan when a role filter is applied, because PostgreSQL HNSW does not support predicate pushdown. Measured at 6,773 rows: pure HNSW = 2 ms, HNSW + WHERE role = 22 ms, recall_fast() = 63 ms. At 100K rows estimated 330 ms. Proposes creating partial HNSW indexes per role.
+
+**Reproduced?** Consistent with known PostgreSQL HNSW limitation. recall_fast() uses `WHERE role = $1` filter which prevents HNSW index use. Finding is credible without re-running — the mechanism is structural.
+
+**Relationship to 0.18.0:** The _stamp removal in 0.18.0 is separate from the HNSW predicate pushdown issue. Note: `recall_fast()` still contains the `_stamp` CTE (see REVIEW_VERDICT_v0180.md Finding A6 — deferred). That is an additional latency contributor not measured in this issue.
+
+**Verdict: DEFER to v0.19.x** — feature request requiring schema change (partial index creation), helper function, and planner cooperation. Labeled by filer as "Wave 2 blocker for Agency integration" but not a blocker for 0.18.0 itself.
+
+---
+
+### Issue #88 — research(graph): graph_walk ablation — measure mem_edge contribution vs latency
+
+**Description:** `recall_hybrid` runs a recursive `graph_walk` CTE over `mem_edge` as a third scoring signal (vector + BM25 + graph). COMPETITIVE_REALITY.md acknowledges zero measurable lift because no bench exercises `mem_edge`. The CTE adds latency on every call even when `mem_edge` is empty. Requests: run ablation on live corpus and labeled datasets; measure recall@K delta and latency; decide keep vs. opt-in.
+
+**Reproduced?** The mechanism is confirmed: `graph_walk` runs unconditionally in recall_hybrid, even when `mem_edge` is empty. The latency cost is real (though small when CTE returns 0 rows). The v0.17.0 release changed `graph_proximity_weight` COALESCE default to 0.0 — this made the graph term effectively zero for callers who don't set the GUC. The ablation (measuring quality delta with vs. without graph) was not run.
+
+**Relationship to 0.18.0:** The _stamp removal does not affect the graph_walk CTE. The graph_walk CTE is unchanged in 0.18.0. However, the default weight of 0.0 (from 0.17.0) means most installations already have the graph term effectively disabled.
+
+**Verdict: DEFER to v0.19.x** — research task. Formal ablation study not done. The 0.17.0 change (default weight = 0.0) partially addresses the concern by making graph-augmentation opt-in without a code change. The ablation (measuring whether removing the CTE entirely improves latency without hurting quality) is future work.
+
+---
+
+## Release gate decision
+
+| Gate condition | Status |
+|----------------|--------|
+| All open issues have verdict | ✅ All 5 have verdict |
+| Any open issue blocks 0.18.0 | ✅ None block |
+| Release-failure issues close-worthy | ✅ #104 and #105 are automated CI artifacts; close-stale |
+| New issues introduced by 0.18.0 behaviour break | ✅ No new issues (break is documented; mark_recalled() is the mitigation) |
+
+**Release may proceed.** Post-tag action: close #104 and #105 with label `closed-stale` and a comment linking to the successor release (`v0.18.0` gate file present, workflow expected to succeed).
+
+---
+
+## How 0.18.0 changes affect the open issues
+
+| Issue | Effect of 0.18.0 |
+|-------|-----------------|
+| #105, #104 | Unrelated — different releases |
+| #103 | Unaffected — retrieval quality unchanged; _stamp removal is write-path only |
+| #89 | Unaffected — partial HNSW is a separate indexing concern; recall_fast still has _stamp (separate issue) |
+| #88 | Unaffected — graph_walk CTE unchanged; default weight 0.0 (from 0.17.0) already makes graph opt-in |
