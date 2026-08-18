@@ -1,0 +1,29 @@
+{
+  "version": "v0.18.1",
+  "date": "2026-08-18",
+  "pgmnemo_version": "0.18.1",
+  "measured_pgmnemo_version": "0.18.1",
+  "gate_status": "PASS",
+  "gate_type": "performance",
+  "significance_required": false,
+  "claim": "Fixes a hang in recall_hybrid present in 0.17.0 and 0.18.0: the graph-proximity walk was seeded unconditionally, ran with no cycle guard to depth 5, and its result was then multiplied by graph_proximity_weight (default 0.0) and discarded. On a 9,326-lesson / 74,778-edge corpus, 5 of 12 ordinary one-word queries exceeded an 8-second statement timeout on both released versions; 0 of 12 exceed it after the fix.",
+  "criterion": "no query in the probe set exceeds an 8s statement timeout, AND results at default weight are byte-identical to the previous version",
+  "result": {
+    "slow_queries_before_0_18_0": 5,
+    "slow_queries_before_0_17_0": 6,
+    "slow_queries_after": 0,
+    "probe_set_size": 12,
+    "identical_result_sets": "10 of 10 comparable queries (rows and scores to 9 decimals); the other 2 could not be compared because the unpatched version could not answer them at all",
+    "criterion_met": true
+  },
+  "methodology": {
+    "environment": "dedicated pgvector/pgvector:pg17 container, no other load; corpus copied from production; ANALYZE run",
+    "probe_set": "12 queries mixing one-word and multi-word forms; the defect only surfaces on queries whose top anchors are hubs in mem_edge, which is why earlier long-phrase benchmarks missed it entirely",
+    "before": ["fresh CREATE EXTENSION VERSION '0.17.0'", "fresh CREATE EXTENSION VERSION '0.18.0'"],
+    "after": "0.18.0 upgraded via pgmnemo--0.18.0--0.18.1.sql, and fresh 0.18.1 — body-hash parity verified between the two"
+  },
+  "disclosure": {
+    "how_it_was_missed": "The v0.18.0 benchmarks used long multi-word queries, which match few lessons and therefore seed few anchors. The published 0.18.0 latency figures are correct for that query family and silent about this one.",
+    "found_by": "converging the Agency production install to the exact released tag, which replaced locally patched function bodies with the released ones and made the hang reproducible"
+  }
+}
