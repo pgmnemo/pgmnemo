@@ -17,6 +17,46 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.19.0] - 2026-08-18
+
+### Fixed: Graph walk structural repairs (D1, D2, D3) + recall_entity read-path stamp removal (R-U1)
+
+Three structural defects in `graph_walk` CTEs identified via DB feasibility analysis (PGMREL-0190):
+
+**D1 (CRITICAL) — Cycle guard added to all recall_* graph_walk CTEs:**
+- All ~18 `recall_*` function variants now carry a `visited BIGINT[]` array column.
+- Recursive term adds `AND NOT (me.target_id = ANY(gw.visited))` to prevent re-visiting nodes.
+- Pattern mirrors the already-correct `traverse_causal_chain` implementation.
+- Prevents combinatorial blowup on cyclic subgraphs with hub nodes (degree 50+).
+
+**D2 (MODERATE) — navigate_locate bidirectional walk rewritten as UNION ALL:**
+- Previous `OR me.target_id = gw.reached_id` join condition forced BitmapOr (30-50% overhead).
+- Rewritten as two clean equi-join branches (forward + backward), each using its own index scan.
+- New partial index `ix_mem_edge_target_active ON mem_edge(target_id) WHERE valid_until IS NULL OR valid_until='infinity'` supports the backward branch.
+
+**D3 (MODERATE) — _max_depth reduced from 5 to 2 in all recall_* functions:**
+- At avg out-degree 6.4, depth 5 explores ~64k WorkTable rows (cost O(d^k)); depth 2 = ~240.
+- Nodes at depth 4-5 contribute ≤0.1 to the multiplicative graph factor — below noise floor.
+- navigate_locate was already at depth 2 (correct); now harmonised across all variants.
+
+**R-U1 — recall_entity recency stamp removed from read path:**
+- `recall_entity()` previously contained a data-modifying `stamped` CTE (UPDATE on agent_lesson).
+- Inconsistent with `recall_hybrid` / `recall_lessons` which removed theirs in v0.18.0.
+- `recall_entity()` is now `STABLE PARALLEL SAFE`.
+- Call `pgmnemo.mark_recalled(ARRAY(SELECT lesson_id FROM pgmnemo.recall_entity(...)))` to track recency.
+
+### Performance (estimated, warm cache, post-repair with graph_proximity_weight=0.2):
+- graph_walk contribution: 0.1–0.5 ms (was 5–15 ms at depth 5 with hub nodes)
+- Total read path: 3.3–4.8 ms (within 8 ms budget)
+
+### Migration:
+No schema changes. Upgrade with:
+```sql
+ALTER EXTENSION pgmnemo UPDATE TO '0.19.0';
+```
+
+---
+
 ## [0.18.0] - 2026-08-14
 
 ### ⚠️ BEHAVIOUR BREAK: `recall_hybrid` and `recall_lessons` no longer stamp recency

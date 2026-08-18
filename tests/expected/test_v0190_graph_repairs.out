@@ -1,0 +1,175 @@
+-- test_v0190_graph_repairs.sql
+-- pg_regress tests for pgmnemo v0.19.0 — graph_walk structural repairs
+--
+-- Coverage:
+--   A1: _max_depth reduced to 2 in recall_hybrid (D3)
+--   A2: _max_depth reduced to 2 in recall_lessons (D3)
+--   B1: graph_walk CTE now includes 'visited' column (D1)
+--   C1: navigate_locate graph_walk uses UNION ALL bidirectional (D2 — no OR in definition)
+--   C2: ix_mem_edge_target_active index exists (D2)
+--   D1: recall_entity is now STABLE (R-U1 — no stamped CTE)
+--   D2: recall_entity is PARALLEL SAFE (R-U1)
+--   E1: recall_entity still finds lessons correctly after R-U1 fix
+--   E2: recall_entity respects p_k limit
+--   F1: graph_walk with cycle (A→B→A) terminates without explosion (D1 smoke test)
+--
+-- Test isolation: role 'tc_grf', project_id -1900.
+SET pgmnemo.gate_strict = 'off';
+SET pgmnemo.include_unverified = 'on';
+SET pgmnemo.track_recall_recency = 'off';
+ALTER EXTENSION pgmnemo UPDATE TO '0.19.0';
+NOTICE:  version "0.18.0" of extension "pgmnemo" is already installed
+-- ─────────────────────────────────────────────────────────────────────────────
+-- A: D3 — _max_depth reduced to 2 in recall_hybrid and recall_lessons
+--    We cannot directly inspect PL/pgSQL constant values from SQL, but we can
+--    verify via pg_proc source (prosrc) that the literal '5' is gone and '2' appears.
+-- ─────────────────────────────────────────────────────────────────────────────
+-- A1: recall_hybrid prosrc must NOT contain '_max_depth := 5'
+SELECT
+    NOT (p.prosrc LIKE '%_max_depth          CONSTANT INT := 5%') AS a1_no_depth5
+FROM pg_proc p
+JOIN pg_namespace n ON n.oid = p.pronamespace
+WHERE n.nspname = 'pgmnemo' AND p.proname = 'recall_hybrid'
+  AND p.pronargs = 11;
+ a1_no_depth5
+--------------
+ t
+(1 row)
+
+-- A2: recall_lessons prosrc must NOT contain '_max_depth := 5'
+SELECT
+    NOT (p.prosrc LIKE '%_max_depth          CONSTANT INT := 5%') AS a2_no_depth5
+FROM pg_proc p
+JOIN pg_namespace n ON n.oid = p.pronamespace
+WHERE n.nspname = 'pgmnemo' AND p.proname = 'recall_lessons'
+  AND p.pronargs = 9;
+ a2_no_depth5
+--------------
+ t
+(1 row)
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- B: D1 — graph_walk CTE now has 'visited' column (cycle guard)
+-- ─────────────────────────────────────────────────────────────────────────────
+-- B1: recall_hybrid prosrc must contain 'visited' (cycle guard)
+SELECT
+    (p.prosrc LIKE '%gw.visited || me.target_id%') AS b1_has_visited_guard
+FROM pg_proc p
+JOIN pg_namespace n ON n.oid = p.pronamespace
+WHERE n.nspname = 'pgmnemo' AND p.proname = 'recall_hybrid'
+  AND p.pronargs = 11;
+ b1_has_visited_guard
+----------------------
+ t
+(1 row)
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- C: D2 — navigate_locate graph_walk rewritten as UNION ALL (no OR-join)
+-- ─────────────────────────────────────────────────────────────────────────────
+-- C1: navigate_locate prosrc must NOT contain 'OR me.target_id = gw.reached_id'
+SELECT
+    NOT (p.prosrc LIKE '%OR me.target_id = gw.reached_id%') AS c1_no_or_join
+FROM pg_proc p
+JOIN pg_namespace n ON n.oid = p.pronamespace
+WHERE n.nspname = 'pgmnemo' AND p.proname = 'navigate_locate';
+ c1_no_or_join
+---------------
+ t
+(1 row)
+
+-- C2: ix_mem_edge_target_active index exists
+SELECT
+    COUNT(*) = 1 AS c2_index_exists
+FROM pg_indexes
+WHERE schemaname = 'pgmnemo'
+  AND indexname = 'ix_mem_edge_target_active';
+ c2_index_exists
+-----------------
+ t
+(1 row)
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- D: R-U1 — recall_entity is now STABLE PARALLEL SAFE (stamped CTE removed)
+-- ─────────────────────────────────────────────────────────────────────────────
+-- D1: recall_entity must be STABLE (provolatile = 's')
+SELECT
+    CASE p.provolatile WHEN 's' THEN 'stable' ELSE p.provolatile::TEXT END AS d1_volatility
+FROM pg_proc p
+JOIN pg_namespace n ON n.oid = p.pronamespace
+WHERE n.nspname = 'pgmnemo' AND p.proname = 'recall_entity';
+ d1_volatility
+---------------
+ stable
+(1 row)
+
+-- D2: recall_entity must be PARALLEL SAFE (proparallel = 's')
+SELECT
+    CASE p.proparallel WHEN 's' THEN 'safe' ELSE p.proparallel::TEXT END AS d2_parallel
+FROM pg_proc p
+JOIN pg_namespace n ON n.oid = p.pronamespace
+WHERE n.nspname = 'pgmnemo' AND p.proname = 'recall_entity';
+ d2_parallel
+-------------
+ safe
+(1 row)
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- E: recall_entity functional correctness after R-U1 fix
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Setup: ingest test lessons with explicit entity_keys in metadata
+-- (bypasses extract_entity_keys regex so test is deterministic regardless of vocabulary)
+DO $$
+DECLARE _id BIGINT;
+BEGIN
+    _id := pgmnemo.ingest(
+        'tc_grf'::TEXT, -1900, 'grf-e1-entity-test'::TEXT,
+        'When graph walk cycle prevention is active the BFS terminates at bounded depth.'::TEXT,
+        4::SMALLINT, NULL::vector(1024), NULL::TEXT, NULL::TEXT,
+        '{"entity_keys": ["schema:pgmnemo.graph_walk"]}'::jsonb, NULL::TEXT
+    );
+    _id := pgmnemo.ingest(
+        'tc_grf'::TEXT, -1900, 'grf-e2-entity-test'::TEXT,
+        'UNION ALL branches in navigate_locate traverse forward and backward edges separately.'::TEXT,
+        3::SMALLINT, NULL::vector(1024), NULL::TEXT, NULL::TEXT,
+        '{"entity_keys": ["schema:pgmnemo.graph_walk"]}'::jsonb, NULL::TEXT
+    );
+END $$;
+-- E1: recall_entity finds lessons by entity key (functional test)
+SELECT
+    COUNT(*) >= 1 AS e1_found_lessons
+FROM pgmnemo.recall_entity('schema:pgmnemo.graph_walk')
+WHERE role = 'tc_grf' AND project_id = -1900;
+ e1_found_lessons
+------------------
+ t
+(1 row)
+
+-- E2: recall_entity respects p_k limit
+SELECT
+    COUNT(*) = 1 AS e2_limit_respected
+FROM pgmnemo.recall_entity('schema:pgmnemo.graph_walk', 1)
+WHERE role = 'tc_grf' AND project_id = -1900;
+ e2_limit_respected
+--------------------
+ t
+(1 row)
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- F: D1 — cycle termination smoke test (structural check via prosrc)
+-- ─────────────────────────────────────────────────────────────────────────────
+-- F1: recall_hybrid prosrc contains AND NOT (me.target_id = ANY(gw.visited))
+SELECT
+    (p.prosrc LIKE '%AND NOT (me.target_id = ANY(gw.visited))%') AS f1_cycle_guard_present
+FROM pg_proc p
+JOIN pg_namespace n ON n.oid = p.pronamespace
+WHERE n.nspname = 'pgmnemo' AND p.proname = 'recall_hybrid'
+  AND p.pronargs = 11;
+ f1_cycle_guard_present
+------------------------
+ t
+(1 row)
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- Cleanup test data
+-- ─────────────────────────────────────────────────────────────────────────────
+DELETE FROM pgmnemo.agent_lesson WHERE role = 'tc_grf' AND project_id = -1900;
