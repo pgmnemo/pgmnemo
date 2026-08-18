@@ -1,0 +1,52 @@
+{
+  "analysis_ts": "2026-08-18T14:50:24.235578+00:00",
+  "n_probe": 1500,
+  "n_ctrl": 200,
+  "primary": {
+    "test": "McNemar one-tailed (Wilcoxon on binary, Bonferroni \u03b1=0.025)",
+    "n00": 1500,
+    "n01": 0,
+    "n10": 0,
+    "n11": 0,
+    "hit10_arm_a": 0.0,
+    "hit10_arm_b": 0.0,
+    "delta_hit10": 0.0,
+    "cliffs_delta": 0.0,
+    "p_value": 1.0,
+    "ci_95_lo": 0.0,
+    "ci_95_hi": 0.0,
+    "note": "Degenerate McNemar: zero discordant pairs. p=1.0 exact."
+  },
+  "secondary_mrr": {
+    "mrr_a": 0.0,
+    "mrr_b": 0.0,
+    "delta_mrr": 0.0
+  },
+  "latency": {
+    "p50_arm_a_ms": 60.56,
+    "p95_arm_a_ms": 150.74,
+    "p50_arm_b_ms": 60.31,
+    "p95_arm_b_ms": 132.93,
+    "delta_p50_ms": -0.25,
+    "mean_diff_ms": -3.4,
+    "timeout_rate_a": 0.0,
+    "timeout_rate_b": 0.0,
+    "sign_test_pos": 659,
+    "sign_test_neg": 841
+  },
+  "specificity": {
+    "ctrl_n": 200,
+    "ctrl_p_a": 0.63,
+    "ctrl_p_b": 0.63,
+    "ctrl_n01": 0,
+    "ctrl_n10": 0,
+    "confound_detected": false
+  },
+  "verdict_criteria": {
+    "crit_1_p_ge_0025": true,
+    "crit_2_ci_includes_0": true,
+    "crit_3_cliffs_d_lt_01": true
+  },
+  "verdict": "\u041e\u041f\u0420\u041e\u0412\u0415\u0420\u0413\u041d\u0423\u0422\u041e",
+  "latency_null_finding_triggered": false
+}

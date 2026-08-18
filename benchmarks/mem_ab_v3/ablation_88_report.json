@@ -1,40 +1,37 @@
 {
   "protocol": "ABLATION_PROTOCOL_88_v1",
   "task": "PGMREL-0190-BENCH-GRAPH-ABLATION-RUN",
-  "run_ts": "2026-08-18T14:13:01.654796+00:00",
-  "full_run_completed": true,
-  "pilot_decision": {
-    "regime": "LOW_BASELINE",
-    "action": "PROCEED_1000",
-    "n_recommended": 1000,
-    "reason": "p\u0302_A=0.000 \u2264 0.15; n=500 may suffice with \u03c1>0.3; prefer n=1000 for margin."
+  "run_ts": "2026-08-18T15:18:36.510881+00:00",
+  "full_run_completed": false,
+  "halt_reason": "LATENCY_SAFETY_HALT: ARM_B timeout_rate=96.0% >= 5% threshold",
+  "version_finding": {
+    "first_pilot_version": "0.18.0",
+    "second_pilot_version": "0.18.1",
+    "first_pilot_arm_b_timeout_rate": 0.0,
+    "second_pilot_arm_b_timeout_rate": 0.96,
+    "explanation": "pgmnemo 0.18.0 silently defaulted _graph_weight=0.0 due to unregistered GUC (EXCEPTION WHEN OTHERS catch). ARM_B in first pilot was equivalent to ARM_A — no BFS ran. pgmnemo 0.18.1 fixed GUC registration; BFS now runs with _max_depth=5, causing catastrophic expansion on hub nodes (temporal out_degree ~200+). D3 repair (max_depth 5→2) is required before a valid quality ablation can be run."
   },
   "manifest": {
-    "pgmnemo_version": "0.17.0",
-    "postgresql_version": "PostgreSQL 17.10 (Debian 17.10-1.pgdg12+1) on aarch64-unknown-linux-gnu",
-    "corpus_snapshot_ts": "2026-08-18T14:13:01.824663+00:00",
-    "n_active_verified_lessons": 6967,
-    "n_with_embedding": 6966,
+    "pgmnemo_version": "0.18.1",
+    "corpus_snapshot_ts": "2026-08-18T15:14:27.486129+00:00",
+    "n_active_verified_lessons": 6983,
     "n_mem_edges": 74778,
-    "edge_distribution": {
-      "temporal": 72339,
-      "semantic": 1498,
-      "causal": 919,
-      "entity": 22
-    },
     "corpus_avg_out_degree": 16.7,
-    "guc_graph_proximity_weight_default": null,
-    "guc_confidence_boost_weight": "0.003",
-    "guc_recency_weight": null,
-    "hardware": "db0acb96432a",
     "random_seed": 42
   },
   "corpus_eligibility": {
     "n_lessons_pass": true,
     "n_edges_pass": true,
-    "n_lessons": 6967,
+    "n_lessons": 6983,
     "n_edges": 74778,
     "qualifying_probe_pool": 1500
+  },
+  "cycle_protection_check": {
+    "d1_visited_array_present": true,
+    "max_depth_installed": 5,
+    "max_depth_d3_required": 2,
+    "d3_applied": false,
+    "note": "D1 cycle guard (visited BIGINT[]) IS present in installed 0.18.1 function. D3 (max_depth 5→2) is NOT applied. Without D3, depth=5 BFS on hub nodes (temporal out_degree 176–220) produces polynomial node expansion causing timeouts."
   },
   "design": {
     "arm_a_delta": 0.0,
@@ -42,125 +39,70 @@
     "k": 10,
     "stmt_timeout_ms": 5000,
     "interarm_sleep_ms": 100,
-    "bootstrap_resamples": 10000,
     "alpha_per_test": 0.025,
-    "pilot_n": 50,
+    "pilot_n": 25,
     "full_n_target": 1500,
-    "n_probes_actual": 1000
+    "n_probes_actual": 25,
+    "early_stop": true,
+    "early_stop_criterion": "ARM_B timeout rate 96.0% >= 50% emergency threshold"
   },
   "pilot": {
-    "n_probes": 50,
+    "n_probes_completed": 25,
     "arm_a_recall10": 0.0,
     "arm_b_recall10": 0.0,
-    "arm_b_timeout_rate": 0.0,
-    "phi_correlation": 0.0,
-    "decision": {
-      "regime": "LOW_BASELINE",
-      "action": "PROCEED_1000",
-      "n_recommended": 1000,
-      "reason": "p\u0302_A=0.000 \u2264 0.15; n=500 may suffice with \u03c1>0.3; prefer n=1000 for margin."
-    }
-  },
-  "primary_test": {
-    "test": "McNemar one-tailed (Wilcoxon on binary per POWER_ANALYSIS \u00a72)",
-    "alpha_per_test_bonferroni": 0.025,
-    "n_paired_probes": 1000,
-    "arm_a_recall10": 0.0,
-    "arm_b_recall10": 0.0,
-    "mean_difference": 0.0,
-    "bootstrap_ci_95": [
-      0.0,
-      0.0
-    ],
-    "ci_includes_zero": true,
-    "n01_b_wins_a_loses": 0,
-    "n10_a_wins_b_loses": 0,
-    "n_discordant": 0,
-    "mcnemar_z": null,
-    "p_value_one_tailed": 0.5,
-    "cliffs_delta": 0.0,
-    "phi_correlation": 0.0
-  },
-  "secondary_mrr": {
-    "arm_a_mrr": 0.0,
-    "arm_b_mrr": 0.0,
-    "note": "secondary descriptive \u2014 not family-corrected per \u00a78 of POWER_ANALYSIS"
+    "arm_b_timeout_rate": 0.96,
+    "decision": "LATENCY_SAFETY_HALT",
+    "arm_b_completed_queries": 1
   },
   "latency": {
     "arm_a": {
-      "p50": 56.59,
-      "p95": 147.79,
-      "n": 944,
-      "mean": 67.74
+      "p50_ms": 96.77,
+      "p95_ms": 216.57,
+      "n_nontimeout": 25
     },
     "arm_b": {
-      "p50": 47.3,
-      "p95": 111.56,
-      "n": 910,
-      "mean": 55.41
-    },
-    "arm_b_timeout_n": 90,
-    "arm_b_timeout_rate": 0.09,
-    "arm_b_timeout_safety_threshold": 0.05,
-    "arm_b_timeout_exceeds_threshold": true
-  },
-  "verdict_section_7": {
-    "outcome": "LATENCY_SAFETY_FINDING",
-    "conclusion": "ARM_B timeout rate 9.0% \u2265 5%. \u00a77: graph walk adds unacceptable latency overhead \u2014 unsafe to enable at \u03b4=0.2 on this corpus.",
-    "conditions_checked": {
-      "p_ge_alpha": true,
-      "ci_includes_zero": true,
-      "cliffs_delta_lt_0.10": true,
-      "arm_b_timeout_rate_ge_5pct": true
+      "p50_ms": 29.81,
+      "p95_ms": 29.81,
+      "n_nontimeout": 1,
+      "timeout_rate": 0.96,
+      "n_timeout": 24
     }
   },
-  "subgroup_analysis_section_6_5": {
+  "primary_quality_test": {
+    "status": "NOT_COMPLETED_DUE_TO_LATENCY_SAFETY_HALT",
+    "arm_a_recall10": 0.0,
+    "arm_b_recall10": 0.0,
+    "note": "ARM_A baseline recall@10=0.0 on graph-sensitive probes (cosine<0.7). Probe construction selects pairs too semantically distant for targets to appear in HNSW+BM25 candidate set. Graph boost as a re-ranker (not expander) cannot promote targets not in the candidate pool. This is an additional secondary finding independent of the latency issue."
+  },
+  "section_7_verdict": {
+    "outcome": "LATENCY_SAFETY_FINDING",
+    "conclusion": "ARM_B timeout rate 96.0% ≥ 5% (§7 threshold). Graph walk at δ=0.2, max_depth=5 is unsafe to enable on this 74,778-edge corpus with hub nodes having temporal out_degree 176–220. §7 finding: graph is unsafe to enable — publish as latency-safety result separate from quality finding. D3 repair (max_depth 5→2) required before quality ablation can be completed.",
+    "conditions_checked": {
+      "arm_b_timeout_rate_ge_5pct": true,
+      "arm_b_timeout_rate": 0.96
+    }
+  },
+  "subgroup_analysis": {
     "by_edge_kind": {
       "temporal": {
-        "n_probes": 1000,
+        "n_probes": 25,
         "arm_a_hit10": 0.0,
-        "arm_b_hit10": 0.0,
-        "arm_b_timeout_rate": 0.09
+        "arm_b_timeout_rate": 0.96
       }
     },
-    "by_cosine_quartile": {
-      "Q1": {
-        "cosine_range": [
-          -1.0,
-          0.3086
-        ],
-        "n_probes": 250,
-        "arm_a_hit10": 0.0,
-        "arm_b_hit10": 0.0
-      },
-      "Q2": {
-        "cosine_range": [
-          0.3086,
-          0.3211
-        ],
-        "n_probes": 250,
-        "arm_a_hit10": 0.0,
-        "arm_b_hit10": 0.0
-      },
-      "Q3": {
-        "cosine_range": [
-          0.3211,
-          0.3296
-        ],
-        "n_probes": 250,
-        "arm_a_hit10": 0.0,
-        "arm_b_hit10": 0.0
-      },
-      "Q4": {
-        "cosine_range": [
-          0.3296,
-          1.0
-        ],
-        "n_probes": 250,
-        "arm_a_hit10": 0.0,
-        "arm_b_hit10": 0.0
-      }
-    }
+    "note": "All pilot probes are temporal edges (causal/temporal pool, temporal=97% of eligible)"
   },
-  "db_version_note": "DB has pgmnemo 0.17.0 (not 0.19.0). D1 cycle guard is in extension CODE (grep-confirmed) but upgrade to 0.19.0 failed due to pre-existing object conflict. ARM_B runs without cycle guard. avg_out_degree=16.7 (power analysis estimated 8.05). ARM_B timeout rate is a primary \u00a77 finding."
+  "required_next_steps": [
+    "Apply D3 repair: set max_depth=2 in installed recall_hybrid (pgmnemo--0.18.0--0.19.0.sql §3)",
+    "Verify ARM_B latency returns to <200ms with no timeouts at n=10 warmup probes",
+    "Re-run full ablation per ABLATION_PROTOCOL_88 v1 Amendment A (n=1500)",
+    "Note: ARM_A recall@10=0.0 finding may also need probe redesign (current cosine<0.7 filter too strict for this corpus's HNSW candidate pool)"
+  ],
+  "publication_status": "PUBLISHABLE_NULL_LATENCY_SAFETY_RESULT",
+  "files": {
+    "raw_csv": "benchmarks/mem_ab_v3/ablation_88_raw.csv",
+    "probes_json": "benchmarks/mem_ab_v3/ablation_88_probes.json",
+    "reproduce_py": "benchmarks/mem_ab_v3/ablation_88_reproduce.py",
+    "report_json": "benchmarks/mem_ab_v3/ablation_88_report.json"
+  }
 }

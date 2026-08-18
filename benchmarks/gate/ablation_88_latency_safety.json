@@ -1,0 +1,58 @@
+{
+  "gate_type": "LATENCY_SAFETY_FINDING",
+  "protocol": "ABLATION_PROTOCOL_88_v1",
+  "task": "PGMREL-0190-BENCH-GRAPH-ABLATION-RUN",
+  "release": "pgmnemo-release-0.19.0",
+  "run_date": "2026-08-18",
+  "outcome": "LATENCY_SAFETY_FINDING",
+  "publishable": true,
+  "summary": "ARM_B (graph_proximity_weight=0.2) timeout rate = 96.0% at max_depth=5 on 74,778-edge corpus with hub nodes (temporal_out_degree 176-220). Graph walk unsafe to enable at delta=0.2. D3 repair (max_depth 5->2) required before quality ablation.",
+  "key_numbers": {
+    "arm_a_delta": 0.0,
+    "arm_b_delta": 0.2,
+    "n_probes_completed": 25,
+    "arm_a_recall_at_10": 0.0,
+    "arm_b_recall_at_10": 0.0,
+    "arm_b_timeout_rate": 0.96,
+    "arm_a_latency_p50_ms": 96.77,
+    "arm_a_latency_p95_ms": 216.57,
+    "arm_b_latency_p50_ms_nontimeout": 29.81,
+    "arm_b_latency_p95_ms_nontimeout": 29.81,
+    "corpus_lessons": 6983,
+    "corpus_edges": 74778,
+    "corpus_avg_out_degree": 16.7,
+    "hub_temporal_out_degree_range": "176-220"
+  },
+  "section_7_conditions": {
+    "arm_b_timeout_rate_ge_5pct": true,
+    "conclusion": "Graph is unsafe to enable at delta=0.2 on a 74k-edge corpus regardless of quality result (§7 timeout null criterion)"
+  },
+  "additional_quality_finding": {
+    "arm_a_recall_at_10": 0.0,
+    "interpretation": "Graph-sensitive probe construction (cosine<0.7 filter on causal+temporal edges) selects targets too semantically distant to appear in HNSW+BM25 candidate set. Graph boost as re-ranker (not expander) cannot promote targets not in initial candidate pool.",
+    "probe_cosine_range": [0.2253, 0.3467],
+    "candidate_pool_min_score": 0.52
+  },
+  "version_discrepancy": {
+    "pgmnemo_0_18_0": "GUC pgmnemo.graph_proximity_weight not registered -> current_setting() raised exception caught by EXCEPTION WHEN OTHERS -> _graph_weight defaulted to 0.0 -> BFS never ran -> ARM_B equivalent to ARM_A (false pilot data)",
+    "pgmnemo_0_18_1": "GUC properly registered -> BFS runs at max_depth=5 -> 96% timeout rate on hub nodes",
+    "installed_at_ablation_time": "0.18.1",
+    "d1_cycle_guard_applied": true,
+    "d3_max_depth_reduced": false,
+    "d3_required": true
+  },
+  "required_before_quality_ablation": [
+    "Apply D3: SET max_depth=2 in recall_hybrid graph_walk (pgmnemo--0.18.0--0.19.0.sql §3)",
+    "Verify ARM_B latency <200ms with no timeouts at n=10 warmup probes",
+    "Consider probe redesign: cosine<0.7 filter may be too strict for this corpus (targets unreachable even via graph boost); cosine<0.9 + rank>10 filter may produce better graph-sensitive probes"
+  ],
+  "files": {
+    "raw_data": "benchmarks/mem_ab_v3/ablation_88_raw.csv",
+    "probes": "benchmarks/mem_ab_v3/ablation_88_probes.json",
+    "report": "benchmarks/mem_ab_v3/ablation_88_report.json",
+    "reproduce": "benchmarks/mem_ab_v3/ablation_88_reproduce.py",
+    "protocol": "spec/graphrag/ABLATION_PROTOCOL_88.md",
+    "power_analysis": "spec/graphrag/POWER_ANALYSIS.md"
+  },
+  "commit_note": "PGMREL-0190-BENCH-GRAPH-ABLATION-RUN: latency-safety finding, publishable null result"
+}

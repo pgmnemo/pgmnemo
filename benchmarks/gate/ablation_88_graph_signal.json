@@ -1,0 +1,82 @@
+{
+  "protocol": "ABLATION_PROTOCOL_88_v1",
+  "task": "PGMREL-0190-BENCH-GRAPH-ABLATION-RUN",
+  "pgmnemo_version": "0.19.0",
+  "run_ts": "2026-08-18T14:53:40.592227+00:00",
+  "report": "spec/graphrag/ABLATION_REPORT_88.md",
+  "dataset": "benchmarks/mem_ab_v3/ablation_88_raw.csv",
+  "reproduce": "benchmarks/mem_ab_v3/ablation_88_reproduce.py",
+  "prereqs_met": {
+    "D1_cycle_guard": true,
+    "D2_union_all": true,
+    "D3_depth_cap_2": true,
+    "corpus_lessons_ge_5000": true,
+    "corpus_edges_ge_50000": true
+  },
+  "design": {
+    "n_probe": 1500,
+    "n_ctrl": 200,
+    "arm_a_delta": 0.0,
+    "arm_b_delta": 0.2,
+    "k": 10,
+    "alpha_bonferroni": 0.025,
+    "amendment": "A_LIMIT_1500"
+  },
+  "pilot": {
+    "n": 50,
+    "arm_a_hit10": 0.0,
+    "arm_b_hit10": 0.0,
+    "lat_delta_p50_ms": -1.9,
+    "regime": "LOW_BASELINE",
+    "decision": "PROCEED_1500"
+  },
+  "primary_metric": {
+    "concordance": {
+      "n00": 1500,
+      "n01": 0,
+      "n10": 0,
+      "n11": 0
+    },
+    "hit10_arm_a": 0.0,
+    "hit10_arm_b": 0.0,
+    "delta_hit10": 0.0,
+    "cliffs_delta": 0.0,
+    "p_mcnemar_onetail": 1.0,
+    "ci_95": [
+      0.0,
+      0.0
+    ],
+    "note": "Degenerate McNemar: zero discordant pairs (n01=n10=0)"
+  },
+  "latency": {
+    "p50_arm_a_ms": 60.6,
+    "p95_arm_a_ms": 150.7,
+    "p50_arm_b_ms": 60.3,
+    "p95_arm_b_ms": 132.9,
+    "delta_p50_ms": -0.2,
+    "timeout_rate_arm_b": 0.0,
+    "finding": "No latency regression from graph walk at max_depth=2"
+  },
+  "specificity": {
+    "ctrl_n": 200,
+    "ctrl_hit10_arm_a": 0.63,
+    "ctrl_hit10_arm_b": 0.63,
+    "confound_detected": false
+  },
+  "verdict": {
+    "criteria_met": [
+      true,
+      true,
+      true
+    ],
+    "outcome": "ОПРОВЕРГНУТО",
+    "outcome_en": "NULL_RESULT",
+    "interpretation": "Graph signal (delta=0.2, max_depth=2) produces zero measurable recall improvement on temporal-edge probe set. Structural cause: recall_hybrid re-ranks existing ANN candidates only — graph-traversed nodes outside ANN pool are not retrievable. Default graph_proximity_weight=0.0 remains correct.",
+    "publish_null": true
+  },
+  "structural_finding": {
+    "finding": "Architecture gap: recall_hybrid performs re-ranking only, not retrieval expansion",
+    "implication": "Graph lift requires targets in ANN candidate pool (top-40 by cosine). Probes with seed_target_cosine < 0.7 exceed this threshold in corpora of this size.",
+    "future_work": "H-GRAPH-02: probe construction with cosine in [0.50,0.75] + target rank in [11,40] under ARM_A; or v0.20.0 retrieval-expansion architecture"
+  }
+}
