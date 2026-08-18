@@ -14,7 +14,7 @@
 SET pgmnemo.gate_strict = 'off';
 SET pgmnemo.include_unverified = 'on';
 
-ALTER EXTENSION pgmnemo UPDATE TO '0.18.0';
+ALTER EXTENSION pgmnemo UPDATE TO '0.19.0';
 
 -- =============================================================================
 -- Schema verification: new columns exist on agent_lesson

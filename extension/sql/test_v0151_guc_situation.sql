@@ -17,7 +17,7 @@ SET pgmnemo.gate_strict = 'off';
 SET pgmnemo.include_unverified = 'on';
 SET pgmnemo.track_recall_recency = 'off';
 
-ALTER EXTENSION pgmnemo UPDATE TO '0.18.0';
+ALTER EXTENSION pgmnemo UPDATE TO '0.19.0';
 
 -- =============================================================================
 -- A3-1: recall_situation() is LANGUAGE plpgsql after upgrade

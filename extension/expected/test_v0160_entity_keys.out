@@ -27,8 +27,8 @@
 SET pgmnemo.gate_strict = 'off';
 SET pgmnemo.include_unverified = 'on';
 SET pgmnemo.track_recall_recency = 'off';
-ALTER EXTENSION pgmnemo UPDATE TO '0.18.0';
-NOTICE:  version "0.18.0" of extension "pgmnemo" is already installed
+ALTER EXTENSION pgmnemo UPDATE TO '0.19.0';
+NOTICE:  version "0.19.0" of extension "pgmnemo" is already installed
 -- ─────────────────────────────────────────────────────────────────────────────
 -- A: extract_entity_keys — signature
 -- ─────────────────────────────────────────────────────────────────────────────
@@ -195,14 +195,16 @@ NOTICE:  C3 has entity_keys key: f
 -- D1: recall_entity — signature check (2 params, returns setof record)
 SELECT
     p.pronargs                                       AS nargs,
-    CASE p.provolatile WHEN 'v' THEN 'volatile' END   AS volatility,
+    -- v0.19.0 (R-U1): recall_entity no longer stamps recency on the read
+    -- path, so it is STABLE now — 'volatile' was the cost of the stamp.
+    CASE p.provolatile WHEN 's' THEN 'stable' END     AS volatility,
     p.proretset                                      AS returns_set
 FROM pg_proc p
 JOIN pg_namespace n ON n.oid = p.pronamespace
 WHERE n.nspname = 'pgmnemo' AND p.proname = 'recall_entity';
  nargs | volatility | returns_set 
 -------+------------+-------------
-     2 | volatile   | t
+     2 | stable     | t
 (1 row)
 
 -- Insert test data for recall_entity tests (no NOTICE — lesson_ids are dynamic)

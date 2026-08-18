@@ -18,7 +18,7 @@ SET pgmnemo.gate_strict = 'off';
 SET pgmnemo.include_unverified = 'on';
 SET pgmnemo.track_recall_recency = 'off';
 ALTER EXTENSION pgmnemo UPDATE TO '0.19.0';
-NOTICE:  version "0.18.0" of extension "pgmnemo" is already installed
+NOTICE:  version "0.19.0" of extension "pgmnemo" is already installed
 -- ─────────────────────────────────────────────────────────────────────────────
 -- A: D3 — _max_depth reduced to 2 in recall_hybrid and recall_lessons
 --    We cannot directly inspect PL/pgSQL constant values from SQL, but we can

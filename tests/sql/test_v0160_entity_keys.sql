@@ -29,7 +29,7 @@ SET pgmnemo.gate_strict = 'off';
 SET pgmnemo.include_unverified = 'on';
 SET pgmnemo.track_recall_recency = 'off';
 
-ALTER EXTENSION pgmnemo UPDATE TO '0.18.0';
+ALTER EXTENSION pgmnemo UPDATE TO '0.19.0';
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- A: extract_entity_keys — signature
@@ -157,7 +157,9 @@ END $$;
 -- D1: recall_entity — signature check (2 params, returns setof record)
 SELECT
     p.pronargs                                       AS nargs,
-    CASE p.provolatile WHEN 'v' THEN 'volatile' END   AS volatility,
+    -- v0.19.0 (R-U1): recall_entity no longer stamps recency on the read
+    -- path, so it is STABLE now — 'volatile' was the cost of the stamp.
+    CASE p.provolatile WHEN 's' THEN 'stable' END     AS volatility,
     p.proretset                                      AS returns_set
 FROM pg_proc p
 JOIN pg_namespace n ON n.oid = p.pronamespace
