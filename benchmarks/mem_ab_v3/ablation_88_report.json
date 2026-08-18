@@ -1,0 +1,168 @@
+{
+  "protocol": "ABLATION_PROTOCOL_88_v1",
+  "task": "PGMREL-0190-BENCH-GRAPH-ABLATION-RUN",
+  "run_ts": "2026-08-18T14:02:17.969873+00:00",
+  "full_run_completed": false,
+  "pilot_decision": {
+    "regime": "LATENCY_SAFETY_HALT",
+    "action": "HALT",
+    "n_recommended": null,
+    "reason": "ARM_B timeout rate 96.0% \u2265 5%. Fix 5 guard may not be bounding BFS. Escalate to engineering before full run. \u00a77 finding: graph is unsafe to enable at \u03b4=0.2 on this corpus."
+  },
+  "manifest": {
+    "pgmnemo_version": "0.17.0",
+    "postgresql_version": "PostgreSQL 17.10 (Debian 17.10-1.pgdg12+1) on aarch64-unknown-linux-gnu",
+    "corpus_snapshot_ts": "2026-08-18T14:02:18.303789+00:00",
+    "n_active_verified_lessons": 6962,
+    "n_with_embedding": 6962,
+    "n_mem_edges": 74778,
+    "edge_distribution": {
+      "temporal": 72339,
+      "semantic": 1498,
+      "causal": 919,
+      "entity": 22
+    },
+    "corpus_avg_out_degree": 16.7,
+    "guc_graph_proximity_weight_default": null,
+    "guc_confidence_boost_weight": "0.003",
+    "guc_recency_weight": null,
+    "hardware": "db0acb96432a",
+    "random_seed": 42
+  },
+  "corpus_eligibility": {
+    "n_lessons_pass": true,
+    "n_edges_pass": true,
+    "n_lessons": 6962,
+    "n_edges": 74778,
+    "qualifying_probe_pool": 1500
+  },
+  "design": {
+    "arm_a_delta": 0.0,
+    "arm_b_delta": 0.2,
+    "k": 10,
+    "stmt_timeout_ms": 5000,
+    "interarm_sleep_ms": 100,
+    "bootstrap_resamples": 10000,
+    "alpha_per_test": 0.025,
+    "pilot_n": 50,
+    "full_n_target": 1500,
+    "n_probes_actual": 25
+  },
+  "pilot": {
+    "n_probes": 50,
+    "arm_a_recall10": 0.0,
+    "arm_b_recall10": 0.0,
+    "arm_b_timeout_rate": 0.96,
+    "phi_correlation": 0.0,
+    "decision": {
+      "regime": "LATENCY_SAFETY_HALT",
+      "action": "HALT",
+      "n_recommended": null,
+      "reason": "ARM_B timeout rate 96.0% \u2265 5%. Fix 5 guard may not be bounding BFS. Escalate to engineering before full run. \u00a77 finding: graph is unsafe to enable at \u03b4=0.2 on this corpus."
+    }
+  },
+  "primary_test": {
+    "test": "McNemar one-tailed (Wilcoxon on binary per POWER_ANALYSIS \u00a72)",
+    "alpha_per_test_bonferroni": 0.025,
+    "n_paired_probes": 25,
+    "arm_a_recall10": 0.0,
+    "arm_b_recall10": 0.0,
+    "mean_difference": 0.0,
+    "bootstrap_ci_95": [
+      0.0,
+      0.0
+    ],
+    "ci_includes_zero": true,
+    "n01_b_wins_a_loses": 0,
+    "n10_a_wins_b_loses": 0,
+    "n_discordant": 0,
+    "mcnemar_z": null,
+    "p_value_one_tailed": 0.5,
+    "cliffs_delta": 0.0,
+    "phi_correlation": 0.0
+  },
+  "secondary_mrr": {
+    "arm_a_mrr": 0.0,
+    "arm_b_mrr": 0.0,
+    "note": "secondary descriptive \u2014 not family-corrected per \u00a78 of POWER_ANALYSIS"
+  },
+  "latency": {
+    "arm_a": {
+      "p50": 85.17,
+      "p95": 179.81,
+      "n": 25,
+      "mean": 103.85
+    },
+    "arm_b": {
+      "p50": 48.38,
+      "p95": 48.38,
+      "n": 1,
+      "mean": 48.38
+    },
+    "arm_b_timeout_n": 24,
+    "arm_b_timeout_rate": 0.96,
+    "arm_b_timeout_safety_threshold": 0.05,
+    "arm_b_timeout_exceeds_threshold": true,
+    "arm_b_single_query_completed_ms": 4633.1,
+    "note": "ARM_B p50/p95 based on only 1 completed query (96% timed out). The single completed ARM_B query: 4633ms (vs ARM_A p50=85ms). ARM_A BFS is blocked by Fix5 guard in recall_hybrid; the 85ms ARM_A baseline reflects HNSW+BM25 on 6962-lesson corpus (no BFS cost). ARM_B BFS runs without D1 cycle guard (pgmnemo 0.17.0) and causes recursive CTE expansion with avg_out_degree=16.70, _max_depth=5 \u2192 catastrophic path enumeration."
+  },
+  "verdict_section_7": {
+    "outcome": "LATENCY_SAFETY_FINDING",
+    "conclusion": "ARM_B timeout rate 96.0% \u2265 5%. \u00a77: graph walk adds unacceptable latency overhead \u2014 unsafe to enable at \u03b4=0.2 on this corpus.",
+    "conditions_checked": {
+      "p_ge_alpha": true,
+      "ci_includes_zero": true,
+      "cliffs_delta_lt_0.10": true,
+      "arm_b_timeout_rate_ge_5pct": true
+    }
+  },
+  "subgroup_analysis_section_6_5": {
+    "by_edge_kind": {
+      "temporal": {
+        "n_probes": 25,
+        "arm_a_hit10": 0.0,
+        "arm_b_hit10": 0.0,
+        "arm_b_timeout_rate": 0.96
+      }
+    },
+    "by_cosine_quartile": {
+      "Q1": {
+        "cosine_range": [
+          -1.0,
+          0.2607
+        ],
+        "n_probes": 6,
+        "arm_a_hit10": 0.0,
+        "arm_b_hit10": 0.0
+      },
+      "Q2": {
+        "cosine_range": [
+          0.2607,
+          0.2653
+        ],
+        "n_probes": 6,
+        "arm_a_hit10": 0.0,
+        "arm_b_hit10": 0.0
+      },
+      "Q3": {
+        "cosine_range": [
+          0.2653,
+          0.2689
+        ],
+        "n_probes": 6,
+        "arm_a_hit10": 0.0,
+        "arm_b_hit10": 0.0
+      },
+      "Q4": {
+        "cosine_range": [
+          0.2689,
+          1.0
+        ],
+        "n_probes": 7,
+        "arm_a_hit10": 0.0,
+        "arm_b_hit10": 0.0
+      }
+    }
+  },
+  "db_version_note": "DB has pgmnemo 0.17.0 (not 0.19.0). D1 cycle guard is in extension CODE (grep-confirmed) but upgrade to 0.19.0 failed due to pre-existing object conflict. ARM_B runs without cycle guard. avg_out_degree=16.7 (power analysis estimated 8.05). ARM_B timeout rate is a primary \u00a77 finding."
+}

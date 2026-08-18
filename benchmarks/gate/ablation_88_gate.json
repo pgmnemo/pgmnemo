@@ -1,0 +1,74 @@
+{
+  "gate_id": "ABLATION-88-PGMREL-0190",
+  "gate_type": "G-EVIDENCE-INTEGRITY",
+  "protocol": "ABLATION_PROTOCOL_88_v1",
+  "task": "PGMREL-0190-BENCH-GRAPH-ABLATION-RUN",
+  "date": "2026-08-18",
+  "release": "pgmnemo-0.19.0",
+  "run_configuration": {
+    "pgmnemo_version_running": "0.17.0",
+    "pgmnemo_version_code": "0.19.0 (D1-D3 in extension SQL, confirmed by grep)",
+    "db_upgrade_attempted": true,
+    "db_upgrade_result": "FAILED \u2014 auto_promote_drafts not owned by extension",
+    "arm_a_delta": 0.0,
+    "arm_b_delta": 0.2,
+    "k": 10,
+    "stmt_timeout_ms": 5000,
+    "n_probes_pilot": 50,
+    "n_probes_measured": 25,
+    "bootstrap_resamples": 10000,
+    "alpha_per_test_bonferroni": 0.025,
+    "random_seed": 42
+  },
+  "corpus": {
+    "n_active_verified_lessons": 6962,
+    "n_mem_edges": 74778,
+    "corpus_avg_out_degree": 16.7,
+    "qualifying_probe_pairs": 1500,
+    "eligibility_5000_lessons": true,
+    "eligibility_50000_edges": true
+  },
+  "section_7_verdict": {
+    "outcome": "LATENCY_SAFETY_FINDING",
+    "publishable": true,
+    "arm_b_timeout_rate": 0.96,
+    "arm_b_timeout_threshold": 0.05,
+    "arm_b_exceeds_threshold": true,
+    "arm_a_latency_p50_ms": 85.17,
+    "arm_b_latency_p50_ms": null,
+    "arm_b_latency_single_completed_ms": 4633.1,
+    "conclusion": "ARM_B (graph_proximity_weight=0.2) is UNSAFE to enable on this corpus. pgmnemo 0.17.0 lacks D1 cycle guard; with avg_out_degree=16.70 and _max_depth=5, the BFS recursive CTE causes catastrophic path enumeration and 96% query timeout rate. Quality measurement (hit@10) is blocked: ARM_B measurements are invalid (timeout-dominated). D1-D3 repairs exist in code (pgmnemo--0.19.0.sql, grep-confirmed) but are not deployed to this DB. Retry ablation after successful DB upgrade to 0.19.0."
+  },
+  "primary_test_blocked": {
+    "reason": "ARM_B timeout rate 96% makes hit@10 measurement invalid (timeouts counted as 0, not true miss)",
+    "arm_a_recall10": 0.0,
+    "arm_b_recall10": 0.0,
+    "note": "ARM_A recall@10=0.0 is EXPECTED: probe set selects graph-sensitive pairs with cosine<0.7 (targets not in cosine top-10 by design). ARM_B recall@10=0.0 is INVALID: timeout-dominated."
+  },
+  "power_analysis_status": {
+    "pilot_regime": "LATENCY_SAFETY_HALT",
+    "amendment_a_probe_pool_n": 1500,
+    "phi_correlation_pilot": 0.0,
+    "note": "Full power analysis inputs (p_A estimate) blocked by latency safety halt"
+  },
+  "subgroup_notes": {
+    "edge_kind_split": "Not computed: insufficient ARM_B completions for subgroup analysis",
+    "query_hop_class": "All probes are effectively single-hop (depth-1 edges in construction SQL \u00a74.3)"
+  },
+  "next_action": {
+    "action": "HALT",
+    "required": [
+      "Resolve db upgrade blocker: auto_promote_drafts function ownership conflict",
+      "Upgrade pgmnemo to 0.19.0 in bench environment (D1 cycle guard, D3 depth cap 5\u21922)",
+      "Re-run ablation after upgrade: ARM_B with depth=2 and cycle guard expected safe (\u00a77: timeout rate <5%)",
+      "Full probe run n=1500 per Amendment A to POWER_ANALYSIS.md"
+    ]
+  },
+  "files": {
+    "probe_list": "benchmarks/mem_ab_v3/ablation_88_probes.json",
+    "raw_csv": "benchmarks/mem_ab_v3/ablation_88_raw.csv",
+    "full_report": "benchmarks/mem_ab_v3/ablation_88_report.json",
+    "reproduce_script": "benchmarks/mem_ab_v3/ablation_88_reproduce.py",
+    "harness": "benchmarks/scripts/ablation_88_protocol.py"
+  }
+}
