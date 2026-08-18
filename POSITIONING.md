@@ -99,7 +99,7 @@ Agents at one engineering team used 68% fewer turns on runs where memory fired a
 
 ### The graph layer does not improve recall
 
-pgmnemo includes `add_edge()` and graph traversal primitives. The `graph_proximity_weight` GUC defaults to 0.2. We have no published benchmark showing graph-augmented recall outperforms hybrid (vector + BM25) alone. The graph layer ships for dependency tracking and causal chains, not as a recall quality lever.
+pgmnemo includes `add_edge()` and graph traversal primitives. We have no published benchmark showing graph-augmented recall outperforms hybrid (vector + BM25) alone, so as of v0.17.0 the `graph_proximity_weight` GUC defaults to **0.0** — the graph signal is opt-in, not on by default. It had been 0.2 in one code path and 0.0 in another, which meant the value you got depended on which entry point you called; that is now unified. The graph layer ships for dependency tracking and causal chains, not as a recall quality lever, and it will not be sold as one until an ablation says otherwise ([issue #88](https://github.com/pgmnemo/pgmnemo/issues/88)).
 
 ### BM25 baseline still wins on LongMemEval-S
 
