@@ -18,6 +18,25 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
+## [0.18.1] - 2026-08-18
+
+**Fix: `recall_hybrid` could hang.** The graph-proximity walk was seeded unconditionally, ran to
+depth 5 with no cycle guard, and its result was then multiplied by `pgmnemo.graph_proximity_weight`
+— which defaults to `0.0` — and discarded. On a 9,326-lesson / 74,778-edge corpus, **5 of 12
+ordinary one-word queries exceeded an 8-second statement timeout** on 0.17.0 and 0.18.0 alike;
+0 of 12 after this fix. `recall_lessons` already had the weight guard and gains only the cycle guard.
+
+At the default weight this changes no result — the proximity term is multiplied by zero either way,
+verified as identical rows and scores on every query the unpatched version could answer.
+
+If you enabled `graph_proximity_weight`, the cycle guard now stops a node being revisited on a
+walk; scores that previously double-counted a cycle will change.
+
+**Why 0.18.0's benchmarks missed it:** they used long multi-word queries, which match few lessons
+and seed few anchors. The defect needs an anchor that is a hub in `mem_edge`. The published 0.18.0
+latency numbers are correct for that query family and silent about this one. Found by converging a
+production install to the exact released tag. See `benchmarks/gate/v0.18.1.json`.
+
 ## [0.18.0] - 2026-08-14
 
 ### ⚠️ BEHAVIOUR BREAK: `recall_hybrid` and `recall_lessons` no longer stamp recency
@@ -2706,23 +2725,3 @@ Initial schema: `pgmnemo.agent_lesson` table + basic HNSW index.
 [0.1.1]: https://github.com/pgmnemo/pgmnemo/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/pgmnemo/pgmnemo/compare/v0.0.1...v0.1.0
 [0.0.1]: https://github.com/pgmnemo/pgmnemo/releases/tag/v0.0.1
-## 0.18.1 — 2026-08-18
-
-**Fix: `recall_hybrid` could hang.** The graph-proximity walk was seeded unconditionally, ran to
-depth 5 with no cycle guard, and its result was then multiplied by `pgmnemo.graph_proximity_weight`
-— which defaults to `0.0` — and discarded. On a 9,326-lesson / 74,778-edge corpus, **5 of 12
-ordinary one-word queries exceeded an 8-second statement timeout** on 0.17.0 and 0.18.0 alike;
-0 of 12 after this fix. `recall_lessons` already had the weight guard and gains only the cycle guard.
-
-At the default weight this changes no result — the proximity term is multiplied by zero either way,
-verified as identical rows and scores on every query the unpatched version could answer.
-
-If you enabled `graph_proximity_weight`, the cycle guard now stops a node being revisited on a
-walk; scores that previously double-counted a cycle will change.
-
-**Why 0.18.0's benchmarks missed it:** they used long multi-word queries, which match few lessons
-and seed few anchors. The defect needs an anchor that is a hub in `mem_edge`. The published 0.18.0
-latency numbers are correct for that query family and silent about this one. Found by converging a
-production install to the exact released tag. See `benchmarks/gate/v0.18.1.json`.
-
-

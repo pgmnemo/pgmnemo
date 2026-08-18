@@ -44,5 +44,13 @@ while read -r pin; do
 done <<< "$(grep -rhoE "UPDATE TO '[0-9]+\.[0-9]+\.[0-9]+'" extension/sql 2>/dev/null \
             | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | sort -u)"
 
+
+# CHANGELOG heading. The release pre-flight greps for the exact form '## [X.Y.Z]';
+# a heading written any other way (## X.Y.Z — date) reads fine to a human and
+# fails the release after the tag is already pushed.
+grep -qE "^## \\[$V\\]" CHANGELOG.md \
+  && echo "  ok        CHANGELOG heading ## [$V]" \
+  || { echo "  MISMATCH  CHANGELOG heading: no '## [$V]' in CHANGELOG.md"; fail=1; }
+
 [ $fail -eq 0 ] && { echo "G-VERSION-PLACES: PASS"; exit 0; } || { echo "G-VERSION-PLACES: FAIL"; exit 1; }
 
