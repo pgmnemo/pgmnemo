@@ -1,20 +1,20 @@
 {
   "protocol": "ABLATION_PROTOCOL_88_v1",
   "task": "PGMREL-0190-BENCH-GRAPH-ABLATION-RUN",
-  "run_ts": "2026-08-18T14:02:17.969873+00:00",
-  "full_run_completed": false,
+  "run_ts": "2026-08-18T14:13:01.654796+00:00",
+  "full_run_completed": true,
   "pilot_decision": {
-    "regime": "LATENCY_SAFETY_HALT",
-    "action": "HALT",
-    "n_recommended": null,
-    "reason": "ARM_B timeout rate 96.0% \u2265 5%. Fix 5 guard may not be bounding BFS. Escalate to engineering before full run. \u00a77 finding: graph is unsafe to enable at \u03b4=0.2 on this corpus."
+    "regime": "LOW_BASELINE",
+    "action": "PROCEED_1000",
+    "n_recommended": 1000,
+    "reason": "p\u0302_A=0.000 \u2264 0.15; n=500 may suffice with \u03c1>0.3; prefer n=1000 for margin."
   },
   "manifest": {
     "pgmnemo_version": "0.17.0",
     "postgresql_version": "PostgreSQL 17.10 (Debian 17.10-1.pgdg12+1) on aarch64-unknown-linux-gnu",
-    "corpus_snapshot_ts": "2026-08-18T14:02:18.303789+00:00",
-    "n_active_verified_lessons": 6962,
-    "n_with_embedding": 6962,
+    "corpus_snapshot_ts": "2026-08-18T14:13:01.824663+00:00",
+    "n_active_verified_lessons": 6967,
+    "n_with_embedding": 6966,
     "n_mem_edges": 74778,
     "edge_distribution": {
       "temporal": 72339,
@@ -32,7 +32,7 @@
   "corpus_eligibility": {
     "n_lessons_pass": true,
     "n_edges_pass": true,
-    "n_lessons": 6962,
+    "n_lessons": 6967,
     "n_edges": 74778,
     "qualifying_probe_pool": 1500
   },
@@ -46,25 +46,25 @@
     "alpha_per_test": 0.025,
     "pilot_n": 50,
     "full_n_target": 1500,
-    "n_probes_actual": 25
+    "n_probes_actual": 1000
   },
   "pilot": {
     "n_probes": 50,
     "arm_a_recall10": 0.0,
     "arm_b_recall10": 0.0,
-    "arm_b_timeout_rate": 0.96,
+    "arm_b_timeout_rate": 0.0,
     "phi_correlation": 0.0,
     "decision": {
-      "regime": "LATENCY_SAFETY_HALT",
-      "action": "HALT",
-      "n_recommended": null,
-      "reason": "ARM_B timeout rate 96.0% \u2265 5%. Fix 5 guard may not be bounding BFS. Escalate to engineering before full run. \u00a77 finding: graph is unsafe to enable at \u03b4=0.2 on this corpus."
+      "regime": "LOW_BASELINE",
+      "action": "PROCEED_1000",
+      "n_recommended": 1000,
+      "reason": "p\u0302_A=0.000 \u2264 0.15; n=500 may suffice with \u03c1>0.3; prefer n=1000 for margin."
     }
   },
   "primary_test": {
     "test": "McNemar one-tailed (Wilcoxon on binary per POWER_ANALYSIS \u00a72)",
     "alpha_per_test_bonferroni": 0.025,
-    "n_paired_probes": 25,
+    "n_paired_probes": 1000,
     "arm_a_recall10": 0.0,
     "arm_b_recall10": 0.0,
     "mean_difference": 0.0,
@@ -88,27 +88,25 @@
   },
   "latency": {
     "arm_a": {
-      "p50": 85.17,
-      "p95": 179.81,
-      "n": 25,
-      "mean": 103.85
+      "p50": 56.59,
+      "p95": 147.79,
+      "n": 944,
+      "mean": 67.74
     },
     "arm_b": {
-      "p50": 48.38,
-      "p95": 48.38,
-      "n": 1,
-      "mean": 48.38
+      "p50": 47.3,
+      "p95": 111.56,
+      "n": 910,
+      "mean": 55.41
     },
-    "arm_b_timeout_n": 24,
-    "arm_b_timeout_rate": 0.96,
+    "arm_b_timeout_n": 90,
+    "arm_b_timeout_rate": 0.09,
     "arm_b_timeout_safety_threshold": 0.05,
-    "arm_b_timeout_exceeds_threshold": true,
-    "arm_b_single_query_completed_ms": 4633.1,
-    "note": "ARM_B p50/p95 based on only 1 completed query (96% timed out). The single completed ARM_B query: 4633ms (vs ARM_A p50=85ms). ARM_A BFS is blocked by Fix5 guard in recall_hybrid; the 85ms ARM_A baseline reflects HNSW+BM25 on 6962-lesson corpus (no BFS cost). ARM_B BFS runs without D1 cycle guard (pgmnemo 0.17.0) and causes recursive CTE expansion with avg_out_degree=16.70, _max_depth=5 \u2192 catastrophic path enumeration."
+    "arm_b_timeout_exceeds_threshold": true
   },
   "verdict_section_7": {
     "outcome": "LATENCY_SAFETY_FINDING",
-    "conclusion": "ARM_B timeout rate 96.0% \u2265 5%. \u00a77: graph walk adds unacceptable latency overhead \u2014 unsafe to enable at \u03b4=0.2 on this corpus.",
+    "conclusion": "ARM_B timeout rate 9.0% \u2265 5%. \u00a77: graph walk adds unacceptable latency overhead \u2014 unsafe to enable at \u03b4=0.2 on this corpus.",
     "conditions_checked": {
       "p_ge_alpha": true,
       "ci_includes_zero": true,
@@ -119,46 +117,46 @@
   "subgroup_analysis_section_6_5": {
     "by_edge_kind": {
       "temporal": {
-        "n_probes": 25,
+        "n_probes": 1000,
         "arm_a_hit10": 0.0,
         "arm_b_hit10": 0.0,
-        "arm_b_timeout_rate": 0.96
+        "arm_b_timeout_rate": 0.09
       }
     },
     "by_cosine_quartile": {
       "Q1": {
         "cosine_range": [
           -1.0,
-          0.2607
+          0.3086
         ],
-        "n_probes": 6,
+        "n_probes": 250,
         "arm_a_hit10": 0.0,
         "arm_b_hit10": 0.0
       },
       "Q2": {
         "cosine_range": [
-          0.2607,
-          0.2653
+          0.3086,
+          0.3211
         ],
-        "n_probes": 6,
+        "n_probes": 250,
         "arm_a_hit10": 0.0,
         "arm_b_hit10": 0.0
       },
       "Q3": {
         "cosine_range": [
-          0.2653,
-          0.2689
+          0.3211,
+          0.3296
         ],
-        "n_probes": 6,
+        "n_probes": 250,
         "arm_a_hit10": 0.0,
         "arm_b_hit10": 0.0
       },
       "Q4": {
         "cosine_range": [
-          0.2689,
+          0.3296,
           1.0
         ],
-        "n_probes": 7,
+        "n_probes": 250,
         "arm_a_hit10": 0.0,
         "arm_b_hit10": 0.0
       }

@@ -1,6 +1,6 @@
 {
   "protocol_version": "ABLATION_PROTOCOL_88_v1",
-  "corpus_snapshot_ts": "2026-08-18T14:02:18.303789+00:00",
+  "corpus_snapshot_ts": "2026-08-18T14:13:01.824663+00:00",
   "amendment": "A (LIMIT 1500 per POWER_ANALYSIS.md)",
   "probes": [
     {
