@@ -395,6 +395,18 @@ CREATE INDEX ix_mem_edge_metadata_gin
 CREATE INDEX ix_pgmnemo_mem_edge_kind_time
     ON pgmnemo.mem_edge (edge_kind, created_at DESC);
 
+-- v0.19.0 D2: partial index on mem_edge(target_id) for active edges.
+-- Supports the backward UNION ALL branch in navigate_locate graph_walk.
+-- Avoids BitmapOr overhead of the prior OR-join condition.
+CREATE INDEX IF NOT EXISTS ix_mem_edge_target_active
+    ON pgmnemo.mem_edge (target_id)
+    WHERE valid_until IS NULL OR valid_until = 'infinity'::TIMESTAMPTZ;
+
+COMMENT ON INDEX pgmnemo.ix_mem_edge_target_active IS
+    'v0.19.0 D2: partial index on mem_edge(target_id) for active edges. '
+    'Supports the backward UNION ALL branch in navigate_locate graph_walk. '
+    'Avoids BitmapOr overhead of the prior OR-join condition.';
+
 CREATE TRIGGER mem_edge_updated_at
     BEFORE UPDATE ON pgmnemo.mem_edge
     FOR EACH ROW EXECUTE FUNCTION pgmnemo._set_updated_at();
