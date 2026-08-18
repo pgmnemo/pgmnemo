@@ -25,9 +25,15 @@ cleanup() {
 }
 trap cleanup EXIT
 
-SIGS="SELECT p.oid::regprocedure::text FROM pg_proc p
+# Signatures AND body hashes: the 0.17.0->0.18.0 migration shipped nine
+# functions whose signatures matched the flat install while their bodies
+# differed — upgraded recall_hybrid failed every text-only call. Signature
+# parity alone is blind to that class.
+SIGS="SELECT p.oid::regprocedure::text || '|' || md5(pg_get_functiondef(p.oid))
+      FROM pg_proc p
+      JOIN pg_depend d ON d.objid = p.oid AND d.deptype = 'e'
       JOIN pg_namespace n ON n.oid = p.pronamespace
-      WHERE n.nspname = 'pgmnemo' ORDER BY 1"
+      WHERE n.nspname = 'pgmnemo' AND p.prokind = 'f' ORDER BY 1"
 
 psql -q -d postgres -c "CREATE DATABASE $DB_FRESH" >/dev/null
 psql -q -d "$DB_FRESH" -c "CREATE EXTENSION vector; CREATE EXTENSION pgmnemo VERSION '$TO';" >/dev/null

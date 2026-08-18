@@ -8,7 +8,7 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 | Version | Breaking change | Migration |
 |---|---|---|
-| **0.18.0** | `recall_hybrid` / `recall_lessons` no longer stamp `last_recalled_at` / `recall_count` on every call — `_stamp` CTE removed for 13.6× latency reduction | Call `pgmnemo.mark_recalled(ARRAY(SELECT lesson_id FROM pgmnemo.recall_hybrid(...)))` after each recall to restore recency tracking |
+| **0.18.0** | `recall_hybrid` / `recall_lessons` no longer stamp `last_recalled_at` / `recall_count` on every call — `_stamp` CTE removed — reads no longer take locks; under concurrent writes p95 halves and lock-convoy stalls are eliminated (quiet-system median unchanged) | Call `pgmnemo.mark_recalled(ARRAY(SELECT lesson_id FROM pgmnemo.recall_hybrid(...)))` after each recall to restore recency tracking |
 | **0.17.0** | `graph_proximity_weight` COALESCE default unified `0.2` → `0.0` in `recall_hybrid` (10p, 11p) and `navigate_locate` (5p) — callers with unset GUC lost implicit graph weighting | `SET pgmnemo.graph_proximity_weight = '0.2'` restores the 0.16.1 effective weight |
 | **0.9.1** | `navigate_expand` 4-arg overload dropped (5th param `relation_types TEXT[]` added) | Positional callers unaffected (DEFAULT NULL); explicit overload refs must update |
 | **0.9.0** | `navigate_locate` budget counter fixed — ~5× more IDs returned per equivalent budget | Callers with `token_budget_chars` need proportional adjustment; see §Breaking changes in [0.9.0] |
@@ -40,7 +40,7 @@ SELECT pgmnemo.mark_recalled(
 
 **What stops working if you do nothing:** `mark_stale()` and corpus curation depend on `last_recalled_at` to identify lessons not recalled in recent sessions. If callers do not call `mark_recalled()`, the recency signal will stagnate and `mark_stale()` will eventually demote the entire corpus. Call `mark_recalled()` after each recall, or accept that curation is disabled.
 
-**Performance improvement:** 44.2 ms → 3.2 ms median (13.6× speedup). Under concurrent write load: no longer blocks. See `benchmarks/results/PGMREL-0180-BENCH-PERF-HYBRID-UNDER-WRITE-LOAD.md` for full before/after numbers.
+**Performance:** under concurrent writes, median 23.4 ms → 15.4 ms and p95 372 ms → 178 ms (paired isolated benches, identical 9.3k-lesson corpus); production lock-convoy stalls up to `statement_timeout` are eliminated. **Quiet-system median is unchanged** (9.7 ms → 10.9 ms, within noise). An earlier 13.6× figure compared against a *live contended cluster* baseline and is withdrawn — see `benchmarks/gate/v0.18.0.json` for both measurements and the correction.
 
 **New function:** `pgmnemo.mark_recalled(lesson_ids BIGINT[]) RETURNS VOID` — explicit VOLATILE write-back. Call it asynchronously, batch it, or omit it for read-heavy workloads that do not need recency tracking.
 
