@@ -1,0 +1,73 @@
+{
+  "version": "v0.19.0-graph-ablation",
+  "date": "2026-08-18",
+  "pgmnemo_version": "0.19.0",
+  "gate_status": "NULL_RESULT",
+  "gate_type": "ablation",
+  "protocol": "spec/graphrag/ABLATION_PROTOCOL_88.md",
+  "task": "PGMREL-0190-BENCH-GRAPH-ABLATION-RUN",
+  "claim": "H-GRAPH-01: graph_proximity_weight=0.2 does NOT improve recall@10 on graph-sensitive probes (ANN retrieval gate prevents graph-reached non-candidates from appearing in results)",
+  "verdict_ru": "ОПРОВЕРГНУТО",
+  "verdict_en": "NULL_RESULT",
+  "publish_null": true,
+  "scope": {
+    "arms": [
+      {"arm": "ARM_A", "graph_proximity_weight": 0.0, "role": "control"},
+      {"arm": "ARM_B", "graph_proximity_weight": 0.2, "role": "treatment"}
+    ],
+    "k": 10,
+    "max_depth": 2,
+    "alpha_bonferroni": 0.025
+  },
+  "corpus": {
+    "bench_db": "pgmnemo_ablation_88",
+    "n_lessons": 6962,
+    "n_edges": 58219,
+    "avg_out_degree": 19.59,
+    "n_bidirectional_cycles": 461,
+    "source": "agency_v3 snapshot 2026-08-18"
+  },
+  "primary_metric": {
+    "metric": "recall@10 (hit@10 leave-one-out)",
+    "n_probes": 1500,
+    "arm_a_recall10": 0.0,
+    "arm_b_recall10": 0.0,
+    "delta_recall10": 0.0,
+    "concordance": {"n00": 1500, "n01": 0, "n10": 0, "n11": 0},
+    "mcnemar_p_one_tailed": 1.0,
+    "cliffs_delta": 0.0,
+    "ci_95": [0.0, 0.0],
+    "mrr_a": 0.0,
+    "mrr_b": 0.0
+  },
+  "latency": {
+    "p50_arm_a_ms": 107.02,
+    "p95_arm_a_ms": 1548.17,
+    "p50_arm_b_ms": 100.82,
+    "p95_arm_b_ms": 946.79,
+    "delta_p50_ms": -6.2,
+    "arm_b_timeout_rate": 0.0
+  },
+  "specificity": {
+    "ctrl_n": 200,
+    "ctrl_hit10_arm_a": 0.63,
+    "ctrl_hit10_arm_b": 0.63,
+    "confound_detected": false
+  },
+  "falsification_criteria": {
+    "crit1_p_ge_alpha": true,
+    "crit2_ci_includes_zero": true,
+    "crit3_cliffs_lt_010": true
+  },
+  "structural_finding": "recall_hybrid performs re-ranking of ANN candidates only (LEFT JOIN, not UNION). Graph-traversed nodes outside ANN pool (cosine < ~0.60-0.70 at this corpus size) cannot be retrieved. Probe construction filter (cosine < 0.7) selects targets at cosine [0.22, 0.35] — below ANN retrieval threshold.",
+  "future_work": "H-GRAPH-02: probe cosine in [0.50, 0.75] with target rank in [11, 40] under ARM_A; or v0.20.0 retrieval-expansion architecture (UNION ALL candidate expansion)",
+  "default_recommendation": "Keep graph_proximity_weight=0.0 default unchanged",
+  "dataset": "benchmarks/mem_ab_v3/ablation_88_raw.csv",
+  "report": "spec/graphrag/ABLATION_REPORT_88.md",
+  "reproduce": "python3 benchmarks/mem_ab_v3/ablation_88_reproduce.py ablation_88_raw.csv",
+  "prereqs_verified": {
+    "D1_cycle_guard": "NOT (me.target_id = ANY(gw.visited)) in all graph_walk CTEs",
+    "D2_union_all": "bidirectional UNION ALL in navigate_locate and recall_hybrid_v2",
+    "D3_depth_cap": "_max_depth = 2 in all recall_* overloads"
+  }
+}

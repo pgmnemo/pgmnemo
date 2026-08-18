@@ -1,108 +1,82 @@
 {
   "protocol": "ABLATION_PROTOCOL_88_v1",
   "task": "PGMREL-0190-BENCH-GRAPH-ABLATION-RUN",
-  "run_ts": "2026-08-18T15:18:36.510881+00:00",
-  "full_run_completed": false,
-  "halt_reason": "LATENCY_SAFETY_HALT: ARM_B timeout_rate=96.0% >= 5% threshold",
-  "version_finding": {
-    "first_pilot_version": "0.18.0",
-    "second_pilot_version": "0.18.1",
-    "first_pilot_arm_b_timeout_rate": 0.0,
-    "second_pilot_arm_b_timeout_rate": 0.96,
-    "explanation": "pgmnemo 0.18.0 silently defaulted _graph_weight=0.0 due to unregistered GUC (EXCEPTION WHEN OTHERS catch). ARM_B in first pilot was equivalent to ARM_A — no BFS ran. pgmnemo 0.18.1 fixed GUC registration; BFS now runs with _max_depth=5, causing catastrophic expansion on hub nodes (temporal out_degree ~200+). D3 repair (max_depth 5→2) is required before a valid quality ablation can be run."
-  },
-  "manifest": {
-    "pgmnemo_version": "0.18.1",
-    "corpus_snapshot_ts": "2026-08-18T15:14:27.486129+00:00",
-    "n_active_verified_lessons": 6983,
-    "n_mem_edges": 74778,
-    "corpus_avg_out_degree": 16.7,
-    "random_seed": 42
-  },
-  "corpus_eligibility": {
-    "n_lessons_pass": true,
-    "n_edges_pass": true,
-    "n_lessons": 6983,
-    "n_edges": 74778,
-    "qualifying_probe_pool": 1500
-  },
-  "cycle_protection_check": {
-    "d1_visited_array_present": true,
-    "max_depth_installed": 5,
-    "max_depth_d3_required": 2,
-    "d3_applied": false,
-    "note": "D1 cycle guard (visited BIGINT[]) IS present in installed 0.18.1 function. D3 (max_depth 5→2) is NOT applied. Without D3, depth=5 BFS on hub nodes (temporal out_degree 176–220) produces polynomial node expansion causing timeouts."
+  "pgmnemo_version": "0.19.0",
+  "run_ts": "2026-08-18T15:30:06.575670+00:00",
+  "report": "spec/graphrag/ABLATION_REPORT_88.md",
+  "dataset": "benchmarks/mem_ab_v3/ablation_88_raw.csv",
+  "reproduce": "benchmarks/mem_ab_v3/ablation_88_reproduce.py",
+  "prereqs_met": {
+    "D1_cycle_guard": true,
+    "D2_union_all": true,
+    "D3_depth_cap_2": true,
+    "corpus_lessons_ge_5000": true,
+    "corpus_edges_ge_50000": true
   },
   "design": {
+    "n_probe": 1500,
+    "n_ctrl": 200,
     "arm_a_delta": 0.0,
     "arm_b_delta": 0.2,
     "k": 10,
-    "stmt_timeout_ms": 5000,
-    "interarm_sleep_ms": 100,
-    "alpha_per_test": 0.025,
-    "pilot_n": 25,
-    "full_n_target": 1500,
-    "n_probes_actual": 25,
-    "early_stop": true,
-    "early_stop_criterion": "ARM_B timeout rate 96.0% >= 50% emergency threshold"
+    "alpha_bonferroni": 0.025,
+    "amendment": "A_LIMIT_1500"
   },
   "pilot": {
-    "n_probes_completed": 25,
-    "arm_a_recall10": 0.0,
-    "arm_b_recall10": 0.0,
-    "arm_b_timeout_rate": 0.96,
-    "decision": "LATENCY_SAFETY_HALT",
-    "arm_b_completed_queries": 1
+    "n": 50,
+    "arm_a_hit10": 0.0,
+    "arm_b_hit10": 0.0,
+    "lat_delta_p50_ms": -11.1,
+    "regime": "LOW_BASELINE",
+    "decision": "PROCEED_1500"
+  },
+  "primary_metric": {
+    "concordance": {
+      "n00": 1500,
+      "n01": 0,
+      "n10": 0,
+      "n11": 0
+    },
+    "hit10_arm_a": 0.0,
+    "hit10_arm_b": 0.0,
+    "delta_hit10": 0.0,
+    "cliffs_delta": 0.0,
+    "p_mcnemar_onetail": 1.0,
+    "ci_95": [
+      0.0,
+      0.0
+    ],
+    "note": "Degenerate McNemar: zero discordant pairs (n01=n10=0)"
   },
   "latency": {
-    "arm_a": {
-      "p50_ms": 96.77,
-      "p95_ms": 216.57,
-      "n_nontimeout": 25
-    },
-    "arm_b": {
-      "p50_ms": 29.81,
-      "p95_ms": 29.81,
-      "n_nontimeout": 1,
-      "timeout_rate": 0.96,
-      "n_timeout": 24
-    }
+    "p50_arm_a_ms": 107.02,
+    "p95_arm_a_ms": 1548.17,
+    "p50_arm_b_ms": 100.82,
+    "p95_arm_b_ms": 946.79,
+    "delta_p50_ms": -6.2,
+    "timeout_rate_arm_b": 0.0,
+    "finding": "No latency regression from graph walk at max_depth=2"
   },
-  "primary_quality_test": {
-    "status": "NOT_COMPLETED_DUE_TO_LATENCY_SAFETY_HALT",
-    "arm_a_recall10": 0.0,
-    "arm_b_recall10": 0.0,
-    "note": "ARM_A baseline recall@10=0.0 on graph-sensitive probes (cosine<0.7). Probe construction selects pairs too semantically distant for targets to appear in HNSW+BM25 candidate set. Graph boost as a re-ranker (not expander) cannot promote targets not in the candidate pool. This is an additional secondary finding independent of the latency issue."
+  "specificity": {
+    "ctrl_n": 200,
+    "ctrl_hit10_arm_a": 0.63,
+    "ctrl_hit10_arm_b": 0.63,
+    "confound_detected": false
   },
-  "section_7_verdict": {
-    "outcome": "LATENCY_SAFETY_FINDING",
-    "conclusion": "ARM_B timeout rate 96.0% ≥ 5% (§7 threshold). Graph walk at δ=0.2, max_depth=5 is unsafe to enable on this 74,778-edge corpus with hub nodes having temporal out_degree 176–220. §7 finding: graph is unsafe to enable — publish as latency-safety result separate from quality finding. D3 repair (max_depth 5→2) required before quality ablation can be completed.",
-    "conditions_checked": {
-      "arm_b_timeout_rate_ge_5pct": true,
-      "arm_b_timeout_rate": 0.96
-    }
+  "verdict": {
+    "criteria_met": [
+      true,
+      true,
+      true
+    ],
+    "outcome": "\u041e\u041f\u0420\u041e\u0412\u0415\u0420\u0413\u041d\u0423\u0422\u041e",
+    "outcome_en": "NULL_RESULT",
+    "interpretation": "Graph signal (delta=0.2, max_depth=2) produces zero measurable recall improvement on temporal-edge probe set. Structural cause: recall_hybrid re-ranks existing ANN candidates only \u2014 graph-traversed nodes outside ANN pool are not retrievable. Default graph_proximity_weight=0.0 remains correct.",
+    "publish_null": true
   },
-  "subgroup_analysis": {
-    "by_edge_kind": {
-      "temporal": {
-        "n_probes": 25,
-        "arm_a_hit10": 0.0,
-        "arm_b_timeout_rate": 0.96
-      }
-    },
-    "note": "All pilot probes are temporal edges (causal/temporal pool, temporal=97% of eligible)"
-  },
-  "required_next_steps": [
-    "Apply D3 repair: set max_depth=2 in installed recall_hybrid (pgmnemo--0.18.0--0.19.0.sql §3)",
-    "Verify ARM_B latency returns to <200ms with no timeouts at n=10 warmup probes",
-    "Re-run full ablation per ABLATION_PROTOCOL_88 v1 Amendment A (n=1500)",
-    "Note: ARM_A recall@10=0.0 finding may also need probe redesign (current cosine<0.7 filter too strict for this corpus's HNSW candidate pool)"
-  ],
-  "publication_status": "PUBLISHABLE_NULL_LATENCY_SAFETY_RESULT",
-  "files": {
-    "raw_csv": "benchmarks/mem_ab_v3/ablation_88_raw.csv",
-    "probes_json": "benchmarks/mem_ab_v3/ablation_88_probes.json",
-    "reproduce_py": "benchmarks/mem_ab_v3/ablation_88_reproduce.py",
-    "report_json": "benchmarks/mem_ab_v3/ablation_88_report.json"
+  "structural_finding": {
+    "finding": "Architecture gap: recall_hybrid performs re-ranking only, not retrieval expansion",
+    "implication": "Graph lift requires targets in ANN candidate pool (top-40 by cosine). Probes with seed_target_cosine < 0.7 exceed this threshold in corpora of this size.",
+    "future_work": "H-GRAPH-02: probe construction with cosine in [0.50,0.75] + target rank in [11,40] under ARM_A; or v0.20.0 retrieval-expansion architecture"
   }
 }
