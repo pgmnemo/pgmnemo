@@ -68,7 +68,10 @@ jobs:
             echo "::error::extension/pgmnemo--${V}.sql missing. PostgreSQL needs a fresh-install script (in addition to the update path) for CREATE EXTENSION to work on a clean database. Build via: cat extension/pgmnemo--<prev>.sql extension/pgmnemo--<prev>--${V}.sql > extension/pgmnemo--${V}.sql && add to extension/Makefile DATA list."
             exit 1
           fi
-          if ! grep -q "pgmnemo--${V}.sql" extension/Makefile; then
+          # DATA may be an explicit list or $(wildcard pgmnemo--*.sql); the wildcard
+          # form installs every script by construction and is the safer of the two.
+          if ! grep -qE 'DATA[[:space:]]*=.*wildcard[[:space:]]+pgmnemo--\*\.sql' extension/Makefile \
+             && ! grep -q "pgmnemo--${V}.sql" extension/Makefile; then
             echo "::error::extension/Makefile DATA list does not include pgmnemo--${V}.sql. Add it so 'make install' copies the fresh-install script to PostgreSQL's extension/ dir."
             exit 1
           fi

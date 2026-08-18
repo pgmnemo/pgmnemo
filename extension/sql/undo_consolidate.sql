@@ -20,7 +20,7 @@
 --   T16: second undo is idempotent (no-op for this role)
 -- SPDX-License-Identifier: Apache-2.0
 
-ALTER EXTENSION pgmnemo UPDATE TO '0.18.0';
+ALTER EXTENSION pgmnemo UPDATE TO '0.18.1';
 
 SET pgmnemo.gate_strict           = 'off';
 SET pgmnemo.include_unverified    = 'on';
