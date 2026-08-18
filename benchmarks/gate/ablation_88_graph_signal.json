@@ -69,10 +69,32 @@
       true,
       true
     ],
-    "outcome": "ОПРОВЕРГНУТО",
-    "outcome_en": "NULL_RESULT",
-    "interpretation": "Graph signal (delta=0.2, max_depth=2) produces zero measurable recall improvement on temporal-edge probe set. Structural cause: recall_hybrid re-ranks existing ANN candidates only — graph-traversed nodes outside ANN pool are not retrievable. Default graph_proximity_weight=0.0 remains correct.",
-    "publish_null": true
+    "outcome": "НЕВАЛИДНО",
+    "outcome_en": "INVALID_ZERO_POWER",
+    "interpretation": "WITHDRAWN by technical_lead 2026-08-18 before publication. This protocol cannot answer its own question. Probes were selected with seed_target_cosine < 0.7 sorted ascending, giving a band of 0.225-0.347 — targets that far from the query never enter recall_hybrid's ANN candidate pool, and graph proximity is a multiplier on candidates already retrieved, not a pool expander. Both arms are therefore pinned at zero by construction: this measures a floor, not a signal. A zero baseline in the control arm is a stop signal to redesign, not a licence to scale n.",
+    "publish_null": false,
+    "measured_on_same_bench_by_technical_lead": {
+      "method": "40 edge pairs per cosine band, recall_hybrid k=10, delta 0.0 vs 0.2, bench pgmnemo_ablation_88",
+      "cosine_0.20_0.40_protocol_band": {
+        "hits_no_graph": 0,
+        "hits_graph": 0
+      },
+      "cosine_0.70_0.85_excluded_by_protocol": {
+        "hits_no_graph": 24,
+        "hits_graph": 25
+      },
+      "cosine_0.85_1.00_excluded_by_protocol": {
+        "hits_no_graph": 26,
+        "hits_graph": 26
+      },
+      "reading": "The probe filter, not the graph signal, determined the outcome. In the measurable band the graph moves one probe of forty — small, and it is the band a valid protocol must run in."
+    },
+    "what_survives": [
+      "The structural finding: graph proximity re-ranks, it cannot retrieve. That is a real result and is publishable.",
+      "The latency check: cycle guard plus depth cap 2 add no measurable latency (p50 delta -0.2 ms, zero timeouts).",
+      "The fact that protocol #88 was invalid, with the reason stated."
+    ],
+    "not_publishable": "Any claim that the graph signal was measured and found to give zero lift."
   },
   "structural_finding": {
     "finding": "Architecture gap: recall_hybrid performs re-ranking only, not retrieval expansion",

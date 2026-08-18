@@ -58,26 +58,26 @@
       "ci_includes_zero": true,
       "cliffs_delta_lt_0.10": true
     },
-    "conclusion": "H-GRAPH-01 REFUTED: graph_proximity_weight=0.2 produces no improvement in hit@10 on 855 graph-sensitive probe pairs (Cliff's \u03b4=0.000, CI=[0,0], p=0.500). NULL RESULT IS PUBLISHABLE per \u00a77 criterion. Root cause (architectural): probe targets (cosine 0.225-0.336 from seeds) fall outside recall_hybrid's candidate pool (top-100). Graph proximity is a re-ranking signal for already-retrieved candidates \u2014 it cannot inject graph-walked nodes into results. For graph benefit to be measurable, probe design must select targets within top-40-100 candidates but outside top-10 (i.e., cosine 0.7-0.9 range, not <0.7)."
+    "conclusion": "H-GRAPH-01 REFUTED: graph_proximity_weight=0.2 produces no improvement in hit@10 on 855 graph-sensitive probe pairs (Cliff's δ=0.000, CI=[0,0], p=0.500). NULL RESULT IS PUBLISHABLE per §7 criterion. Root cause (architectural): probe targets (cosine 0.225-0.336 from seeds) fall outside recall_hybrid's candidate pool (top-100). Graph proximity is a re-ranking signal for already-retrieved candidates — it cannot inject graph-walked nodes into results. For graph benefit to be measurable, probe design must select targets within top-40-100 candidates but outside top-10 (i.e., cosine 0.7-0.9 range, not <0.7)."
   },
   "latency": {
-    "note_data_quality": "Probes 0-259 ran with old recall_hybrid (no D1+D3) before manual fix applied. 31.2% ARM_B timeout rate for tainted probes. Probes 260-999 ran with fixed recall_hybrid (D1+D3). 1.5% ARM_B timeout rate for clean probes \u2014 BELOW \u00a77 5% threshold.",
+    "note_data_quality": "Probes 0-259 ran with old recall_hybrid (no D1+D3) before manual fix applied. 31.2% ARM_B timeout rate for tainted probes. Probes 260-999 ran with fixed recall_hybrid (D1+D3). 1.5% ARM_B timeout rate for clean probes — BELOW §7 5% threshold.",
     "clean_probes_arm_a_p50_ms": 57.5,
     "clean_probes_arm_a_p95_ms": 155.9,
     "clean_probes_arm_b_p50_ms": 46.4,
     "clean_probes_arm_b_p95_ms": 110.3,
     "clean_arm_b_timeout_rate": 0.015,
     "arm_b_safe_with_d1_d3": true,
-    "latency_verdict": "ARM_B with D1+D3 (depth=2, cycle guard): 1.5% timeout rate < 5% \u00a77 threshold. Graph walk is LATENCY-SAFE to enable at \u03b4=0.2 on this corpus with D1-D3 repairs. Note: no Fix5 guard in deployed version \u2014 BFS runs for ARM_A too (adds ~10-15ms). Fix5 guard needed to recover latency baseline."
+    "latency_verdict": "ARM_B with D1+D3 (depth=2, cycle guard): 1.5% timeout rate < 5% §7 threshold. Graph walk is LATENCY-SAFE to enable at δ=0.2 on this corpus with D1-D3 repairs. Note: no Fix5 guard in deployed version — BFS runs for ARM_A too (adds ~10-15ms). Fix5 guard needed to recover latency baseline."
   },
   "architectural_finding": {
     "title": "recall_hybrid graph proximity is re-rank-only, not candidate injection",
-    "detail": "recall_hybrid computes graph proximity for nodes in all_candidates (union of vec_candidates and bm25_candidates). Nodes reachable via graph_walk but NOT in all_candidates receive no proximity score and cannot appear in results. For the probe design (cosine<0.7), probe targets are outside top-100 by cosine similarity and typically absent from bm25_candidates. Therefore graph_walk cannot surface them regardless of \u03b4. To measure true graph recall benefit: either (A) revise probe design to cosine 0.7-0.9 range (target in candidate pool but outside top-10), OR (B) revise recall_hybrid to include depth-1 graph-walked nodes as third candidate source alongside vec/bm25.",
+    "detail": "recall_hybrid computes graph proximity for nodes in all_candidates (union of vec_candidates and bm25_candidates). Nodes reachable via graph_walk but NOT in all_candidates receive no proximity score and cannot appear in results. For the probe design (cosine<0.7), probe targets are outside top-100 by cosine similarity and typically absent from bm25_candidates. Therefore graph_walk cannot surface them regardless of δ. To measure true graph recall benefit: either (A) revise probe design to cosine 0.7-0.9 range (target in candidate pool but outside top-10), OR (B) revise recall_hybrid to include depth-1 graph-walked nodes as third candidate source alongside vec/bm25.",
     "next_experiment": "H-GRAPH-02: probe design revision or recall_hybrid candidate injection"
   },
   "query_hop_class": {
     "hop_class_all_probes": "single-hop",
-    "note": "Probe construction SQL selects direct edges (depth-1 connections). Multi-hop benefits not tested by this design (\u00a710.5 limit of generalization)."
+    "note": "Probe construction SQL selects direct edges (depth-1 connections). Multi-hop benefits not tested by this design (§10.5 limit of generalization)."
   },
   "data_integrity": {
     "probe_list_locked_before_data_collection": true,
@@ -93,7 +93,7 @@
     "OR revise recall_hybrid: inject graph-walked nodes as third candidate source",
     "Apply Fix5 guard to deployed recall_hybrid (add 'WHERE _graph_weight > 0' in anchors seed)",
     "Register new protocol (H-GRAPH-02) for revised ablation before data collection",
-    "Investigate high avg_out_degree (16.70 temporal) \u2014 consider edge weight/confidence filter"
+    "Investigate high avg_out_degree (16.70 temporal) — consider edge weight/confidence filter"
   ],
   "files": {
     "probe_list": "benchmarks/mem_ab_v3/ablation_88_probes.json",
@@ -101,5 +101,7 @@
     "full_report": "benchmarks/mem_ab_v3/ablation_88_report.json",
     "reproduce_script": "benchmarks/mem_ab_v3/ablation_88_reproduce.py",
     "harness": "benchmarks/scripts/ablation_88_protocol.py"
-  }
+  },
+  "withdrawn_2026_08_18": "Protocol #88 had zero power by construction — probes at cosine 0.225-0.347 can never enter recall_hybrid's ANN candidate pool, and graph proximity only re-ranks retrieved candidates, so both arms are pinned at zero. See benchmarks/gate/ablation_88_graph_signal.json for the measurement that establishes this. No claim about the graph signal's value may cite this file.",
+  "publish": false
 }
