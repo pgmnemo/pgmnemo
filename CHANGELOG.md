@@ -8,6 +8,7 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 | Version | Breaking change | Migration |
 |---|---|---|
+| **0.18.1** | `recall_hybrid` could hang for tens of seconds on ordinary queries — the graph walk ran on every call, unguarded, and its result was then multiplied by a weight of zero and thrown away. Present in 0.17.0 and 0.18.0. |
 | **0.18.0** | `recall_hybrid` / `recall_lessons` no longer stamp `last_recalled_at` / `recall_count` on every call — `_stamp` CTE removed for 13.6× latency reduction | Call `pgmnemo.mark_recalled(ARRAY(SELECT lesson_id FROM pgmnemo.recall_hybrid(...)))` after each recall to restore recency tracking |
 | **0.17.0** | `graph_proximity_weight` COALESCE default unified `0.2` → `0.0` in `recall_hybrid` (10p, 11p) and `navigate_locate` (5p) — callers with unset GUC lost implicit graph weighting | `SET pgmnemo.graph_proximity_weight = '0.2'` restores the 0.16.1 effective weight |
 | **0.9.1** | `navigate_expand` 4-arg overload dropped (5th param `relation_types TEXT[]` added) | Positional callers unaffected (DEFAULT NULL); explicit overload refs must update |
@@ -57,6 +58,25 @@ ALTER EXTENSION pgmnemo UPDATE TO '0.19.0';
 
 ---
 
+## [0.18.1] - 2026-08-18
+
+**Fix: `recall_hybrid` could hang.** The graph-proximity walk was seeded unconditionally, ran to
+depth 5 with no cycle guard, and its result was then multiplied by `pgmnemo.graph_proximity_weight`
+— which defaults to `0.0` — and discarded. On a 9,326-lesson / 74,778-edge corpus, **5 of 12
+ordinary one-word queries exceeded an 8-second statement timeout** on 0.17.0 and 0.18.0 alike;
+0 of 12 after this fix. `recall_lessons` already had the weight guard and gains only the cycle guard.
+
+At the default weight this changes no result — the proximity term is multiplied by zero either way,
+verified as identical rows and scores on every query the unpatched version could answer.
+
+If you enabled `graph_proximity_weight`, the cycle guard now stops a node being revisited on a
+walk; scores that previously double-counted a cycle will change.
+
+**Why 0.18.0's benchmarks missed it:** they used long multi-word queries, which match few lessons
+and seed few anchors. The defect needs an anchor that is a hub in `mem_edge`. The published 0.18.0
+latency numbers are correct for that query family and silent about this one. Found by converging a
+production install to the exact released tag. See `benchmarks/gate/v0.18.1.json`.
+
 ## [0.18.0] - 2026-08-14
 
 ### ⚠️ BEHAVIOUR BREAK: `recall_hybrid` and `recall_lessons` no longer stamp recency
@@ -80,7 +100,7 @@ SELECT pgmnemo.mark_recalled(
 
 **What stops working if you do nothing:** `mark_stale()` and corpus curation depend on `last_recalled_at` to identify lessons not recalled in recent sessions. If callers do not call `mark_recalled()`, the recency signal will stagnate and `mark_stale()` will eventually demote the entire corpus. Call `mark_recalled()` after each recall, or accept that curation is disabled.
 
-**Performance improvement:** 44.2 ms → 3.2 ms median (13.6× speedup). Under concurrent write load: no longer blocks. See `benchmarks/results/PGMREL-0180-BENCH-PERF-HYBRID-UNDER-WRITE-LOAD.md` for full before/after numbers.
+**Performance:** under concurrent writes, median 23.4 ms → 15.4 ms and p95 372 ms → 178 ms (paired isolated benches, identical 9.3k-lesson corpus); production lock-convoy stalls up to `statement_timeout` are eliminated. **Quiet-system median is unchanged** (9.7 ms → 10.9 ms, within noise). An earlier 13.6× figure compared against a *live contended cluster* baseline and is withdrawn — see `benchmarks/gate/v0.18.0.json` for both measurements and the correction.
 
 **New function:** `pgmnemo.mark_recalled(lesson_ids BIGINT[]) RETURNS VOID` — explicit VOLATILE write-back. Call it asynchronously, batch it, or omit it for read-heavy workloads that do not need recency tracking.
 
