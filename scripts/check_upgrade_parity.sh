@@ -14,6 +14,13 @@
 # Usage: check_upgrade_parity.sh <from_version> <to_version>
 set -euo pipefail
 
+# Inside the app container the cluster password lives only in DBOS_DATABASE_URL;
+# derive libpq env from it when the caller has not set PGPASSWORD (the release
+# gate registry invokes this script without one).
+if [ -z "${PGPASSWORD:-}" ] && [ -n "${DBOS_DATABASE_URL:-}" ]; then
+    eval "$(python3 -c 'import os, urllib.parse as u; p=u.urlparse(os.environ["DBOS_DATABASE_URL"]); print(f"export PGPASSWORD={p.password} PGUSER={p.username} PGHOST={p.hostname} PGPORT={p.port or 5432}")')"
+fi
+
 FROM="${1:?usage: check_upgrade_parity.sh <from_version> <to_version>}"
 TO="${2:?usage: check_upgrade_parity.sh <from_version> <to_version>}"
 DB_FRESH="pgmnemo_parity_fresh_$$"
