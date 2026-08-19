@@ -10779,7 +10779,7 @@ BEGIN
         SELECT id FROM scored ORDER BY rrf_sparse DESC LIMIT 5
     ),
     graph_walk(anchor_id, depth, reached_id, visited) AS (
-        SELECT id, 0, id, ARRAY[id] FROM anchors  -- D1(v0.19.0): cycle guard
+        SELECT id, 0, id, ARRAY[id] FROM anchors WHERE _graph_weight > 0  -- D1(v0.19.0): cycle guard; 0.18.1: walk only when weight enabled
         UNION ALL
         SELECT gw.anchor_id, gw.depth + 1, me.target_id, gw.visited || me.target_id
         FROM graph_walk gw

@@ -2,18 +2,26 @@
   "version": "v0.19.0-graph-ablation",
   "date": "2026-08-18",
   "pgmnemo_version": "0.19.0",
-  "gate_status": "NULL_RESULT",
+  "gate_status": "INVALID_ZERO_POWER",
   "gate_type": "ablation",
   "protocol": "spec/graphrag/ABLATION_PROTOCOL_88.md",
   "task": "PGMREL-0190-BENCH-GRAPH-ABLATION-RUN",
-  "claim": "H-GRAPH-01: graph_proximity_weight=0.2 does NOT improve recall@10 on graph-sensitive probes (ANN retrieval gate prevents graph-reached non-candidates from appearing in results)",
-  "verdict_ru": "ОПРОВЕРГНУТО",
-  "verdict_en": "NULL_RESULT",
-  "publish_null": true,
+  "claim": "STRUCTURAL FINDING ONLY (survives): recall_hybrid's graph proximity is a multiplier on ANN-retrieved candidates — a lesson outside the ANN pool cannot appear in results at any weight. The protocol's recall comparison is WITHDRAWN: probes were selected at cosine 0.225-0.347, unreachable by the ANN pool, so both arms were pinned at zero by construction (zero discordant pairs, degenerate McNemar). No claim about the graph signal's measured value may cite this run.",
+  "verdict_ru": "ОТОЗВАНО 2026-08-19: нулевая мощность по построению — фильтр отбора зондов, а не графовый сигнал, определил исход. Выживает только структурный вывод (re-rank, не retrieval) и проверка задержек. См. benchmarks/mem_ab_v3/ABLATION_88_WITHDRAWN.md.",
+  "verdict_en": "WITHDRAWN 2026-08-19: zero power by construction — the probe filter, not the graph signal, determined the outcome. Only the structural finding (re-rank, not retrieval) and the latency check survive. See benchmarks/mem_ab_v3/ABLATION_88_WITHDRAWN.md.",
+  "publish_null": false,
   "scope": {
     "arms": [
-      {"arm": "ARM_A", "graph_proximity_weight": 0.0, "role": "control"},
-      {"arm": "ARM_B", "graph_proximity_weight": 0.2, "role": "treatment"}
+      {
+        "arm": "ARM_A",
+        "graph_proximity_weight": 0.0,
+        "role": "control"
+      },
+      {
+        "arm": "ARM_B",
+        "graph_proximity_weight": 0.2,
+        "role": "treatment"
+      }
     ],
     "k": 10,
     "max_depth": 2,
@@ -33,10 +41,18 @@
     "arm_a_recall10": 0.0,
     "arm_b_recall10": 0.0,
     "delta_recall10": 0.0,
-    "concordance": {"n00": 1500, "n01": 0, "n10": 0, "n11": 0},
+    "concordance": {
+      "n00": 1500,
+      "n01": 0,
+      "n10": 0,
+      "n11": 0
+    },
     "mcnemar_p_one_tailed": 1.0,
     "cliffs_delta": 0.0,
-    "ci_95": [0.0, 0.0],
+    "ci_95": [
+      0.0,
+      0.0
+    ],
     "mrr_a": 0.0,
     "mrr_b": 0.0
   },

@@ -1,0 +1,23 @@
+{
+  "version": "v0.19.0",
+  "date": "2026-08-19",
+  "pgmnemo_version": "0.19.0",
+  "measured_pgmnemo_version": "0.19.0",
+  "gate_status": "PASS",
+  "gate_type": "correctness",
+  "significance_required": false,
+  "claim": "Graph-walk repairs, carrying the 0.18.1 hang fix forward: every active graph traversal now has a cycle guard (visited array), depth is capped at 2 (was 5), the bidirectional walk in navigate_locate is a valid single-recursive-reference CTE (the previous form failed at first execution on any fresh install), and the walk is seeded only when graph_proximity_weight > 0 — at the default weight no traversal runs at all. No recall-quality claim is made for the graph signal: the only ablation attempted (#88) was withdrawn as invalid (zero power by construction), see benchmarks/mem_ab_v3/ABLATION_88_WITHDRAWN.md.",
+  "criterion": "12-query hang probe all under 8s on a production-size corpus AND both upgrade chains produce body-hash parity with a fresh install AND latency of the guarded walk is not measurable at default weight",
+  "result": {
+    "hang_probe_slow_queries": 0,
+    "hang_probe_size": 12,
+    "corpus": "9,424 lessons / 74,778 edges (isolated container, snapshot of production)",
+    "upgrade_chains_verified": ["0.17.0 -> 0.18.0 -> 0.18.1 -> 0.19.0", "0.18.1 -> 0.19.0"],
+    "body_hash_parity": "both chains identical to fresh 0.19.0 for every extension function",
+    "criterion_met": true
+  },
+  "latency_note": "The one part of the withdrawn ablation #88 that survives is its latency safety check, measured on 0.19.0 bodies: enabling the guarded walk (weight 0.2, depth 2) added no measurable latency (p50 delta -0.2 ms, 0 timeouts in 3,000 calls). That number is about cost, not benefit.",
+  "corrections": {
+    "context": "0.17.0 and 0.18.0 shipped an unguarded, cycle-unprotected depth-5 walk that ran on every call and could hang recall_hybrid for tens of seconds (fixed in 0.18.1 for the 0.18 line; this release carries the fix into the 0.19 line, which had the cycle guard but not the weight guard in its active recall_hybrid)."
+  }
+}

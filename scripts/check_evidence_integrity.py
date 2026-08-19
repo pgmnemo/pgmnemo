@@ -225,7 +225,22 @@ def _writes_data_file(tree: ast.AST) -> list[str]:
                 for i, arg in enumerate(node.args):
                     if i == 1 and isinstance(arg, ast.Constant):
                         mode_arg = arg.value
-                if mode_arg is None or mode_arg in WRITE_MODES:
+                # open() without a mode is a READ by definition (default 'r') —
+                # flagging it made the gate cry wolf on a seeded-bootstrap
+                # reproduce script whose only open() was reading its CSV. A
+                # *variable* second positional arg still counts as unknown:
+                # only the literal-absent case is safely a read.
+                mode_unknown = (
+                    func_name == "open"
+                    and len(node.args) > 1
+                    and not isinstance(node.args[1], ast.Constant)
+                )
+                is_write = (
+                    (mode_arg is not None and mode_arg in WRITE_MODES)
+                    or mode_unknown
+                    or (func_name != "open" and mode_arg is None)
+                )
+                if is_write:
                     # Check filename extension (first arg if string)
                     fname = None
                     if node.args and isinstance(node.args[0], ast.Constant):

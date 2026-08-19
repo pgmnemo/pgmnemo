@@ -1,0 +1,98 @@
+{
+  "analysis_ts": "2026-08-18T15:59:17.481529+00:00",
+  "amendments": [
+    "A: n=1702 (max available)",
+    "B: cosine \u2208 [0.70,0.85]"
+  ],
+  "n_probe": 500,
+  "n_paired": 500,
+  "n_ctrl": 200,
+  "primary": {
+    "test": "McNemar one-tailed (Bonferroni \u03b1=0.025)",
+    "n00": 190,
+    "n01": 27,
+    "n10": 1,
+    "n11": 282,
+    "hit10_arm_a": 0.566,
+    "hit10_arm_b": 0.618,
+    "delta_hit10": 0.052,
+    "cliffs_delta": 0.052,
+    "p_value": 1e-06,
+    "z_stat": 4.7246,
+    "ci_95_lo": -0.01,
+    "ci_95_hi": 0.112
+  },
+  "latency": {
+    "p50_arm_a_ms": 25.562,
+    "p95_arm_a_ms": 245.894,
+    "p50_arm_b_ms": 26.234,
+    "p95_arm_b_ms": 1326.107,
+    "delta_p50_ms": 0.67,
+    "timeout_rate_b": 0.0,
+    "n_timeout_b": 0
+  },
+  "specificity": {
+    "ctrl_n": 200,
+    "ctrl_recall_a": 0.395,
+    "ctrl_recall_b": 0.395,
+    "ctrl_n01": 0,
+    "ctrl_n10": 0,
+    "confound_detected": false
+  },
+  "verdict_criteria": {
+    "crit_1_p_ge_0025": false,
+    "crit_2_ci_includes_0": true,
+    "crit_3_cliffs_d_lt_01": true
+  },
+  "verdict": "CONFIRMED",
+  "subgroups": {
+    "causal": {
+      "n": 6,
+      "recall_a": 0.8333,
+      "recall_b": 1.0
+    },
+    "temporal": {
+      "n": 494,
+      "recall_a": 0.5628,
+      "recall_b": 0.6134
+    }
+  },
+  "cosine_quartiles": {
+    "Q1": {
+      "n": 127,
+      "recall_a": 0.5276,
+      "recall_b": 0.5827
+    },
+    "Q2": {
+      "n": 124,
+      "recall_a": 0.621,
+      "recall_b": 0.6532
+    },
+    "Q3": {
+      "n": 125,
+      "recall_a": 0.568,
+      "recall_b": 0.64
+    },
+    "Q4": {
+      "n": 124,
+      "recall_a": 0.5484,
+      "recall_b": 0.5968
+    }
+  },
+  "manifest": {
+    "pgmnemo_version_installed": "0.18.1",
+    "d3_applied_transiently": true,
+    "effective_max_depth": 2,
+    "corpus_snapshot_ts": "2026-08-18T15:55:08.124579+00:00",
+    "n_lessons": 6996,
+    "n_edges": 74646,
+    "avg_out_degree": 16.7,
+    "cosine_band": [
+      0.7,
+      0.85
+    ],
+    "alpha_per_test": 0.025,
+    "random_seed": 42,
+    "bootstrap_resamples": 10000
+  }
+}

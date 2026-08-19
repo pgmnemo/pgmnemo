@@ -1,4 +1,4 @@
--- Regression test: recall_lessons() graph_proximity mixin (v0.2.0-step4)
+-- Regression test: recall_lessons() graph_proximity mixin (v0.19.0 D3: max_depth=2)
 -- Pure-SQL predicate checks; no live table required.
 -- Recall@10 targets: ≥0.55 on 100-row synthetic, ≥0.45 on 1000-row LOO.
 
@@ -13,14 +13,14 @@ SELECT
 
 -- Expected: cosine=0.4, importance=0.2, prov_strength=0.1, sum=0.7, t
 
--- 2. graph_proximity formula: 1.0 - depth/max_depth (max_depth=5)
+-- 2. graph_proximity formula: 1.0 - depth/max_depth (D3 v0.19.0: max_depth=2)
+-- At max_depth=2: depth 0 and 1 expand (0 < 2, 1 < 2); depth 2 reaches but doesn't expand (2 < 2 = f).
+-- Useful proximity: depth1 = 0.50; depth2 = 0.00 (zero-weight; cycle guard keeps row count tiny).
 SELECT
-    round((1.0 - 1::float / 5)::numeric, 2) AS proximity_depth1,
-    round((1.0 - 2::float / 5)::numeric, 2) AS proximity_depth2,
-    round((1.0 - 3::float / 5)::numeric, 2) AS proximity_depth3,
-    round((1.0 - 4::float / 5)::numeric, 2) AS proximity_depth4;
+    round((1.0 - 1::float / 2)::numeric, 2) AS proximity_depth1,
+    round((1.0 - 2::float / 2)::numeric, 2) AS proximity_depth2;
 
--- Expected: 0.80, 0.60, 0.40, 0.20 (depth=5 would be 0.0, blocked by depth < max_depth guard)
+-- Expected: 0.50, 0.00
 
 -- 3. GUC range clamping: GREATEST(0.0, LEAST(0.5, input))
 SELECT
@@ -58,12 +58,12 @@ SELECT
 
 -- Expected: t, t, t, f, f
 
--- 7. depth guard: traversal halts when depth >= max_depth (depth < 5)
+-- 7. depth guard: traversal halts when depth >= max_depth (D3 v0.19.0: depth < 2)
 SELECT
-    (0 < 5) AS depth0_traverses,
-    (4 < 5) AS depth4_traverses,
-    (5 < 5) AS depth5_blocked,
-    (6 < 5) AS depth6_blocked;
+    (0 < 2) AS depth0_traverses,
+    (1 < 2) AS depth1_traverses,
+    (2 < 2) AS depth2_blocked,
+    (3 < 2) AS depth3_blocked;
 
 -- Expected: t, t, f, f
 

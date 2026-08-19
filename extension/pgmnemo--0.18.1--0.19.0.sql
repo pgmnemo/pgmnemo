@@ -1,3 +1,7 @@
+-- pgmnemo 0.18.1 -> 0.19.0: same content as 0.18.0 -> 0.19.0 — that script
+-- recreates every graph-path function wholesale, so it converges either start
+-- point to the same 0.19.0 bodies. Parity is verified by the release gate.
+
 -- pgmnemo upgrade: 0.18.0 → 0.19.0
 -- Graph walk structural repairs (D1, D2, D3) + recall_entity read-path recency stamp removal (R-U1)
 -- SPDX-License-Identifier: Apache-2.0
