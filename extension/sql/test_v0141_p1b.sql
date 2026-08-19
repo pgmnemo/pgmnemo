@@ -20,7 +20,7 @@
 -- Test isolation: roles 'tc_rcap' (project -1414), 'tc_tiebreak' (project -1441).
 -- SPDX-License-Identifier: Apache-2.0
 
-ALTER EXTENSION pgmnemo UPDATE TO '0.19.0';
+ALTER EXTENSION pgmnemo UPDATE TO '0.19.1';
 
 SET pgmnemo.gate_strict           = 'off';
 SET pgmnemo.include_unverified    = 'on';

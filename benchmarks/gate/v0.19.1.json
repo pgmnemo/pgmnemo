@@ -1,0 +1,13 @@
+{
+  "version": "v0.19.1",
+  "date": "2026-08-19",
+  "pgmnemo_version": "0.19.1",
+  "measured_pgmnemo_version": "0.19.1",
+  "gate_status": "PASS",
+  "gate_type": "correctness",
+  "significance_required": false,
+  "claim": "Hotfix: the 0.18.x -> 0.19.0 upgrade scripts shipped a navigate_locate with an invalid recursive CTE (two references to its own worktable) — fresh 0.19.0 installs are unaffected, upgraded installs fail on the first navigate_locate call. 0.19.1 converges upgraded installs to the fixed body, verbatim from a fresh install.",
+  "criterion": "fresh 0.19.1 == every upgrade chain by body hash for all extension functions AND navigate_locate answers on both",
+  "result": {"criterion_met": true, "found_by": "converging Agency production to the tag after release — the upgraded body diverged from the fresh one; the earlier parity check had passed only because BOTH sides were then equally broken"},
+  "note": "No behavior claims beyond the fix; the 0.19.0 gate's statements stand."
+}

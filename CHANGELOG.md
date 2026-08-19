@@ -8,6 +8,7 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 | Version | Breaking change | Migration |
 |---|---|---|
+| **0.19.1** | Upgrade path shipped a `navigate_locate` with an invalid recursive CTE — fresh installs fine, upgraded installs broken on first call. Converged; body parity now gates the release. |
 | **0.18.1** | `recall_hybrid` could hang for tens of seconds on ordinary queries — the graph walk ran on every call, unguarded, and its result was then multiplied by a weight of zero and thrown away. Present in 0.17.0 and 0.18.0. |
 | **0.18.0** | `recall_hybrid` / `recall_lessons` no longer stamp `last_recalled_at` / `recall_count` on every call — `_stamp` CTE removed for 13.6× latency reduction | Call `pgmnemo.mark_recalled(ARRAY(SELECT lesson_id FROM pgmnemo.recall_hybrid(...)))` after each recall to restore recency tracking |
 | **0.17.0** | `graph_proximity_weight` COALESCE default unified `0.2` → `0.0` in `recall_hybrid` (10p, 11p) and `navigate_locate` (5p) — callers with unset GUC lost implicit graph weighting | `SET pgmnemo.graph_proximity_weight = '0.2'` restores the 0.16.1 effective weight |
@@ -17,6 +18,16 @@ Versions follow [Semantic Versioning](https://semver.org/).
 | **0.5.0** | `mem_edge` columns renamed: `lesson_a_id` → `source_id`, `lesson_b_id` → `target_id` | Use `pgmnemo.add_edge()` to avoid direct column references; see [docs/MIGRATION.md](docs/MIGRATION.md) |
 
 ---
+
+## [0.19.1] - 2026-08-19
+
+**Fix: upgraded installs got a broken `navigate_locate`.** The 0.18.x → 0.19.0 upgrade scripts
+carry a `navigate_locate` whose recursive CTE references its own worktable twice — invalid SQL
+that survives `CREATE` because PL/pgSQL defers parsing to first execution, then fails every call
+("recursive reference to query \"graph_walk\" must not appear within its non-recursive term").
+A fresh 0.19.0 install is unaffected (the flat carries the fixed body); only the upgrade path is.
+0.19.1 converges upgraded installs to the fixed body. Upgrade-vs-fresh body parity is now part of
+the release pre-flight, so a divergence of this class blocks the tag instead of shipping.
 
 ## [0.19.0] - 2026-08-18
 

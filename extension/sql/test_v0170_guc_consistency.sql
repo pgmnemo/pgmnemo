@@ -29,7 +29,7 @@ SET pgmnemo.gate_strict = 'off';
 SET pgmnemo.include_unverified = 'on';
 SET pgmnemo.track_recall_recency = 'off';
 
-ALTER EXTENSION pgmnemo UPDATE TO '0.19.0';
+ALTER EXTENSION pgmnemo UPDATE TO '0.19.1';
 
 -- Suppress NULL-embedding NOTICEs from recall functions for stable output.
 SET client_min_messages = WARNING;
