@@ -6777,27 +6777,27 @@ BEGIN
         SELECT id FROM scored ORDER BY rrf_sparse DESC LIMIT 5
     ),
     -- D1+D2(v0.19.0): cycle guard + UNION ALL bidirectional (was OR-join)
-    graph_walk(anchor_id, depth, reached_id, visited) AS (
+    -- Two recursive branches in the recursive term is valid in PostgreSQL:
+    -- each branch references the worktable independently per iteration.
+    graph_walk (anchor_id, depth, reached_id, visited) AS (
         SELECT id, 0, id, ARRAY[id] FROM anchors WHERE _graph_weight > 0  -- Fix 5; D1: visited set
         UNION ALL
-        -- D2(v0.19.0): bidirectional via pre-unioned edge arms — a recursive CTE
-        -- permits exactly ONE recursive reference, so two UNION ALL branches each
-        -- reading graph_walk are illegal (PL/pgSQL defers parsing to first
-        -- execution, which is how the broken form survived CREATE). Each arm of
-        -- the inner UNION ALL keeps its own index: source_id btree forward,
-        -- ix_mem_edge_target_active backward.
-        SELECT gw.anchor_id, gw.depth + 1, e.next_id, gw.visited || e.next_id
+        -- Forward: source → target (clean B-tree index scan on source_id)
+        SELECT gw.anchor_id, gw.depth + 1, me.target_id, gw.visited || me.target_id
         FROM graph_walk gw
-        JOIN (
-            SELECT me.source_id AS from_id, me.target_id AS next_id, me.valid_until
-            FROM pgmnemo.mem_edge me
-            UNION ALL
-            SELECT me.target_id AS from_id, me.source_id AS next_id, me.valid_until
-            FROM pgmnemo.mem_edge me
-        ) e ON e.from_id = gw.reached_id
+        JOIN pgmnemo.mem_edge me ON me.source_id = gw.reached_id
         WHERE gw.depth < _max_depth
-          AND (e.valid_until IS NULL OR e.valid_until = 'infinity'::TIMESTAMPTZ)
-          AND NOT (e.next_id = ANY(gw.visited))  -- D1: prevent cycle revisit
+          -- v0.9.1 fix: handle both active-edge sentinels
+          AND (me.valid_until IS NULL OR me.valid_until = 'infinity'::TIMESTAMPTZ)
+          AND NOT (me.target_id = ANY(gw.visited))  -- D1: prevent cycle revisit
+        UNION ALL
+        -- Backward: target → source (uses ix_mem_edge_target_active index)
+        SELECT gw.anchor_id, gw.depth + 1, me.source_id, gw.visited || me.source_id
+        FROM graph_walk gw
+        JOIN pgmnemo.mem_edge me ON me.target_id = gw.reached_id
+        WHERE gw.depth < _max_depth
+          AND (me.valid_until IS NULL OR me.valid_until = 'infinity'::TIMESTAMPTZ)
+          AND NOT (me.source_id = ANY(gw.visited))  -- D1: prevent cycle revisit
     ),
     graph_proximity AS (
         SELECT
@@ -8703,27 +8703,27 @@ BEGIN
         SELECT id FROM scored ORDER BY rrf_sparse DESC LIMIT 5
     ),
     -- D1+D2(v0.19.0): cycle guard + UNION ALL bidirectional (was OR-join)
-    graph_walk(anchor_id, depth, reached_id, visited) AS (
+    -- Two recursive branches in the recursive term is valid in PostgreSQL:
+    -- each branch references the worktable independently per iteration.
+    graph_walk (anchor_id, depth, reached_id, visited) AS (
         SELECT id, 0, id, ARRAY[id] FROM anchors WHERE _graph_weight > 0  -- Fix 5; D1: visited set
         UNION ALL
-        -- D2(v0.19.0): bidirectional via pre-unioned edge arms — a recursive CTE
-        -- permits exactly ONE recursive reference, so two UNION ALL branches each
-        -- reading graph_walk are illegal (PL/pgSQL defers parsing to first
-        -- execution, which is how the broken form survived CREATE). Each arm of
-        -- the inner UNION ALL keeps its own index: source_id btree forward,
-        -- ix_mem_edge_target_active backward.
-        SELECT gw.anchor_id, gw.depth + 1, e.next_id, gw.visited || e.next_id
+        -- Forward: source → target (clean B-tree index scan on source_id)
+        SELECT gw.anchor_id, gw.depth + 1, me.target_id, gw.visited || me.target_id
         FROM graph_walk gw
-        JOIN (
-            SELECT me.source_id AS from_id, me.target_id AS next_id, me.valid_until
-            FROM pgmnemo.mem_edge me
-            UNION ALL
-            SELECT me.target_id AS from_id, me.source_id AS next_id, me.valid_until
-            FROM pgmnemo.mem_edge me
-        ) e ON e.from_id = gw.reached_id
+        JOIN pgmnemo.mem_edge me ON me.source_id = gw.reached_id
         WHERE gw.depth < _max_depth
-          AND (e.valid_until IS NULL OR e.valid_until = 'infinity'::TIMESTAMPTZ)
-          AND NOT (e.next_id = ANY(gw.visited))  -- D1: prevent cycle revisit
+          -- v0.9.1 fix: handle both active-edge sentinels
+          AND (me.valid_until IS NULL OR me.valid_until = 'infinity'::TIMESTAMPTZ)
+          AND NOT (me.target_id = ANY(gw.visited))  -- D1: prevent cycle revisit
+        UNION ALL
+        -- Backward: target → source (uses ix_mem_edge_target_active index)
+        SELECT gw.anchor_id, gw.depth + 1, me.source_id, gw.visited || me.source_id
+        FROM graph_walk gw
+        JOIN pgmnemo.mem_edge me ON me.target_id = gw.reached_id
+        WHERE gw.depth < _max_depth
+          AND (me.valid_until IS NULL OR me.valid_until = 'infinity'::TIMESTAMPTZ)
+          AND NOT (me.source_id = ANY(gw.visited))  -- D1: prevent cycle revisit
     ),
     graph_proximity AS (
         SELECT
