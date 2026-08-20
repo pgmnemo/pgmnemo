@@ -72,12 +72,18 @@ END $$;
 
 -- ── Variant C fixtures ───────────────────────────────────────────────────────
 -- L_ent1, L_ent2: entity_key='model:claude-sonnet-4-6', text NOT BM25-matchable to probe
--- L_bm25: matches BM25 probe 'v0200probe zeta kappa omega', no entity key → 'ann'
--- L_both: matches BM25 probe AND has entity key → 'ann' (entity pool excludes overlap)
--- Query: 'claude-sonnet-4-6 v0200probe zeta kappa omega'
+-- L_bm25: matches BM25 probe 'v0200probe zeta kappa omega', no entity key
+-- L_both: matches BM25 probe AND has entity key
+-- Query used by T4: 'claude-sonnet-4-6 v0200probe zeta kappa omega'
 --   extract_entity_keys → ['model:claude-sonnet-4-6']
---   BM25 → L_bm25, L_both
---   Entity expansion → L_ent1, L_ent2 (not in BM25 pool)
+--   BM25 → NOTHING. The probe carries the token 'claude-sonnet-4-6', which lives
+--   only in metadata and in no lesson body, and BM25 matching is conjunctive —
+--   one absent token empties the whole pool. So under THIS probe every returned
+--   row arrives through entity expansion, L_both included, and T4 exercises
+--   Variant C alone. The pool-interaction claims it used to make here were never
+--   true; T10 below uses a probe whose tokens do occur in the bodies, which is
+--   what actually puts BM25 rows on the table.
+--   Entity expansion → L_ent1, L_ent2, L_both
 DO $$
 BEGIN
     INSERT INTO pgmnemo.agent_lesson
@@ -248,6 +254,53 @@ FROM pgmnemo.recall_hybrid(
     30,
     'skill:test_v0200'
 );
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- T10: expansion is ADDITIVE — enabling an expander never removes a row that
+-- the same query returned with the expander off. T4/T5 only show that entity
+-- rows appear; nothing so far proved the base rows survive. The probe below is
+-- BM25-matchable on its own (every token occurs in a lesson body), otherwise
+-- the baseline arm is empty and the comparison is vacuous.
+-- ─────────────────────────────────────────────────────────────────────────────
+SET pgmnemo.graph_entity_expand_weight = '0.0';
+CREATE TEMP TABLE _t10_off AS
+SELECT lesson_id FROM pgmnemo.recall_hybrid(
+    NULL::vector(1024), 'v0200probe zeta kappa omega', 20, 'skill:test_v0200',
+    NULL, 0.0, 1.0, NULL, NULL, NULL, NULL);
+
+SET pgmnemo.graph_entity_expand_weight = '0.1';
+CREATE TEMP TABLE _t10_on AS
+SELECT lesson_id FROM pgmnemo.recall_hybrid(
+    NULL::vector(1024), 'v0200probe zeta kappa omega', 20, 'skill:test_v0200',
+    NULL, 0.0, 1.0, NULL, NULL, NULL, NULL);
+
+SELECT (SELECT COUNT(*) FROM _t10_off) > 0 AS baseline_non_empty,
+       NOT EXISTS (SELECT lesson_id FROM _t10_off
+                   EXCEPT SELECT lesson_id FROM _t10_on) AS nothing_lost_when_enabled;
+
+DROP TABLE _t10_off;
+DROP TABLE _t10_on;
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- T11: pools are DISJOINT by construction. entity_scores and graph_scores both
+-- exclude everything already in the ANN and BM25 pools, so one lesson can never
+-- carry two sources — the "priority entity > graph > ann" rule described in the
+-- design docs has no reachable case. What must hold instead: every row appears
+-- once, with exactly one source drawn from the allowed set.
+-- ─────────────────────────────────────────────────────────────────────────────
+SET pgmnemo.graph_entity_expand_weight = '0.1';
+SET pgmnemo.graph_expand_weight = '0.2';
+
+SELECT COUNT(*) = COUNT(DISTINCT lesson_id) AS each_lesson_once,
+       COUNT(*) FILTER (WHERE retrieval_source IS NULL) AS null_source,
+       COUNT(*) FILTER (WHERE retrieval_source NOT IN ('ann','graph','entity'))
+                                                        AS unknown_source
+FROM pgmnemo.recall_hybrid(
+    NULL::vector(1024), 'claude-sonnet-4-6 v0200probe zeta kappa omega', 20,
+    'skill:test_v0200', NULL, 0.0, 1.0, NULL, NULL, NULL, NULL);
+
+RESET pgmnemo.graph_expand_weight;
+RESET pgmnemo.graph_entity_expand_weight;
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- Cleanup

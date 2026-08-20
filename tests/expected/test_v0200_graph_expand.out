@@ -18,8 +18,11 @@
 --   T9  Cycle guard: cyclic edges terminate without error
 -- ─────────────────────────────────────────────────────────────────────────────
 SET pgmnemo.gate_strict = 'off';
+SET
 SET pgmnemo.include_unverified = 'on';
+SET
 SET pgmnemo.track_recall_recency = 'off';
+SET
 -- ─────────────────────────────────────────────────────────────────────────────
 -- T1: recall_hybrid prosrc has Variant A + Variant C + retrieval_source
 -- ─────────────────────────────────────────────────────────────────────────────
@@ -79,14 +82,21 @@ BEGIN
     END IF;
     DELETE FROM pgmnemo.agent_lesson WHERE role = 'skill:test_v0200';
 END $$;
+DO
 -- ── Variant C fixtures ───────────────────────────────────────────────────────
 -- L_ent1, L_ent2: entity_key='model:claude-sonnet-4-6', text NOT BM25-matchable to probe
--- L_bm25: matches BM25 probe 'v0200probe zeta kappa omega', no entity key → 'ann'
--- L_both: matches BM25 probe AND has entity key → 'ann' (entity pool excludes overlap)
--- Query: 'claude-sonnet-4-6 v0200probe zeta kappa omega'
+-- L_bm25: matches BM25 probe 'v0200probe zeta kappa omega', no entity key
+-- L_both: matches BM25 probe AND has entity key
+-- Query used by T4: 'claude-sonnet-4-6 v0200probe zeta kappa omega'
 --   extract_entity_keys → ['model:claude-sonnet-4-6']
---   BM25 → L_bm25, L_both
---   Entity expansion → L_ent1, L_ent2 (not in BM25 pool)
+--   BM25 → NOTHING. The probe carries the token 'claude-sonnet-4-6', which lives
+--   only in metadata and in no lesson body, and BM25 matching is conjunctive —
+--   one absent token empties the whole pool. So under THIS probe every returned
+--   row arrives through entity expansion, L_both included, and T4 exercises
+--   Variant C alone. The pool-interaction claims it used to make here were never
+--   true; T10 below uses a probe whose tokens do occur in the bodies, which is
+--   what actually puts BM25 rows on the table.
+--   Entity expansion → L_ent1, L_ent2, L_both
 DO $$
 BEGIN
     INSERT INTO pgmnemo.agent_lesson
@@ -109,6 +119,7 @@ BEGIN
          'v0200probe zeta kappa omega also model text',
          '{"entity_keys": ["model:claude-sonnet-4-6"]}', 3, NOW());
 END $$;
+DO
 SELECT COUNT(*) AS entity_fixtures
 FROM pgmnemo.agent_lesson WHERE role = 'skill:test_v0200';
  entity_fixtures 
@@ -120,7 +131,9 @@ FROM pgmnemo.agent_lesson WHERE role = 'skill:test_v0200';
 -- T4: Variant C — entity expansion puts L_ent1+L_ent2 in 'entity' pool
 -- ─────────────────────────────────────────────────────────────────────────────
 SET pgmnemo.graph_entity_expand_weight = '0.1';
+SET
 SET pgmnemo.graph_entity_min_overlap = '1';
+SET
 SELECT topic, retrieval_source
 FROM pgmnemo.recall_hybrid(
     NULL::vector(1024),
@@ -129,7 +142,7 @@ FROM pgmnemo.recall_hybrid(
     'skill:test_v0200'
 )
 ORDER BY topic;
-NOTICE:  pgmnemo: query_embedding IS NULL -- falling back to text-only recall; no semantic similarity
+psql:/tmp/t.sql:126: NOTICE:  pgmnemo: query_embedding IS NULL -- falling back to text-only recall; no semantic similarity
         topic         | retrieval_source 
 ----------------------+------------------
  Both BM25 and entity | entity
@@ -141,6 +154,7 @@ NOTICE:  pgmnemo: query_embedding IS NULL -- falling back to text-only recall; n
 -- T5: Entity expansion disabled when weight = 0.0 (default)
 -- ─────────────────────────────────────────────────────────────────────────────
 SET pgmnemo.graph_entity_expand_weight = '0.0';
+SET
 SELECT COUNT(*) FILTER (WHERE retrieval_source = 'entity') AS entity_rows_when_disabled
 FROM pgmnemo.recall_hybrid(
     NULL::vector(1024),
@@ -148,7 +162,7 @@ FROM pgmnemo.recall_hybrid(
     20,
     'skill:test_v0200'
 );
-NOTICE:  pgmnemo: query_embedding IS NULL -- falling back to text-only recall; no semantic similarity
+psql:/tmp/t.sql:139: NOTICE:  pgmnemo: query_embedding IS NULL -- falling back to text-only recall; no semantic similarity
  entity_rows_when_disabled 
 ---------------------------
                          0
@@ -209,12 +223,15 @@ BEGIN
 
     PERFORM pgmnemo.add_edge(_anc, _tgt, 'CAUSED_BY', 0.9);
 END $$;
+DO
 -- ─────────────────────────────────────────────────────────────────────────────
 -- T7: Variant A — BFS reaches L_tgt via causal edge from ANN anchor L_anc
 -- Query with e1 vector + probe text → L_anc in ANN+BM25 pool; L_tgt in graph pool
 -- ─────────────────────────────────────────────────────────────────────────────
 SET pgmnemo.graph_expand_weight = '0.2';
+SET
 SET pgmnemo.graph_entity_expand_weight = '0.0';
+SET
 SELECT topic, retrieval_source
 FROM pgmnemo.recall_hybrid(
     ('[' || '1,' || repeat('0,', 1022) || '0]')::vector(1024),
@@ -241,6 +258,7 @@ BEGIN
         DELETE FROM pgmnemo.mem_edge WHERE source_id = ANY(_ids) OR target_id = ANY(_ids);
     END IF;
 END $$;
+DO
 SELECT COUNT(*) FILTER (WHERE retrieval_source = 'graph') AS graph_rows_no_edges
 FROM pgmnemo.recall_hybrid(
     ('[' || '1,' || repeat('0,', 1022) || '0]')::vector(1024),
@@ -276,6 +294,7 @@ BEGIN
     PERFORM pgmnemo.add_edge(_la, _lb, 'CAUSED_BY', 0.8);
     PERFORM pgmnemo.add_edge(_lb, _la, 'CAUSED_BY', 0.8);
 END $$;
+DO
 SELECT COUNT(*) > 0 AS recall_terminates_with_cycle
 FROM pgmnemo.recall_hybrid(
     ('[' || '1,' || repeat('0,', 1022) || '0]')::vector(1024),
@@ -289,6 +308,69 @@ FROM pgmnemo.recall_hybrid(
 (1 row)
 
 -- ─────────────────────────────────────────────────────────────────────────────
+-- T10: expansion is ADDITIVE — enabling an expander never removes a row that
+-- the same query returned with the expander off. T4/T5 only show that entity
+-- rows appear; nothing so far proved the base rows survive. The probe below is
+-- BM25-matchable on its own (every token occurs in a lesson body), otherwise
+-- the baseline arm is empty and the comparison is vacuous.
+-- ─────────────────────────────────────────────────────────────────────────────
+SET pgmnemo.graph_entity_expand_weight = '0.0';
+SET
+CREATE TEMP TABLE _t10_off AS
+SELECT lesson_id FROM pgmnemo.recall_hybrid(
+    NULL::vector(1024), 'v0200probe zeta kappa omega', 20, 'skill:test_v0200',
+    NULL, 0.0, 1.0, NULL, NULL, NULL, NULL);
+psql:/tmp/t.sql:269: NOTICE:  pgmnemo: query_embedding IS NULL -- falling back to text-only recall; no semantic similarity
+SELECT 2
+SET pgmnemo.graph_entity_expand_weight = '0.1';
+SET
+CREATE TEMP TABLE _t10_on AS
+SELECT lesson_id FROM pgmnemo.recall_hybrid(
+    NULL::vector(1024), 'v0200probe zeta kappa omega', 20, 'skill:test_v0200',
+    NULL, 0.0, 1.0, NULL, NULL, NULL, NULL);
+psql:/tmp/t.sql:275: NOTICE:  pgmnemo: query_embedding IS NULL -- falling back to text-only recall; no semantic similarity
+SELECT 2
+SELECT (SELECT COUNT(*) FROM _t10_off) > 0 AS baseline_non_empty,
+       NOT EXISTS (SELECT lesson_id FROM _t10_off
+                   EXCEPT SELECT lesson_id FROM _t10_on) AS nothing_lost_when_enabled;
+ baseline_non_empty | nothing_lost_when_enabled 
+--------------------+---------------------------
+ t                  | t
+(1 row)
+
+DROP TABLE _t10_off;
+DROP TABLE
+DROP TABLE _t10_on;
+DROP TABLE
+-- ─────────────────────────────────────────────────────────────────────────────
+-- T11: pools are DISJOINT by construction. entity_scores and graph_scores both
+-- exclude everything already in the ANN and BM25 pools, so one lesson can never
+-- carry two sources — the "priority entity > graph > ann" rule described in the
+-- design docs has no reachable case. What must hold instead: every row appears
+-- once, with exactly one source drawn from the allowed set.
+-- ─────────────────────────────────────────────────────────────────────────────
+SET pgmnemo.graph_entity_expand_weight = '0.1';
+SET
+SET pgmnemo.graph_expand_weight = '0.2';
+SET
+SELECT COUNT(*) = COUNT(DISTINCT lesson_id) AS each_lesson_once,
+       COUNT(*) FILTER (WHERE retrieval_source IS NULL) AS null_source,
+       COUNT(*) FILTER (WHERE retrieval_source NOT IN ('ann','graph','entity'))
+                                                        AS unknown_source
+FROM pgmnemo.recall_hybrid(
+    NULL::vector(1024), 'claude-sonnet-4-6 v0200probe zeta kappa omega', 20,
+    'skill:test_v0200', NULL, 0.0, 1.0, NULL, NULL, NULL, NULL);
+psql:/tmp/t.sql:300: NOTICE:  pgmnemo: query_embedding IS NULL -- falling back to text-only recall; no semantic similarity
+ each_lesson_once | null_source | unknown_source 
+------------------+-------------+----------------
+ t                |           0 |              0
+(1 row)
+
+RESET pgmnemo.graph_expand_weight;
+RESET
+RESET pgmnemo.graph_entity_expand_weight;
+RESET
+-- ─────────────────────────────────────────────────────────────────────────────
 -- Cleanup
 -- ─────────────────────────────────────────────────────────────────────────────
 DO $$
@@ -301,6 +383,7 @@ BEGIN
     END IF;
     DELETE FROM pgmnemo.agent_lesson WHERE role = 'skill:test_v0200';
 END $$;
+DO
 SELECT COUNT(*) AS remaining_test_lessons
 FROM pgmnemo.agent_lesson WHERE role = 'skill:test_v0200';
  remaining_test_lessons 
@@ -309,4 +392,6 @@ FROM pgmnemo.agent_lesson WHERE role = 'skill:test_v0200';
 (1 row)
 
 RESET pgmnemo.graph_entity_expand_weight;
+RESET
 RESET pgmnemo.graph_expand_weight;
+RESET
