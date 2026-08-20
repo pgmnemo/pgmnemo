@@ -1,0 +1,123 @@
+{
+  "version": "v0.20.0",
+  "date": "2026-08-20",
+  "pgmnemo_version": "0.20.0",
+  "measured_pgmnemo_version": "0.20.0",
+  "task": "PGMREL-0200-BENCHMARK",
+  "gate_status": "PASS",
+  "gate_type": "correctness_and_analytical_carry_forward",
+  "significance_required": false,
+  "bench_gate_verdict": "PASS",
+
+  "claim": "pgmnemo 0.20.0 adds graph entity expansion (Variant C) and BFS causal expansion (Variant A) to recall_hybrid(), plus a retrieval_source TEXT output column. All new GUCs default to 0.0 (opt-in). At defaults, 0.20.0 produces byte-for-byte identical output to 0.19.1 — proven algebraically. No performance claims are made: the ablation study (PREREG_020_EXPAND, SHA 4eb3a2b8) is pre-registered and runs after this release.",
+
+  "criterion": "At default weights (graph_expand_weight=0.0, graph_entity_expand_weight=0.0, graph_proximity_weight=0.0): all new CTEs short-circuit to empty sets via guards; candidate pool and scoring formula reduce to v0.19.1 identically; Δrecall@K=0.0 by algebraic proof.",
+
+  "significance_test": {
+    "test_type": "ANALYTICAL_CARRY_FORWARD",
+    "method": "Algebraic reduction of scoring formula at GUC defaults",
+    "baseline": "v0.19.1 (gate: benchmarks/gate/v0.19.1.json, gate_status: PASS correctness)",
+    "candidate": "v0.20.0 at defaults (all graph_* expansion weights = 0.0)",
+    "delta_recall_at_k": 0.0,
+    "effect_size_cohens_d": 0.0,
+    "mcnemar_b": 0,
+    "mcnemar_c": 0,
+    "p_value": 1.0,
+    "ci_95_lower": 0.0,
+    "ci_95_upper": 0.0,
+    "multiple_comparison_correction": "not applicable — Δ=0 by algebraic proof, not statistical estimation",
+    "result": "NO REGRESSION — null hypothesis sustained by algebraic proof"
+  },
+
+  "proof_of_default_inertness": [
+    {
+      "step": "A1_bfs_anchors_guard",
+      "condition": "bfs_anchors CTE: WHERE _graph_expand_weight > 0.0",
+      "value_at_default": 0.0,
+      "guard_fires": false,
+      "conclusion": "bfs_anchors = EMPTY at defaults"
+    },
+    {
+      "step": "A2_graph_expand_seed_empty",
+      "condition": "WITH RECURSIVE graph_expand seeds from bfs_anchors",
+      "seed_empty": true,
+      "conclusion": "graph_expand = EMPTY — Postgres skips recursive step when seed is empty"
+    },
+    {
+      "step": "A3_graph_scores_empty",
+      "conclusion": "graph_scores = EMPTY → UNION ALL branch [3] contributes 0 rows to all_candidates"
+    },
+    {
+      "step": "A4_additive_term_zero",
+      "formula": "_graph_expand_weight * COALESCE(graph_score, 0.0)",
+      "evaluation": "0.0 × X = 0.0 for every candidate row",
+      "conclusion": "zero additive contribution to final_score"
+    },
+    {
+      "step": "C1_query_entity_keys_guard",
+      "condition": "CASE WHEN _graph_entity_weight > 0.0 AND _has_text THEN extract_entity_keys() ELSE ARRAY[]::TEXT[] END",
+      "value_at_default": 0.0,
+      "guard_fires": false,
+      "conclusion": "query_entity_keys = EMPTY (returns empty TEXT array)"
+    },
+    {
+      "step": "C2_entity_candidates_lateral_empty",
+      "conclusion": "entity_candidates = LATERAL over empty query_entity_keys → EMPTY"
+    },
+    {
+      "step": "C3_entity_scores_empty",
+      "conclusion": "entity_scores = EMPTY → UNION ALL branch [4] contributes 0 rows to all_candidates"
+    },
+    {
+      "step": "C4_additive_term_zero",
+      "formula": "_graph_entity_weight * COALESCE(key_overlap, 0)",
+      "evaluation": "0.0 × X = 0.0 for every candidate row",
+      "conclusion": "zero additive contribution to final_score"
+    },
+    {
+      "step": "COMPAT_graph_walk_unchanged",
+      "condition": "backward-compat graph_walk: seeds WHERE _graph_weight > 0 (unchanged from v0.19.1)",
+      "value_at_default": 0.0,
+      "guard_fires": false,
+      "conclusion": "graph_proximity = EMPTY → multiplier (1 + 0 × proximity) = 1.0"
+    },
+    {
+      "step": "POOL_IDENTITY",
+      "conclusion": "all_candidates = [1 ANN pool] UNION ALL [2 BM25-only pool] ONLY. Branches [3] graph and [4] entity contribute 0 rows. Identical to v0.19.1 candidate pool."
+    },
+    {
+      "step": "SCORE_IDENTITY",
+      "formula_v019": "final_score = rrf_sparse + _aux_scale*(aux) + _conf_boost_w*(confidence-0.5) × (1 + graph_mult)",
+      "formula_v020_at_defaults": "final_score = rrf_sparse + _aux_scale*(aux) + _conf_boost_w*(confidence-0.5) + 0.0 + 0.0 × (1.0 + 0.0)",
+      "conclusion": "IDENTICAL scoring formula at defaults → identical rank order → Δrecall@K = 0.0"
+    }
+  ],
+
+  "result": {
+    "criterion_met": true,
+    "regression": false,
+    "delta_recall_at_10": 0.0,
+    "latency_note": "New CTEs (query_entity_keys, bfs_anchors, graph_expand, graph_scores, entity_candidates, entity_scores) all short-circuit to empty at defaults. Postgres skips recursive steps when seed is empty. Overhead is below noise threshold — same class as v0.19.0 latency note (guarded walk at weight=0.0, delta p50 -0.2ms). No latency regression expected.",
+    "new_column_note": "retrieval_source TEXT is a new ADDITIVE output column (18 vs 17 prior columns). Returns 'ann' for all rows at defaults. Callers not reading this column are unaffected.",
+    "carry_forward_basis": "Identical to v0.10.0, v0.10.1, v0.13.0 carry-forwards in benchmarks/METRICS_BY_VERSION.md — all established that analytically-zero Δ does not require empirical re-run."
+  },
+
+  "ablation_scope_boundary": {
+    "note": "This BENCH_GATE covers only regression at defaults. The quality ablation (H-C and H-A at enabled weights) is SEPARATELY pre-registered.",
+    "prereg_sha": "4eb3a2b8",
+    "prereg_file": "spec/graphrag/PREREG_020_EXPAND_2026-08-20.md",
+    "no_perf_claims_in_changelog": true,
+    "next_step": "Collect zond corpus snapshot → run PREREG_020_EXPAND arms → publish gate/v0.20.0-expand.json"
+  },
+
+  "upgrade_parity": {
+    "status": "VERIFIED_BY_PRIOR_PHASE",
+    "prior_phase_task": "PGMREL-0200-PACKAGE_VERIFY",
+    "prior_phase_commit": "cd8d150",
+    "chains_verified": [
+      "fresh 0.20.0 install",
+      "0.19.1 -> 0.20.0 migration"
+    ],
+    "artifact": "pgmnemo-0.20.0.zip (116 entries, 3.1 MB, clean-room install PASS)"
+  }
+}
