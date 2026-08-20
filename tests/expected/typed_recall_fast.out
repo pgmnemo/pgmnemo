@@ -22,7 +22,7 @@ SET pgmnemo.include_unverified = 'on';
 SET pgmnemo.track_recall_recency = 'off';
 SET pgmnemo.disable_hybrid = 'on';   -- force vector-only path in recall_lessons
 ALTER EXTENSION pgmnemo UPDATE TO '0.19.0';
-NOTICE:  version "0.16.1" of extension "pgmnemo" is already installed
+ERROR:  extension "pgmnemo" has no update path from version "0.20.0" to version "0.19.0"
 -- ─────────────────────────────────────────────────────────────────────────────
 -- T1: recall_fast has 6 parameters
 -- ─────────────────────────────────────────────────────────────────────────────

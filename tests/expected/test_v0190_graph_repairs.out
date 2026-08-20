@@ -18,7 +18,7 @@ SET pgmnemo.gate_strict = 'off';
 SET pgmnemo.include_unverified = 'on';
 SET pgmnemo.track_recall_recency = 'off';
 ALTER EXTENSION pgmnemo UPDATE TO '0.19.0';
-NOTICE:  version "0.19.0" of extension "pgmnemo" is already installed
+ERROR:  extension "pgmnemo" has no update path from version "0.20.0" to version "0.19.0"
 -- ─────────────────────────────────────────────────────────────────────────────
 -- A: D3 — _max_depth reduced to 2 in recall_hybrid and recall_lessons
 --    We cannot directly inspect PL/pgSQL constant values from SQL, but we can
@@ -31,7 +31,7 @@ FROM pg_proc p
 JOIN pg_namespace n ON n.oid = p.pronamespace
 WHERE n.nspname = 'pgmnemo' AND p.proname = 'recall_hybrid'
   AND p.pronargs = 11;
- a1_no_depth5
+ a1_no_depth5 
 --------------
  t
 (1 row)
@@ -43,7 +43,7 @@ FROM pg_proc p
 JOIN pg_namespace n ON n.oid = p.pronamespace
 WHERE n.nspname = 'pgmnemo' AND p.proname = 'recall_lessons'
   AND p.pronargs = 9;
- a2_no_depth5
+ a2_no_depth5 
 --------------
  t
 (1 row)
@@ -58,7 +58,7 @@ FROM pg_proc p
 JOIN pg_namespace n ON n.oid = p.pronamespace
 WHERE n.nspname = 'pgmnemo' AND p.proname = 'recall_hybrid'
   AND p.pronargs = 11;
- b1_has_visited_guard
+ b1_has_visited_guard 
 ----------------------
  t
 (1 row)
@@ -72,7 +72,7 @@ SELECT
 FROM pg_proc p
 JOIN pg_namespace n ON n.oid = p.pronamespace
 WHERE n.nspname = 'pgmnemo' AND p.proname = 'navigate_locate';
- c1_no_or_join
+ c1_no_or_join 
 ---------------
  t
 (1 row)
@@ -83,7 +83,7 @@ SELECT
 FROM pg_indexes
 WHERE schemaname = 'pgmnemo'
   AND indexname = 'ix_mem_edge_target_active';
- c2_index_exists
+ c2_index_exists 
 -----------------
  t
 (1 row)
@@ -97,7 +97,7 @@ SELECT
 FROM pg_proc p
 JOIN pg_namespace n ON n.oid = p.pronamespace
 WHERE n.nspname = 'pgmnemo' AND p.proname = 'recall_entity';
- d1_volatility
+ d1_volatility 
 ---------------
  stable
 (1 row)
@@ -108,7 +108,7 @@ SELECT
 FROM pg_proc p
 JOIN pg_namespace n ON n.oid = p.pronamespace
 WHERE n.nspname = 'pgmnemo' AND p.proname = 'recall_entity';
- d2_parallel
+ d2_parallel 
 -------------
  safe
 (1 row)
@@ -139,7 +139,7 @@ SELECT
     COUNT(*) >= 1 AS e1_found_lessons
 FROM pgmnemo.recall_entity('schema:pgmnemo.graph_walk')
 WHERE role = 'tc_grf' AND project_id = -1900;
- e1_found_lessons
+ e1_found_lessons 
 ------------------
  t
 (1 row)
@@ -149,7 +149,7 @@ SELECT
     COUNT(*) = 1 AS e2_limit_respected
 FROM pgmnemo.recall_entity('schema:pgmnemo.graph_walk', 1)
 WHERE role = 'tc_grf' AND project_id = -1900;
- e2_limit_respected
+ e2_limit_respected 
 --------------------
  t
 (1 row)
@@ -164,7 +164,7 @@ FROM pg_proc p
 JOIN pg_namespace n ON n.oid = p.pronamespace
 WHERE n.nspname = 'pgmnemo' AND p.proname = 'recall_hybrid'
   AND p.pronargs = 11;
- f1_cycle_guard_present
+ f1_cycle_guard_present 
 ------------------------
  t
 (1 row)
