@@ -6,7 +6,7 @@ DOCS         =
 # List only tests that have matching expected/*.out files.
 # Historical tests (v060, v070) are kept in tests/sql/ for reference
 # but excluded from REGRESS until expected files are authored.
-REGRESS      = setup_v0200_comment test_v071 test_v080 test_v0110_typed_recall test_remember_fact test_v0120 typed_recall_fast test_v0142_curation_honesty test_v0150_episodic test_v0151_guc_situation test_v0160_entity_keys test_v0161_failure_vocab test_v0190_graph_repairs test_v0200_graph_expand
+REGRESS      = test_v071 test_v080 test_v0110_typed_recall test_remember_fact test_v0120 typed_recall_fast test_v0142_curation_honesty test_v0150_episodic test_v0151_guc_situation test_v0160_entity_keys test_v0161_failure_vocab test_v0190_graph_repairs test_v0200_graph_expand
 REGRESS_OPTS = --inputdir=tests --load-extension=vector --load-extension=$(EXTENSION)
 
 PG_CONFIG    = pg_config

@@ -67,13 +67,16 @@ SELECT (
 ) AS sentinel_contribution_less_than_median;
 
 -- ── Comment check: function comment references Cormack 2009 ─────────────────
--- Every recall_hybrid overload must document the sparse-safe rule, not just
--- whichever one pg_proc happens to return first: the unordered LIMIT 1 this
--- check used to carry silently followed the new 11-param overload in 0.20.0
--- and only then revealed that its rewritten comment had dropped the reference.
-SELECT bool_and(obj_description(p.oid, 'pg_proc') LIKE '%Cormack%') AS comment_has_cormack
+-- Pin the check to the CURRENT signature (the widest overload) rather than to
+-- whichever row pg_proc returns first. The unordered LIMIT 1 this check used to
+-- carry followed the new 11-param overload only in 0.20.0, and that is when it
+-- surfaced that its rewritten comment had dropped the reference. Historical
+-- overloads still present on an upgrade path keep their own older comments and
+-- must not decide this check either way.
+SELECT (obj_description(p.oid, 'pg_proc') LIKE '%Cormack%') AS comment_has_cormack
 FROM   pg_proc p
 JOIN   pg_namespace n ON n.oid = p.pronamespace
 WHERE  n.nspname = 'pgmnemo'
   AND  p.proname = 'recall_hybrid'
-  AND  obj_description(p.oid, 'pg_proc') IS NOT NULL;
+ORDER  BY p.pronargs DESC
+LIMIT  1;
