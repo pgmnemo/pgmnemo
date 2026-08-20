@@ -673,6 +673,8 @@ COMMENT ON FUNCTION pgmnemo.recall_hybrid(vector, TEXT, INT, TEXT, INT, DOUBLE P
     ''
     'retrieval_source TEXT column: ann (original ANN+BM25 pool), graph (BFS-expanded), entity (GIN-expanded). '
     'Output columns preserved: vec_score (cosine similarity), bm25_score, rrf_score, match_confidence. '
+    'RRF fusion sparse-safe (Cormack 2009): an item absent from a ranking gets sentinel rank n+1, '
+    'never a median rank — absent items must not collect a fusion boost. '
     'All expansion weights default 0.0 — output is byte-identical to 0.19.x when weights unset. '
     'IRON: no perf claims until PREREG_020_EXPAND (SHA 4eb3a2b8) ablation complete. '
     'v0.18.0 — VOLATILE (uses CREATE TEMP TABLE). Call mark_recalled() separately for recency tracking. '
