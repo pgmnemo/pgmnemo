@@ -8,6 +8,7 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 | Version | Breaking change | Migration |
 |---|---|---|
+| **0.20.0** | `recall_hybrid` (11-param) adds `retrieval_source TEXT` as 18th column; `stats()` adds 7 GUC columns | Positional row access must add column; named/`*` access unaffected |
 | **0.19.1** | Upgrade path shipped a `navigate_locate` with an invalid recursive CTE — fresh installs fine, upgraded installs broken on first call. Converged; body parity now gates the release. |
 | **0.18.1** | `recall_hybrid` could hang for tens of seconds on ordinary queries — the graph walk ran on every call, unguarded, and its result was then multiplied by a weight of zero and thrown away. Present in 0.17.0 and 0.18.0. |
 | **0.18.0** | `recall_hybrid` / `recall_lessons` no longer stamp `last_recalled_at` / `recall_count` on every call — `_stamp` CTE removed for 13.6× latency reduction | Call `pgmnemo.mark_recalled(ARRAY(SELECT lesson_id FROM pgmnemo.recall_hybrid(...)))` after each recall to restore recency tracking |
@@ -16,6 +17,68 @@ Versions follow [Semantic Versioning](https://semver.org/).
 | **0.9.0** | `navigate_locate` budget counter fixed — ~5× more IDs returned per equivalent budget | Callers with `token_budget_chars` need proportional adjustment; see §Breaking changes in [0.9.0] |
 | **0.5.0** | 4-arg `traverse_causal_chain` removed | Use 2-arg form + `WHERE` clause |
 | **0.5.0** | `mem_edge` columns renamed: `lesson_a_id` → `source_id`, `lesson_b_id` → `target_id` | Use `pgmnemo.add_edge()` to avoid direct column references; see [docs/MIGRATION.md](docs/MIGRATION.md) |
+
+---
+
+## [0.20.0] - 2026-08-20
+
+**Feature: «Граф, который достаёт» — two orthogonal graph expansion mechanisms for recall_hybrid.**
+
+Two optional pool-expander CTEs are added to `recall_hybrid` (11-param). Both default to
+disabled (all new weights 0.0) — output is byte-for-byte identical to 0.19.1 when no GUCs
+are set. No performance claims are made in this entry; quantitative recall lift will be
+published after pre-registered ablation PREREG_020_EXPAND (SHA 4eb3a2b8) completes.
+
+### Added
+
+**Variant A — BFS pool expansion (`graph_expand_weight` GUC)**
+- New `graph_expand` CTE: BFS depth=1, causal edges only (`edge_kind='causal'`), seeded
+  from top-K ANN anchors, hub-capped via `LATERAL LIMIT` per source node.
+- Lessons reachable via causal graph but outside the original ANN+BM25 candidate pool
+  are promoted into scoring and receive `retrieval_source = 'graph'`.
+- Hub-cap is mandatory (p99 out-degree = 222 without cap): `graph_expand_per_node` default 10.
+- GUC `pgmnemo.graph_expand_weight` `[0.0, 0.5]` default `0.0` — master enable/disable.
+- GUC `pgmnemo.graph_expand_depth` `[1, 2]` default `1` — BFS depth (depth=2 conditional).
+- GUC `pgmnemo.graph_expand_ann_k` `[10, 50]` default `15` — ANN anchor oversampling.
+- GUC `pgmnemo.graph_expand_per_node` `[3, 50]` default `10` — hub-cap per source node.
+
+**Variant C — Entity GIN expansion (`graph_entity_expand_weight` GUC)**
+- New `entity_expanded` CTE: LATERAL per-key GIN scan on `metadata @> jsonb_build_object('entity_keys', jsonb_build_array(key))`.
+- GIN pattern fix (R2_DB §7): `jsonb_build_object` nesting is required — bare `jsonb_build_array` returns 0 rows.
+- Lessons matching query entity keys but outside the original pool receive `retrieval_source = 'entity'`.
+- GUC `pgmnemo.graph_entity_expand_weight` `[0.0, 0.3]` default `0.0` — master enable/disable.
+- GUC `pgmnemo.graph_entity_min_overlap` `>= 1` default `1` — minimum matching entity keys.
+- GUC `pgmnemo.graph_entity_max_expansion` `>= 1` default `50` — max GIN candidates per key.
+
+**Explainability: `retrieval_source` output column**
+- `recall_hybrid` now returns `retrieval_source TEXT` as an 18th column.
+- Values: `'ann'` (original ANN+BM25 pool), `'graph'` (BFS-expanded), `'entity'` (GIN-expanded).
+- Callers using positional access to recall_hybrid output must add a column to their row type.
+
+**`stats()` diagnostics**
+- 7 new columns: `graph_expand_weight`, `graph_expand_depth`, `graph_expand_ann_k`,
+  `graph_expand_per_node`, `graph_entity_expand_weight`, `graph_entity_min_overlap`,
+  `graph_entity_max_expansion` — all read from GUCs, show active configuration.
+
+### Changed
+
+- `recall_hybrid` return type: 17 → 18 columns (adds `retrieval_source TEXT`). Callers
+  using named-column or `*` access are unaffected; positional callers need updating.
+- `stats()` return type: 19 → 26 columns. Callers selecting specific columns are unaffected.
+
+### Migration
+
+Upgrade path `pgmnemo--0.19.1--0.20.0.sql` performs DROP + CREATE on both `recall_hybrid`
+and `stats()` (return type changes require DROP; extension context allows this).
+G-UPGRADE-PARITY: `pgmnemo--0.20.0.sql` (fresh install) and the delta migration produce
+identical installed state.
+
+### Breaking changes
+
+| Function | Change | Impact |
+|---|---|---|
+| `recall_hybrid` (11-param) | adds 18th column `retrieval_source` | positional row access |
+| `stats()` | adds 7 GUC columns (cols 20–26) | positional row access |
 
 ---
 
