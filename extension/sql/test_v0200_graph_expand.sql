@@ -17,9 +17,11 @@
 --   T8  Empty mem_edge + graph_expand_weight > 0 → 0 'graph' rows
 --   T9  Cycle guard: cyclic edges terminate without error
 -- ─────────────────────────────────────────────────────────────────────────────
+
 SET pgmnemo.gate_strict = 'off';
 SET pgmnemo.include_unverified = 'on';
 SET pgmnemo.track_recall_recency = 'off';
+
 -- ─────────────────────────────────────────────────────────────────────────────
 -- T1: recall_hybrid prosrc has Variant A + Variant C + retrieval_source
 -- ─────────────────────────────────────────────────────────────────────────────
@@ -30,10 +32,6 @@ SELECT
 FROM pg_proc p
 JOIN pg_namespace n ON n.oid = p.pronamespace
 WHERE n.nspname = 'pgmnemo' AND p.proname = 'recall_hybrid' AND p.pronargs = 11;
- has_variant_a | has_variant_c | has_retrieval_source 
----------------+---------------+----------------------
- t             | t             | t
-(1 row)
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- T2: stats() return signature has 7 new GUC columns
@@ -44,10 +42,6 @@ SELECT
 FROM pg_proc p
 JOIN pg_namespace n ON n.oid = p.pronamespace
 WHERE n.nspname = 'pgmnemo' AND p.proname = 'stats' AND p.pronargs = 0;
- stats_has_variant_a_guc | stats_has_variant_c_guc 
--------------------------+-------------------------
- t                       | t
-(1 row)
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- T3: stats() GUC defaults are all safe (0.0 weights / sane counts)
@@ -61,10 +55,6 @@ SELECT
     graph_entity_min_overlap = 1     AS min_overlap_one,
     graph_entity_max_expansion = 50  AS max_exp_fifty
 FROM pgmnemo.stats();
- a_weight_zero | c_weight_zero | depth_one | ann_k_fifteen | per_node_ten | min_overlap_one | max_exp_fifty 
----------------+---------------+-----------+---------------+--------------+-----------------+---------------
- t             | t             | t         | t             | t            | t               | t
-(1 row)
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- Setup: clean any prior test data
@@ -79,6 +69,7 @@ BEGIN
     END IF;
     DELETE FROM pgmnemo.agent_lesson WHERE role = 'skill:test_v0200';
 END $$;
+
 -- ── Variant C fixtures ───────────────────────────────────────────────────────
 -- L_ent1, L_ent2: entity_key='model:claude-sonnet-4-6', text NOT BM25-matchable to probe
 -- L_bm25: matches BM25 probe 'v0200probe zeta kappa omega', no entity key → 'ann'
@@ -109,18 +100,16 @@ BEGIN
          'v0200probe zeta kappa omega also model text',
          '{"entity_keys": ["model:claude-sonnet-4-6"]}', 3, NOW());
 END $$;
+
 SELECT COUNT(*) AS entity_fixtures
 FROM pgmnemo.agent_lesson WHERE role = 'skill:test_v0200';
- entity_fixtures 
------------------
-               4
-(1 row)
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- T4: Variant C — entity expansion puts L_ent1+L_ent2 in 'entity' pool
 -- ─────────────────────────────────────────────────────────────────────────────
 SET pgmnemo.graph_entity_expand_weight = '0.1';
 SET pgmnemo.graph_entity_min_overlap = '1';
+
 SELECT topic, retrieval_source
 FROM pgmnemo.recall_hybrid(
     NULL::vector(1024),
@@ -129,18 +118,12 @@ FROM pgmnemo.recall_hybrid(
     'skill:test_v0200'
 )
 ORDER BY topic;
-NOTICE:  pgmnemo: query_embedding IS NULL -- falling back to text-only recall; no semantic similarity
-        topic         | retrieval_source 
-----------------------+------------------
- Both BM25 and entity | entity
- Entity alpha 1       | entity
- Entity alpha 2       | entity
-(3 rows)
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- T5: Entity expansion disabled when weight = 0.0 (default)
 -- ─────────────────────────────────────────────────────────────────────────────
 SET pgmnemo.graph_entity_expand_weight = '0.0';
+
 SELECT COUNT(*) FILTER (WHERE retrieval_source = 'entity') AS entity_rows_when_disabled
 FROM pgmnemo.recall_hybrid(
     NULL::vector(1024),
@@ -148,11 +131,6 @@ FROM pgmnemo.recall_hybrid(
     20,
     'skill:test_v0200'
 );
-NOTICE:  pgmnemo: query_embedding IS NULL -- falling back to text-only recall; no semantic similarity
- entity_rows_when_disabled 
----------------------------
-                         0
-(1 row)
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- T6: GIN containment correctness (R2_DB §7)
@@ -164,20 +142,12 @@ FROM pgmnemo.agent_lesson
 WHERE is_active
   AND metadata @> jsonb_build_object('entity_keys', jsonb_build_array('model:claude-sonnet-4-6'))
   AND role = 'skill:test_v0200';
- correct_gin_rows 
-------------------
-                3
-(1 row)
 
 SELECT COUNT(*) AS wrong_gin_rows
 FROM pgmnemo.agent_lesson
 WHERE is_active
   AND metadata @> jsonb_build_array('model:claude-sonnet-4-6')
   AND role = 'skill:test_v0200';
- wrong_gin_rows 
-----------------
-              0
-(1 row)
 
 -- ── Variant A BFS fixtures ───────────────────────────────────────────────────
 -- L_anc: embedding=e1 (unit vec), BM25-matchable ('v0200probe bfs anchor')
@@ -209,12 +179,14 @@ BEGIN
 
     PERFORM pgmnemo.add_edge(_anc, _tgt, 'CAUSED_BY', 0.9);
 END $$;
+
 -- ─────────────────────────────────────────────────────────────────────────────
 -- T7: Variant A — BFS reaches L_tgt via causal edge from ANN anchor L_anc
 -- Query with e1 vector + probe text → L_anc in ANN+BM25 pool; L_tgt in graph pool
 -- ─────────────────────────────────────────────────────────────────────────────
 SET pgmnemo.graph_expand_weight = '0.2';
 SET pgmnemo.graph_entity_expand_weight = '0.0';
+
 SELECT topic, retrieval_source
 FROM pgmnemo.recall_hybrid(
     ('[' || '1,' || repeat('0,', 1022) || '0]')::vector(1024),
@@ -223,11 +195,6 @@ FROM pgmnemo.recall_hybrid(
     'skill:test_v0200'
 )
 ORDER BY topic;
-       topic       | retrieval_source 
--------------------+------------------
- BFS anchor lesson | ann
- BFS target lesson | graph
-(2 rows)
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- T8: Empty mem_edge + graph_expand_weight > 0 → 0 'graph' source rows
@@ -241,6 +208,7 @@ BEGIN
         DELETE FROM pgmnemo.mem_edge WHERE source_id = ANY(_ids) OR target_id = ANY(_ids);
     END IF;
 END $$;
+
 SELECT COUNT(*) FILTER (WHERE retrieval_source = 'graph') AS graph_rows_no_edges
 FROM pgmnemo.recall_hybrid(
     ('[' || '1,' || repeat('0,', 1022) || '0]')::vector(1024),
@@ -248,10 +216,6 @@ FROM pgmnemo.recall_hybrid(
     30,
     'skill:test_v0200'
 );
- graph_rows_no_edges 
----------------------
-                   0
-(1 row)
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- T9: Cycle guard — cyclic edges A→B, B→A must terminate without error
@@ -276,6 +240,7 @@ BEGIN
     PERFORM pgmnemo.add_edge(_la, _lb, 'CAUSED_BY', 0.8);
     PERFORM pgmnemo.add_edge(_lb, _la, 'CAUSED_BY', 0.8);
 END $$;
+
 SELECT COUNT(*) > 0 AS recall_terminates_with_cycle
 FROM pgmnemo.recall_hybrid(
     ('[' || '1,' || repeat('0,', 1022) || '0]')::vector(1024),
@@ -283,10 +248,6 @@ FROM pgmnemo.recall_hybrid(
     30,
     'skill:test_v0200'
 );
- recall_terminates_with_cycle 
-------------------------------
- t
-(1 row)
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- Cleanup
@@ -301,12 +262,9 @@ BEGIN
     END IF;
     DELETE FROM pgmnemo.agent_lesson WHERE role = 'skill:test_v0200';
 END $$;
+
 SELECT COUNT(*) AS remaining_test_lessons
 FROM pgmnemo.agent_lesson WHERE role = 'skill:test_v0200';
- remaining_test_lessons 
-------------------------
-                      0
-(1 row)
 
 RESET pgmnemo.graph_entity_expand_weight;
 RESET pgmnemo.graph_expand_weight;
