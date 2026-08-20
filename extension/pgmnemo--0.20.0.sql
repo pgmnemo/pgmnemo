@@ -1,9 +1,9 @@
--- pgmnemo--0.19.0.sql
--- Flat install for pgmnemo 0.19.0 (graph_walk repairs: D1 cycle guard, D2 UNION ALL bidirectional, D3 depth cap; R-U1 recall_entity)
--- Generated from: pgmnemo--0.18.0.sql + pgmnemo--0.18.0--0.19.0.sql
+-- pgmnemo--0.20.0.sql
+-- Flat install for pgmnemo 0.20.0 (graph entity expansion Variant C + BFS Variant A + retrieval_source column)
+-- Generated from: pgmnemo--0.19.0.sql + pgmnemo--0.19.0--0.19.1.sql + pgmnemo--0.19.1--0.20.0.sql
 -- SPDX-License-Identifier: Apache-2.0
 
-\echo Use "CREATE EXTENSION pgmnemo VERSION '0.19.0'" to load this file. \quit
+\echo Use "CREATE EXTENSION pgmnemo VERSION '0.20.0'" to load this file. \quit
 
 
 -- ─────────────────────────────────────────────────────────────────────────────

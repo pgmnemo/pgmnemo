@@ -4,15 +4,15 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pgmnemo-mcp"
-version = "0.19.1"
+version = "0.20.0"
 description = "MCP server wrapping pgmnemo ingest and recall for AI agent memory"
 readme = "README.md"
 license = { text = "Apache-2.0" }
 requires-python = ">=3.11"
 dependencies = [
     "mcp>=2.0,<3",
-    "psycopg2-binary>=2.9",
-    "pydantic>=2.0",
+    "psycopg2-binary>=2.9,<3",
+    "pydantic>=2.0,<3",
 ]
 
 [project.scripts]
