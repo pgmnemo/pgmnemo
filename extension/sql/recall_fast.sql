@@ -22,7 +22,7 @@ SET pgmnemo.gate_strict = 'off';
 SET pgmnemo.include_unverified = 'on';
 SET pgmnemo.track_recall_recency = 'on';
 
-ALTER EXTENSION pgmnemo UPDATE TO '0.19.1';
+ALTER EXTENSION pgmnemo UPDATE TO '0.20.0';
 
 -- ============================================================================
 -- T1: Function exists with correct 5-arg signature

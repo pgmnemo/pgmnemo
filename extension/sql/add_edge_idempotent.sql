@@ -23,7 +23,7 @@ SET pgmnemo.gate_strict = 'off';
 SET pgmnemo.track_recall_recency = 'off';
 
 -- Ensure we are on v0.12.2
-ALTER EXTENSION pgmnemo UPDATE TO '0.19.1';
+ALTER EXTENSION pgmnemo UPDATE TO '0.20.0';
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- R1: uq_mem_edge_active index exists
