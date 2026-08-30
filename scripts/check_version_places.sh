@@ -1,11 +1,17 @@
 #!/usr/bin/env bash
 # Gate: every version-bearing file agrees with extension/pgmnemo.control.
 #
-# There are six of them and they are easy to miscount. 0.16.0 shipped with
+# There are seven of them and they are easy to miscount. 0.16.0 shipped with
 # META.provides.*.file still pointing at the previous flat install (caught by the
 # packaging gate); 0.16.1 was tagged with pgmnemo_mcp/pyproject.toml still on the
 # previous version (caught by CI pre-flight). Both were found after the tag was
 # pushed. This finds them before.
+#
+# The seventh place is pgmnemo_mcp/pgmnemo_mcp/__version__, which this gate did not
+# check until 0.20.0. It had sat at 0.18.0 across two releases: nothing imports it
+# for behaviour, so nothing went red — but the MCP server reports it in the
+# initialize handshake, so every directory that introspects the server (Glama and
+# anything else reading serverInfo) displayed a version we had not shipped.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 V=$(grep -oE "default_version = '([0-9.]+)'" extension/pgmnemo.control | grep -oE "[0-9.]+")
@@ -26,6 +32,7 @@ f=list(p.values())[0]['file']
 m=re.search(r'([0-9]+\.[0-9]+\.[0-9]+)\.sql\$',f); print(m.group(1) if m else 'UNPARSED')")"
 check "pyproject.toml version" "$(grep -m1 -oE '^version = \"[0-9.]+\"' pyproject.toml | grep -oE '[0-9.]+')"
 check "pgmnemo_mcp/pyproject.toml version" "$(grep -m1 -oE '^version = \"[0-9.]+\"' pgmnemo_mcp/pyproject.toml | grep -oE '[0-9.]+')"
+check "pgmnemo_mcp __version__ (serverInfo)" "$(grep -m1 -oE '^__version__ = \"[0-9.]+\"' pgmnemo_mcp/pgmnemo_mcp/__init__.py | grep -oE '[0-9.]+')"
 [ -f "extension/pgmnemo--$V.sql" ] && echo "  ok        flat install extension/pgmnemo--$V.sql" || { echo "  MISSING   extension/pgmnemo--$V.sql"; fail=1; }
 [ -f "benchmarks/gate/v$V.json" ] && echo "  ok        bench gate benchmarks/gate/v$V.json" || { echo "  MISSING   benchmarks/gate/v$V.json"; fail=1; }
 
