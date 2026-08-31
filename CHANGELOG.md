@@ -8,6 +8,7 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 | Version | Breaking change | Migration |
 |---|---|---|
+| **0.21.0** | None — bug fix only. | — |
 | **0.20.0** | `recall_hybrid` (11-param) adds `retrieval_source TEXT` as 18th column; `stats()` adds 7 GUC columns | Positional row access must add column; named/`*` access unaffected |
 | **0.19.1** | Upgrade path shipped a `navigate_locate` with an invalid recursive CTE — fresh installs fine, upgraded installs broken on first call. Converged; body parity now gates the release. |
 | **0.18.1** | `recall_hybrid` could hang for tens of seconds on ordinary queries — the graph walk ran on every call, unguarded, and its result was then multiplied by a weight of zero and thrown away. Present in 0.17.0 and 0.18.0. |
@@ -17,6 +18,80 @@ Versions follow [Semantic Versioning](https://semver.org/).
 | **0.9.0** | `navigate_locate` budget counter fixed — ~5× more IDs returned per equivalent budget | Callers with `token_budget_chars` need proportional adjustment; see §Breaking changes in [0.9.0] |
 | **0.5.0** | 4-arg `traverse_causal_chain` removed | Use 2-arg form + `WHERE` clause |
 | **0.5.0** | `mem_edge` columns renamed: `lesson_a_id` → `source_id`, `lesson_b_id` → `target_id` | Use `pgmnemo.add_edge()` to avoid direct column references; see [docs/MIGRATION.md](docs/MIGRATION.md) |
+
+---
+
+## [0.21.0] - 2026-08-31
+
+**Fix: memory corpus no longer silently discarded by pg_dump.**
+
+PostgreSQL extensions that own tables must call `pg_extension_config_dump()` to
+mark those tables as configuration data. Without this, `pg_dump` preserves the
+extension's DDL (via `CREATE EXTENSION`) but silently omits all row data. For
+pgmnemo this meant that any standard backup/restore cycle discarded the entire
+lesson corpus — the very data the extension exists to store.
+
+### Fixed
+
+- `pg_extension.extconfig` was empty in all versions prior to 0.21.0. `pg_dump`
+  therefore emitted only `CREATE EXTENSION pgmnemo;`, restoring schema and
+  functions but no data. The fix calls `pg_extension_config_dump()` for each
+  user-data table and its id sequence immediately after the tables are created.
+
+### Added
+
+- `pg_extension_config_dump` registrations for all three user-data tables:
+  - `pgmnemo.agent_lesson` — primary lesson store
+  - `pgmnemo.mem_edge` — graph edge store
+  - `pgmnemo.memory_ingest_log` — ingestion batch log
+- `pg_extension_config_dump` registrations for the three corresponding
+  BIGSERIAL sequences (`agent_lesson_id_seq`, `mem_edge_id_seq`,
+  `memory_ingest_log_id_seq`). Without these, sequences reset to 1 after
+  restore, causing new writes to collide with ids from the pre-dump corpus.
+- Regression test `test_v0210_dump_restore` (pg_regress): verifies
+  `pg_extension.extconfig` is correctly populated, all three user-data tables
+  and their sequences are listed, `agent_lesson_state_transition` is excluded
+  (see below), and that user rows inserted before a dump would be included.
+
+### Design notes
+
+**Why `agent_lesson_state_transition` is excluded:**
+This table is seeded by the extension's own install SQL (17 fixed rows defining
+the valid state-machine transitions). If it were registered with
+`pg_extension_config_dump`, the restore sequence would be:
+1. `CREATE EXTENSION pgmnemo` — extension SQL inserts the 17 seed rows.
+2. `pg_restore` applies the dump — attempts to INSERT the same 17 rows again.
+3. Primary-key conflict → restore fails.
+
+Excluding it is correct: `CREATE EXTENSION` always restores the static rows,
+so they never need to be in the dump.
+
+### Migration
+
+The upgrade path `pgmnemo--0.20.0--0.21.0.sql` calls `pg_extension_config_dump`
+for all six objects. No tables are altered; no data is moved. The call is safe
+to run on any live 0.20.0 installation.
+
+**Recommendation for users of older versions:**
+If you have a lesson corpus in a version earlier than 0.21.0, take a data-only
+export before upgrading:
+
+```bash
+pg_dump --data-only --schema=pgmnemo \
+        -t pgmnemo.agent_lesson \
+        -t pgmnemo.mem_edge \
+        -t pgmnemo.memory_ingest_log \
+        mydb > pgmnemo_data_pre_upgrade.sql
+```
+
+After upgrading to 0.21.0, standard `pg_dump` (full or schema-qualified) will
+automatically include the data.
+
+### Breaking changes
+
+None. `pg_extension_config_dump()` is idempotent and additive — it only affects
+what `pg_dump` outputs. Existing installations, queries, and application code
+are unaffected.
 
 ---
 
