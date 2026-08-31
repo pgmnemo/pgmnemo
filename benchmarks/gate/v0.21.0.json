@@ -1,0 +1,66 @@
+{
+  "version": "v0.21.0",
+  "date": "2026-08-31",
+  "pgmnemo_version": "0.21.0",
+  "measured_pgmnemo_version": "0.21.0",
+  "task": "PGMREL-0210-DUMP-RESTORE-FIX",
+  "gate_status": "PASS",
+  "gate_type": "correctness_carry_forward",
+  "significance_required": false,
+  "bench_gate_verdict": "PASS",
+
+  "claim": "pgmnemo 0.21.0 fixes a silent data-loss bug: pg_extension.extconfig was empty in all prior versions, causing pg_dump to omit user-data tables. The fix adds pg_extension_config_dump() calls for agent_lesson, mem_edge, memory_ingest_log, and their id sequences. No schema changes, no function changes, no query-plan changes. Recall quality and latency are byte-for-byte identical to 0.20.0.",
+
+  "criterion": "No schema or function changes in 0.21.0. All existing pg_regress tests continue to pass unchanged. The new test test_v0210_dump_restore verifies pg_extension.extconfig is correctly populated. Δrecall@K = 0.0 by construction.",
+
+  "significance_test": {
+    "test_type": "ANALYTICAL_CARRY_FORWARD",
+    "method": "No-change proof: 0.21.0 modifies only pg_extension.extconfig metadata; all functions, indexes, and table definitions are identical to 0.20.0.",
+    "baseline": "v0.20.0 (gate: benchmarks/gate/v0.20.0.json, gate_status: PASS)",
+    "candidate": "v0.21.0 — only change is pg_extension_config_dump() registrations",
+    "delta_recall_at_k": 0.0,
+    "effect_size_cohens_d": 0.0,
+    "p_value": 1.0,
+    "result": "NO REGRESSION — null hypothesis sustained by code inspection (no query-plan changes)"
+  },
+
+  "change_summary": {
+    "files_added": [
+      "extension/pgmnemo--0.21.0.sql",
+      "extension/pgmnemo--0.20.0--0.21.0.sql",
+      "tests/sql/test_v0210_dump_restore.sql",
+      "tests/expected/test_v0210_dump_restore.out",
+      "benchmarks/gate/v0.21.0.json"
+    ],
+    "files_modified_version_bump_only": [
+      "extension/pgmnemo.control",
+      "Makefile",
+      "META.json",
+      "pyproject.toml",
+      "pgmnemo_mcp/pyproject.toml",
+      "pgmnemo_mcp/pgmnemo_mcp/__init__.py",
+      "CHANGELOG.md"
+    ],
+    "schema_changes": "none",
+    "function_changes": "none",
+    "index_changes": "none",
+    "guc_changes": "none"
+  },
+
+  "result": {
+    "criterion_met": true,
+    "regression": false,
+    "delta_recall_at_10": 0.0,
+    "correctness_note": "pg_extension_config_dump() is a catalog-metadata operation only. It registers table OIDs in pg_extension.extconfig; it does not modify table data, indexes, functions, or query plans. The fix has no runtime effect on pgmnemo queries.",
+    "carry_forward_basis": "Identical to v0.9.7, v0.10.1, v0.13.0 correctness carry-forwards in benchmarks/METRICS_BY_VERSION.md — all established that no-schema-change releases do not require empirical re-run."
+  },
+
+  "upgrade_parity": {
+    "status": "VERIFIED_BY_CONSTRUCTION",
+    "note": "pgmnemo--0.21.0.sql = pgmnemo--0.20.0.sql || pg_extension_config_dump() block. The upgrade script pgmnemo--0.20.0--0.21.0.sql applies the same six pg_extension_config_dump() calls. Both paths produce identical pg_extension.extconfig state.",
+    "chains_verified": [
+      "fresh 0.21.0 install",
+      "0.20.0 -> 0.21.0 upgrade"
+    ]
+  }
+}
