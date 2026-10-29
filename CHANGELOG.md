@@ -60,6 +60,13 @@ lesson corpus — the very data the extension exists to store.
   returns restored lessons. A negative control confirms a plain 0.20.0 dump
   contains no `TABLE DATA` for the user tables (the bug).
 
+### Packaging
+
+- `META.json` runtime prereqs now declare upper bounds: `PostgreSQL >= 17.0.0, < 18.0.0`
+  and `vector >= 0.7.0, < 0.9.0` (the range the release gates actually ran on).
+- `docs/INSTALL.md` points at 0.21.0 and states the PostgreSQL 17 requirement
+  (the extension has used PG17-only `SET EXPRESSION` since 0.10.1).
+
 ### Design notes
 
 **Why `agent_lesson_state_transition` is excluded:**
