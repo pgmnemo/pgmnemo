@@ -8,11 +8,8 @@
   "gate_type": "correctness_carry_forward",
   "significance_required": false,
   "bench_gate_verdict": "PASS",
-
   "claim": "pgmnemo 0.21.0 fixes a silent data-loss bug: pg_extension.extconfig was empty in all prior versions, causing pg_dump to omit user-data tables. The fix adds pg_extension_config_dump() calls for agent_lesson, mem_edge, memory_ingest_log, and their id sequences. No schema changes, no function changes, no query-plan changes. Recall quality and latency are byte-for-byte identical to 0.20.0.",
-
   "criterion": "No schema or function changes in 0.21.0. All existing pg_regress tests continue to pass unchanged. The new test test_v0210_dump_restore verifies pg_extension.extconfig is correctly populated. Δrecall@K = 0.0 by construction.",
-
   "significance_test": {
     "test_type": "ANALYTICAL_CARRY_FORWARD",
     "method": "No-change proof: 0.21.0 modifies only pg_extension.extconfig metadata; all functions, indexes, and table definitions are identical to 0.20.0.",
@@ -21,9 +18,9 @@
     "delta_recall_at_k": 0.0,
     "effect_size_cohens_d": 0.0,
     "p_value": 1.0,
-    "result": "NO REGRESSION — null hypothesis sustained by code inspection (no query-plan changes)"
+    "result": "NO REGRESSION — null hypothesis sustained by code inspection (no query-plan changes)",
+    "empirical_note": "Supersedes the analytical-only p_value above: measured, see empirical_cross_check."
   },
-
   "change_summary": {
     "files_added": [
       "extension/pgmnemo--0.21.0.sql",
@@ -46,7 +43,6 @@
     "index_changes": "none",
     "guc_changes": "none"
   },
-
   "result": {
     "criterion_met": true,
     "regression": false,
@@ -54,7 +50,6 @@
     "correctness_note": "pg_extension_config_dump() is a catalog-metadata operation only. It registers table OIDs in pg_extension.extconfig; it does not modify table data, indexes, functions, or query plans. The fix has no runtime effect on pgmnemo queries.",
     "carry_forward_basis": "Identical to v0.9.7, v0.10.1, v0.13.0 correctness carry-forwards in benchmarks/METRICS_BY_VERSION.md — all established that no-schema-change releases do not require empirical re-run."
   },
-
   "upgrade_parity": {
     "status": "VERIFIED_BY_CONSTRUCTION",
     "note": "pgmnemo--0.21.0.sql = pgmnemo--0.20.0.sql || pg_extension_config_dump() block. The upgrade script pgmnemo--0.20.0--0.21.0.sql applies the same six pg_extension_config_dump() calls. Both paths produce identical pg_extension.extconfig state.",
@@ -62,5 +57,39 @@
       "fresh 0.21.0 install",
       "0.20.0 -> 0.21.0 upgrade"
     ]
+  },
+  "empirical_cross_check": {
+    "date": "2026-10-29",
+    "environment": "PostgreSQL 17.11, pgvector 0.8.0, fresh databases, one per version (0.20.0 vs 0.21.0), identical deterministic corpus (1500 lessons, 1024-dim embeddings)",
+    "catalog_diff": {
+      "result": "IDENTICAL",
+      "compared": "50 extension function bodies (md5 of pg_get_functiondef), 107 columns, 39 indexes, 15 constraints, 5 triggers, 2 policies, 2 views, 7 types, state-transition seed rows (231 catalog rows total)"
+    },
+    "result_lists": {
+      "queries": 300,
+      "query": "recall_hybrid(embedding, text), k=20",
+      "ranked_ids_identical": true
+    },
+    "quality": {
+      "n": 300,
+      "recall@1": 1.0,
+      "recall@5": 1.0,
+      "recall@10": 1.0,
+      "mrr": 1.0,
+      "note": "synthetic corpus is at ceiling, so quality deltas are uninformative; the identical ranked lists above are the load-bearing evidence",
+      "significance_test_py": "no significant improvements or regressions; Cohen's h = 0 on all metrics"
+    },
+    "latency": {
+      "design": "400 paired queries, interleaved, random order, 20 warm-up pairs",
+      "median_ms": {
+        "0.20.0": 9.71,
+        "0.21.0": 9.6
+      },
+      "median_paired_diff_ms": -0.108,
+      "mean_paired_diff_ms": -0.01,
+      "sd_paired_diff_ms": 3.899,
+      "sign_test_p": 0.012,
+      "interpretation": "function bodies are byte-identical, so the 0.1 ms (~1%) median shift is a cache/layout artefact between two separate databases, not a change; mean difference is ~0. Not a regression."
+    }
   }
 }
