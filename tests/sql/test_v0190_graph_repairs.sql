@@ -19,7 +19,7 @@ SET pgmnemo.gate_strict = 'off';
 SET pgmnemo.include_unverified = 'on';
 SET pgmnemo.track_recall_recency = 'off';
 
-ALTER EXTENSION pgmnemo UPDATE TO '0.19.0';
+ALTER EXTENSION pgmnemo UPDATE TO '0.21.0';
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- A: D3 — _max_depth reduced to 2 in recall_hybrid and recall_lessons
