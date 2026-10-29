@@ -47,8 +47,17 @@ BENCHMARKS = [
         "script": "analyze.py",
         "dataset": "runs.csv",
         "document": ROOT / "docs" / "EVIDENCE.md",
-        # Numbers after this heading are from retrieval benchmarks, not the AB
-        # experiment — do not cross-check them against analyze.py output.
+        # Numbers from this heading on belong to the second experiment (checked
+        # by the next entry) or to retrieval benchmarks — not to this script.
+        "doc_stop_at": "## A second, larger experiment",
+    },
+    {
+        "dir": "mem_ab_v2",
+        "script": "analyze.py",
+        "dataset": "runs.csv",
+        "document": ROOT / "docs" / "EVIDENCE.md",
+        # Only the second-experiment section is checked against this script.
+        "doc_start_at": "## A second, larger experiment",
         "doc_stop_at": "## Where we lose",
     },
 ]
@@ -295,6 +304,7 @@ def _numbers_match(
     *,
     tol: float = 0.005,
     doc_stop_at: str = "",
+    doc_start_at: str = "",
 ) -> list[str]:
     """Return list of discrepancy descriptions; empty list = all match.
 
@@ -309,8 +319,9 @@ def _numbers_match(
         numbers no longer match any script number → FAIL.
       • A fabricated document claims a number never output by the script → FAIL.
 
-    ``doc_stop_at``: if set and found in the document, only the text BEFORE
-    that heading is checked.  Use this to exclude numbers from other experiments
+    ``doc_start_at``: if set, only the text FROM that heading on is checked
+    (the heading must exist). ``doc_stop_at``: if set and found in the document
+    (after the start), only the text BEFORE that heading is checked.  Use this to exclude numbers from other experiments
     that also appear in the same document.
 
     Inline code spans (``backtick content``) are stripped before extraction to
@@ -321,8 +332,14 @@ def _numbers_match(
 
     # Scope: stop before unrelated section
     doc_section = document
-    if doc_stop_at and doc_stop_at in document:
-        doc_section = document[: document.index(doc_stop_at)]
+    if doc_start_at:
+        # A registered start heading that is missing is a failure, not a pass:
+        # an empty scope would otherwise vacuously match.
+        if doc_start_at not in document:
+            return [f"start heading {doc_start_at!r} not found in document"]
+        doc_section = document[document.index(doc_start_at):]
+    if doc_stop_at and doc_stop_at in doc_section:
+        doc_section = doc_section[: doc_section.index(doc_stop_at)]
 
     # Strip inline code (prevents config values from being treated as claims)
     doc_section = re.sub(r"`[^`\n]*`", "", doc_section)
@@ -430,7 +447,10 @@ def check_numbers_agree(failures: list[str]) -> None:
 
         doc_text = doc_path.read_text(encoding="utf-8")
         doc_stop = entry.get("doc_stop_at", "")
-        discrepancies = _numbers_match(result.stdout, doc_text, doc_stop_at=doc_stop)
+        doc_start = entry.get("doc_start_at", "")
+        discrepancies = _numbers_match(
+            result.stdout, doc_text, doc_stop_at=doc_stop, doc_start_at=doc_start,
+        )
         for d in discrepancies:
             failures.append(f"[G1-2] {entry['dir']}/{entry['script']} vs {doc_path.name}: {d}")
 
