@@ -15,11 +15,15 @@ include $(PGXS)
 
 # Convenience targets
 
-.PHONY: help format lint
+.PHONY: help format lint dump-restore-check
+
+dump-restore-check:
+	bash scripts/dump_restore_check.sh $(EXTVERSION)
 
 help:
 	@echo "make            — build extension"
 	@echo "make install    — install extension to $$($(PG_CONFIG) --sharedir)/extension/"
 	@echo "make installcheck — run regression tests against running PG"
+	@echo "make dump-restore-check — real pg_dump -> pg_restore round-trip (needs make install + CREATEDB role)"
 	@echo "make clean      — remove build artifacts"
 	@echo "make uninstall  — remove installed extension files"

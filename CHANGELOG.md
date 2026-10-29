@@ -52,14 +52,21 @@ lesson corpus — the very data the extension exists to store.
   `pg_extension.extconfig` is correctly populated, all three user-data tables
   and their sequences are listed, `agent_lesson_state_transition` is excluded
   (see below), and that user rows inserted before a dump would be included.
+- `scripts/dump_restore_check.sh` (`make dump-restore-check`): a real
+  `pg_dump -Fc` → `pg_restore` into an empty database, run for a fresh 0.21.0
+  install and for a 0.20.0 → 0.21.0 `ALTER EXTENSION UPDATE`. Asserts row counts
+  and an md5 of all three tables, sequence continuity (next id > max id), no
+  duplicated `agent_lesson_state_transition` seed rows, and that recall still
+  returns restored lessons. A negative control confirms a plain 0.20.0 dump
+  contains no `TABLE DATA` for the user tables (the bug).
 
 ### Design notes
 
 **Why `agent_lesson_state_transition` is excluded:**
-This table is seeded by the extension's own install SQL (17 fixed rows defining
+This table is seeded by the extension's own install SQL (19 fixed rows defining
 the valid state-machine transitions). If it were registered with
 `pg_extension_config_dump`, the restore sequence would be:
-1. `CREATE EXTENSION pgmnemo` — extension SQL inserts the 17 seed rows.
+1. `CREATE EXTENSION pgmnemo` — extension SQL inserts the 19 seed rows.
 2. `pg_restore` applies the dump — attempts to INSERT the same 17 rows again.
 3. Primary-key conflict → restore fails.
 

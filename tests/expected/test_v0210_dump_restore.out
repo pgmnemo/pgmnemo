@@ -21,7 +21,7 @@
 --
 -- Note on full dump/restore verification:
 --   A complete pg_dump → pg_restore → SELECT round-trip is exercised by
---   scripts/clean_room_install_check.sh --dump-restore. This pg_regress test
+--   scripts/dump_restore_check.sh (make dump-restore-check). This pg_regress test
 --   focuses on the catalog invariant: if extconfig is correct, pg_dump will
 --   include the data.
 -- ─────────────────────────────────────────────────────────────────────────────
@@ -33,7 +33,7 @@ SET pgmnemo.track_recall_recency = 'off';
 -- ─────────────────────────────────────────────────────────────────────────────
 SELECT array_length(extconfig, 1) >= 6 AS has_config_entries
 FROM pg_extension WHERE extname = 'pgmnemo';
- has_config_entries
+ has_config_entries 
 --------------------
  t
 (1 row)
@@ -45,7 +45,7 @@ SELECT COUNT(*) = 1 AS agent_lesson_registered
 FROM pg_extension e
 JOIN pg_class c ON c.oid = ANY(e.extconfig)
 WHERE e.extname = 'pgmnemo' AND c.relname = 'agent_lesson' AND c.relkind = 'r';
- agent_lesson_registered
+ agent_lesson_registered 
 -------------------------
  t
 (1 row)
@@ -57,7 +57,7 @@ SELECT COUNT(*) = 1 AS mem_edge_registered
 FROM pg_extension e
 JOIN pg_class c ON c.oid = ANY(e.extconfig)
 WHERE e.extname = 'pgmnemo' AND c.relname = 'mem_edge' AND c.relkind = 'r';
- mem_edge_registered
+ mem_edge_registered 
 ---------------------
  t
 (1 row)
@@ -69,7 +69,7 @@ SELECT COUNT(*) = 1 AS ingest_log_registered
 FROM pg_extension e
 JOIN pg_class c ON c.oid = ANY(e.extconfig)
 WHERE e.extname = 'pgmnemo' AND c.relname = 'memory_ingest_log' AND c.relkind = 'r';
- ingest_log_registered
+ ingest_log_registered 
 -----------------------
  t
 (1 row)
@@ -81,7 +81,7 @@ SELECT COUNT(*) = 1 AS lesson_seq_registered
 FROM pg_extension e
 JOIN pg_class c ON c.oid = ANY(e.extconfig)
 WHERE e.extname = 'pgmnemo' AND c.relname = 'agent_lesson_id_seq' AND c.relkind = 'S';
- lesson_seq_registered
+ lesson_seq_registered 
 -----------------------
  t
 (1 row)
@@ -93,7 +93,7 @@ SELECT COUNT(*) = 1 AS edge_seq_registered
 FROM pg_extension e
 JOIN pg_class c ON c.oid = ANY(e.extconfig)
 WHERE e.extname = 'pgmnemo' AND c.relname = 'mem_edge_id_seq' AND c.relkind = 'S';
- edge_seq_registered
+ edge_seq_registered 
 ---------------------
  t
 (1 row)
@@ -105,7 +105,7 @@ SELECT COUNT(*) = 1 AS log_seq_registered
 FROM pg_extension e
 JOIN pg_class c ON c.oid = ANY(e.extconfig)
 WHERE e.extname = 'pgmnemo' AND c.relname = 'memory_ingest_log_id_seq' AND c.relkind = 'S';
- log_seq_registered
+ log_seq_registered 
 --------------------
  t
 (1 row)
@@ -117,7 +117,7 @@ SELECT COUNT(*) = 0 AS state_transition_excluded
 FROM pg_extension e
 JOIN pg_class c ON c.oid = ANY(e.extconfig)
 WHERE e.extname = 'pgmnemo' AND c.relname = 'agent_lesson_state_transition';
- state_transition_excluded
+ state_transition_excluded 
 ---------------------------
  t
 (1 row)
@@ -129,7 +129,7 @@ SELECT COUNT(*) = 0 AS no_filter_conditions
 FROM pg_extension e,
      LATERAL UNNEST(COALESCE(e.extcondition, ARRAY[]::TEXT[])) AS cond
 WHERE e.extname = 'pgmnemo' AND cond <> '';
- no_filter_conditions
+ no_filter_conditions 
 ----------------------
  t
 (1 row)
@@ -141,10 +141,9 @@ INSERT INTO pgmnemo.agent_lesson (role, topic, lesson_text, artifact_hash)
 VALUES ('dump-test-v0210', 'config-dump-regression',
         'Row that must survive pg_dump/restore — confirms data is in a config-dump table',
         'sha256:feedbeef0210');
-INSERT 0 1
 SELECT COUNT(*) = 1 AS dump_test_row_present
 FROM pgmnemo.agent_lesson WHERE role = 'dump-test-v0210';
- dump_test_row_present
+ dump_test_row_present 
 -----------------------
  t
 (1 row)
@@ -154,4 +153,3 @@ DO $$
 BEGIN
     DELETE FROM pgmnemo.agent_lesson WHERE role = 'dump-test-v0210';
 END $$;
-DO

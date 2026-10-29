@@ -21,7 +21,7 @@
 --
 -- Note on full dump/restore verification:
 --   A complete pg_dump → pg_restore → SELECT round-trip is exercised by
---   scripts/clean_room_install_check.sh --dump-restore. This pg_regress test
+--   scripts/dump_restore_check.sh (make dump-restore-check). This pg_regress test
 --   focuses on the catalog invariant: if extconfig is correct, pg_dump will
 --   include the data.
 -- ─────────────────────────────────────────────────────────────────────────────
