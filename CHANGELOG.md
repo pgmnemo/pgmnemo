@@ -21,7 +21,7 @@ Versions follow [Semantic Versioning](https://semver.org/).
 
 ---
 
-## [0.21.0] - 2026-08-31
+## [0.21.0] - 2026-10-29
 
 **Fix: memory corpus no longer silently discarded by pg_dump.**
 
@@ -74,7 +74,7 @@ This table is seeded by the extension's own install SQL (19 fixed rows defining
 the valid state-machine transitions). If it were registered with
 `pg_extension_config_dump`, the restore sequence would be:
 1. `CREATE EXTENSION pgmnemo` — extension SQL inserts the 19 seed rows.
-2. `pg_restore` applies the dump — attempts to INSERT the same 17 rows again.
+2. `pg_restore` applies the dump — attempts to INSERT the same 19 rows again.
 3. Primary-key conflict → restore fails.
 
 Excluding it is correct: `CREATE EXTENSION` always restores the static rows,
@@ -86,24 +86,30 @@ The upgrade path `pgmnemo--0.20.0--0.21.0.sql` calls `pg_extension_config_dump`
 for all six objects. No tables are altered; no data is moved. The call is safe
 to run on any live 0.20.0 installation.
 
-**Recommendation for users of older versions:**
-If you have a lesson corpus in a version earlier than 0.21.0, take a data-only
-export before upgrading:
+**Upgrade first, then dump.** Run `ALTER EXTENSION pgmnemo UPDATE TO '0.21.0'`
+(metadata only, takes no table locks) *before* taking your next backup:
 
 ```bash
-pg_dump --data-only --schema=pgmnemo \
-        -t pgmnemo.agent_lesson \
-        -t pgmnemo.mem_edge \
-        -t pgmnemo.memory_ingest_log \
-        mydb > pgmnemo_data_pre_upgrade.sql
+psql -d mydb -c "ALTER EXTENSION pgmnemo UPDATE TO '0.21.0';"
+pg_dump -Fc mydb > mydb.dump          # now includes the pgmnemo corpus
 ```
 
-After upgrading to 0.21.0, standard `pg_dump` (full or schema-qualified) will
-automatically include the data.
+**Backups taken before 0.21.0 contain no pgmnemo rows.** Restoring one gives you
+the schema and an empty corpus. Keep the source database until you have a
+0.21.0 dump and have checked it, e.g.
+`pg_restore -l mydb.dump | grep 'TABLE DATA pgmnemo'` must list `agent_lesson`,
+`mem_edge` and `memory_ingest_log`.
+
+Note that on 0.20.0 and earlier an explicit
+`pg_dump --data-only -t pgmnemo.agent_lesson …` does **not** work around the
+problem either: `pg_dump` skips extension-owned tables that are not registered,
+even when named with `-t` (verified on PostgreSQL 17.11 — the output contains no
+rows). Upgrading is the fix; if you cannot upgrade yet, export with
+`\copy (SELECT * FROM pgmnemo.agent_lesson) TO …` instead.
 
 ### Breaking changes
 
-None. `pg_extension_config_dump()` is idempotent and additive — it only affects
+None. No GUC defaults changed. `pg_extension_config_dump()` is idempotent and additive — it only affects
 what `pg_dump` outputs. Existing installations, queries, and application code
 are unaffected.
 
