@@ -62,8 +62,9 @@ lesson corpus — the very data the extension exists to store.
 
 ### Packaging
 
-- `META.json` runtime prereqs now declare upper bounds: `PostgreSQL >= 17.0.0, < 18.0.0`
-  and `vector >= 0.7.0, < 0.9.0` (the range the release gates actually ran on).
+- `META.json` runtime prereqs are unchanged (PostgreSQL 17.0.0 or newer, pgvector 0.7.0 or newer).
+  The release gates ran on PostgreSQL 17 with pgvector 0.8; newer versions are not blocked,
+  so users on them still receive this data-loss fix.
 - `docs/INSTALL.md` points at 0.21.0 and states the PostgreSQL 17 requirement
   (the extension has used PG17-only `SET EXPRESSION` since 0.10.1).
 
