@@ -8,6 +8,12 @@ number can be checked without taking our word for anything.
 GUC defaults and the evidence behind each one are audited separately in
 [GUC_EVIDENCE.md](GUC_EVIDENCE.md).
 
+**Read this first.** The first experiment below (about 300 runs in the two arms it
+compared) suggested that injecting memory helps. A second experiment on about seven
+times as many runs did not confirm it: the two arms completed the same share of
+runs. The current picture is in [A second, larger experiment](#a-second-larger-experiment);
+the first experiment's text and numbers are left exactly as published.
+
 ---
 
 ## The finding that cost us a quarter
@@ -31,6 +37,22 @@ used the hybrid path — vector plus BM25, no score threshold, no type filter. A
 vector-only recall with a 0.40 cosine gate and a type filter. On this evidence the lever
 is *how* memory is retrieved, not how much of it is handed over; a vector-only path with
 quality gates returned more material that helped less.
+
+> **Correction, 2026-10-29 (the text above is unchanged).** The sentence "Arm B used the
+> hybrid path" names the wrong mechanism. Arm B did not call pgmnemo's `recall_hybrid()`.
+> The application that hosts pgmnemo has retrieved lessons since 2026-06-03 with its own
+> two-phase query against the lesson table: an HNSW vector query and a full-text (BM25)
+> query, fused by reciprocal rank in application code. Calling `recall_hybrid()` is an
+> opt-in environment flag. Arm C did call a pgmnemo function,
+> `recall_fast()`, which is vector-only; and when its gated query returned nothing, the
+> run fell back to arm B's retrieval instead of receiving no lessons. So the A-versus-B
+> result is evidence about that application-level vector-plus-BM25 query, not about
+> `recall_hybrid()`, and "arm C versus arm B" compares a gated native call (with fallback)
+> against the application query. The measured numbers are unchanged; what they are
+> evidence *about* is narrower than the paragraph above says. Calling `recall_hybrid()`
+> is off by default and is not set in the deployment configuration we can inspect, but
+> the setting was not recorded per run, so "off throughout" rests on that configuration
+> and the code history, not on a per-run log.
 
 This is published first because it is the most useful result here for anyone else
 building agent memory, and because it is the result that costs us the most.
@@ -143,6 +165,144 @@ generator that caused all this walked straight through.
 **The dataset is an export, never a synthesis.** If a change to this directory ever
 produces `runs.csv` from a random number generator instead of from real runs, this
 document is void and the claim on the front of this project is false.
+
+---
+
+## A second, larger experiment
+
+The first experiment ended with a signal we could not prove. We ran a second one to
+find out whether it was real. It was not pre-registered, it was not designed to answer
+this question cleanly, and its result is a null: on about seven times as many runs, the
+effect did not confirm.
+
+**What it measures.** Whether putting retrieved lessons into an agent's prompt changes
+the share of runs that complete. Not whether the retriever ranks the right row.
+
+**Design.** Two arms, assigned per agent run, on the same production fleet, from
+2026-08-13 until the experiment's switch was turned off on 2026-10-29 at 19:10 UTC.
+Every terminal run (completed, failed or escalated) that started in that window is in
+the data, except 18 runs from the first day that were still governed by the first
+experiment's switch and so were never randomised here.
+
+| Arm | Configuration |
+|-----|---------------|
+| treat | retrieved lessons are put into the agent's prompt |
+| control | lessons are retrieved but **not** put into the prompt |
+
+**Control is not "no memory".** Retrieval is computed in both arms and its result is
+recorded, and during a run the agent can still search memory and write to it in both
+arms. What differs is only whether the lessons found at dispatch are placed in the
+prompt up front. The comparison is *injected memory versus no injected memory*. An
+agent in the control arm that searches for itself is partly treated, which pushes any
+real effect toward zero; the data do not say how often that happened.
+
+**Assignment.** SHA-256 of the run identifier, mapped into two equal buckets.
+Deterministic and re-derivable from the run identifier alone. The unit is the run, not
+the task: a task retried after a failure can have runs in both arms, so runs are not
+independent and the intervals below are somewhat too narrow by an amount we cannot
+estimate from the export.
+
+**Outcome.** A run counts as a success if it completed. The same pipeline judged all
+runs, in both arms. Cost and turns per run are secondary.
+
+### Results
+
+| Arm | Runs | Completed | Cost per run (mean) | Turns (mean) |
+|-----|-----:|----------:|--------------------:|-------------:|
+| treat | 1046 | 63.0% | $2.039 | 41.281 |
+| control | 1021 | 62.9% | $2.200 | 47.513 |
+
+| Comparison | Difference | 95% CI | z | p | Cohen's h |
+|---|---:|---:|---:|---:|---:|
+| Completed, all terminal runs | +0.1 pp | [-4.0, +4.3] | 0.06 | 0.954 | 0.003 |
+| Completed, excluding infrastructure faults | +1.2 pp | [-2.4, +4.9] | 0.65 | 0.514 | 0.033 |
+
+Excluding infrastructure faults leaves 84.5% (780 runs) against 83.3% (771 runs). A
+quarter of all runs ended on an infrastructure fault (25.4% in treat, 24.5% in control,
+no detectable difference between arms, p=0.620), which is why that second row exists.
+It conditions on an outcome that happens after assignment and was added after we had
+seen the data, so it is a sensitivity analysis and not the headline. The faults it removes include
+cost-ceiling stops and restart sweeps, which memory could in principle influence.
+
+Cost and turns, Welch's t, two-tailed: cost per run differs by -0.161 dollars
+(95% CI -0.420 to +0.097, p=0.222); turns by -6.232 (95% CI -13.396 to +0.932,
+p=0.088). Cost per completed run is $3.091 in treat and $3.399 in control. Neither
+reaches significance. The direction favours treat, and that is all it is.
+
+**Did the arms differ in what the agent saw?** Once agents were asked to list which
+injected lessons they used, the final report of 489 of 955 treat runs (51.2%) carried
+that line, against 2 of 955 control runs (0.2%). So injection did differ by arm. That
+request only began in the second week of the window: in week 0 (157 runs, 7.6% of the
+sample) neither arm shows the line and the export cannot confirm what the prompts
+contained. Dropping week 0 changes nothing: +0.2 pp, 95% CI [-4.1, +4.5], p=0.924.
+
+**Minimum detectable effect.** With these sample sizes, an effect of 6.0 percentage
+points on the completion share would be detected 80% of the time at the 5% level
+(5.2 points once infrastructure faults are removed). The estimate cannot rule out a
+true effect of a few points, and it could not have seen one.
+
+### What this does and does not support
+
+Read this before quoting any number above.
+
+- **It was not pre-registered.** No primary metric, sample size or stopping rule was
+  fixed before the data were read. The completion share is the metric the first
+  experiment reported, and we use it for the same reason; that is a choice made with
+  hindsight, not a registered analysis. The switch was turned off when the decision to
+  stop was taken, not at a planned sample size.
+- **Control is not "no memory".** See above. The experiment tests the value of putting
+  lessons in the prompt at dispatch, with search and write still available.
+- **The sample is concentrated in time.** Half of the runs (1034, 50.0%) fall in two
+  consecutive weeks, 17 to 30 September (weeks 5 and 6), and one of them holds 30.2% of
+  the sample. Completion in week 5 was low in both arms (46.2% in treat, 51.6% in
+  control, a difference of -5.4 pp, p=0.173) and high in week 6. The effect by week
+  is not stable, and a pooled number is dominated by a few weeks. Without week 5 the
+  difference is +2.3 pp (95% CI [-2.5, +7.1], p=0.340). Stratifying by week, the
+  Mantel-Haenszel difference is +0.6 pp (p=0.763). None of these is distinguishable
+  from zero, and none is a finding.
+- **The treatment was not constant.** From 2026-08-20 the injected text asked the agent
+  to report which lessons it used. Before that it did not.
+- **A null on this sample is not a refutation.** The first experiment's point estimate
+  of +11.6 pp lies outside this experiment's interval, so a true effect that large is
+  unlikely under this design. An effect of one to four points is compatible with both
+  experiments, and this design cannot detect effects below about 6 points.
+
+**Pooling with the first experiment.** Combining the first experiment (always-on versus
+recall off: 66.9% against 55.3%, +11.6 pp, 95% CI [+0.6, +22.5], p=0.041) with this one
+by inverse-variance weighting gives +1.6 pp, 95% CI [-2.3, +5.5], p=0.433. The two
+differences disagree by 11.4 pp (z=1.91, p=0.056), so a single common effect is not a
+comfortable summary, and the pooled figure should not be read as an estimate of one.
+The contrasts also differ: the first experiment's control had recall switched off, this
+one's did not.
+
+The honest summary: *on about seven times as many runs, the effect of injecting memory
+on completion did not confirm. The point estimate is zero, the interval runs from a
+small loss to a small gain, and the design could not see anything under about six
+points. We withdraw nothing from the first experiment, and we no longer read it as
+evidence that injected memory raises the completion rate.*
+
+This section follows the same rule as the first: the experiment is closed, and these
+figures will not be quietly updated.
+
+### Reproducing it
+
+```
+cd benchmarks/mem_ab_v2
+python3 analyze.py
+```
+
+`runs.csv` is a de-identified export of the real runs: one row per run, carrying arm,
+week index (counted from 2026-08-13), outcome, an infrastructure-fault flag, turns,
+cost, retrieved count and whether the final report carries the lesson-usage line. It
+has no task identifiers, no role names, no project names and no failure classes. The
+export is a single read-only query over terminal runs that started in the window. The
+file's SHA-256 is `d744b0c2a2a6835011ad500b81e2c8e525ef49209c89294380dce5896f47806c`.
+`analyze.py` uses the Python standard library only and regenerates every number in this
+section from that file, and from the first experiment's `runs.csv` for the pooled figure.
+
+The export carries `run_id` and `analyze.py` re-derives every row's arm from it with the
+assignment rule, and stops if any row disagrees (none does). The run identifiers are
+opaque integers from the fleet's run table.
 
 ---
 

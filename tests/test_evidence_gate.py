@@ -332,3 +332,20 @@ def test_analyze_no_false_positive(tmp_path):
         "analyze.py must not false-positive — it reads data without importing RNG.\n"
         + "\n".join(failures)
     )
+
+
+# ── doc_start_at: scope a document section to its own script ────────────────
+
+def test_start_heading_scopes_numbers_to_section():
+    doc = "# T\n\nfirst 1.50 claim\n\n## Second\n\nsecond 2.50 claim\n\n## Tail\n\n9.99 other\n"
+    # Only the "Second" section is checked: 2.50 is in the output, 1.50 and 9.99 are out of scope.
+    assert gate._numbers_match(
+        "p 2.50", doc, doc_start_at="## Second", doc_stop_at="## Tail") == []
+    # A number inside the scope that the script never printed still fails.
+    assert gate._numbers_match(
+        "p 7.00", doc, doc_start_at="## Second", doc_stop_at="## Tail") != []
+
+
+def test_missing_start_heading_fails_instead_of_passing_vacuously():
+    out = gate._numbers_match("p 1.00", "# T\n\n1.00\n", doc_start_at="## Nope")
+    assert out and "not found" in out[0]
