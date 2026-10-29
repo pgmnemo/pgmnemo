@@ -33,7 +33,7 @@
     "n_edges": 58219,
     "avg_out_degree": 19.59,
     "n_bidirectional_cycles": 461,
-    "source": "agency_v3 snapshot 2026-08-18"
+    "source": "production fleet snapshot 2026-08-18"
   },
   "primary_metric": {
     "metric": "recall@10 (hit@10 leave-one-out)",

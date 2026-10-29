@@ -2,7 +2,7 @@
 
 **Task:** PGMREL-0180-BENCH-PERF-HYBRID-UNDER-WRITE-LOAD  
 **Date:** 2026-08-14  
-**Analyst:** Statistical Analyst (assignee_id=79)  
+**Analyst:** statistical analyst  
 **Environment:** pgmnemo 0.17.0 (before) / 0.18.0 (after), PostgreSQL 17.10 / aarch64, 3 600 active lessons  
 **Goal:** Separate retrieval cost from write contention; identify root cause of multi-second stalls.
 
